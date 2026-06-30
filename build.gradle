@@ -5,7 +5,9 @@ plugins {
     id 'idea'
 }
 
-tasks.named('wrapper', Wrapper).configure {
+// 'wrapper' only exists when this project is the Gradle root (standalone checkout);
+// when included as a subproject of ../settings.gradle it isn't registered here.
+tasks.matching { it.name == 'wrapper' }.configureEach {
     // Define wrapper values here so as to not have to always do so when updating gradlew.properties.
     // Switching this to Wrapper.DistributionType.ALL will download the full gradle sources that comes with
     // documentation attached on cursor hover of gradle classes and methods. However, this comes with increased
@@ -226,6 +228,40 @@ publishing {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8' // Use the UTF-8 charset for Java compilation
+}
+
+// Wired into the farmstead-game monorepo build (see ../build.gradle, ../settings.gradle)
+def modsDir = file('../mods')
+def devModsDir = file('../dev-server/mods')
+
+tasks.register('buildDev') {
+    group = 'farmstead'
+    description = 'Build jar and copy to dev-server/mods'
+    dependsOn tasks.named('jar')
+    doLast {
+        // version embeds an auto-incrementing build number, so stale jars from
+        // earlier builds must be removed first or NeoForge sees a duplicate modId
+        delete fileTree(devModsDir) { include 'neoessentials-*.jar' }
+        copy {
+            from tasks.named('jar').get().archiveFile
+            into devModsDir
+        }
+        println "Copied to ${devModsDir}/${tasks.named('jar').get().archiveFile.get().asFile.name}"
+    }
+}
+
+tasks.register('buildProd') {
+    group = 'farmstead'
+    description = 'Build jar and copy to mods (prod)'
+    dependsOn tasks.named('jar')
+    doLast {
+        delete fileTree(modsDir) { include 'neoessentials-*.jar' }
+        copy {
+            from tasks.named('jar').get().archiveFile
+            into modsDir
+        }
+        println "Copied to ${modsDir}/${tasks.named('jar').get().archiveFile.get().asFile.name}"
+    }
 }
 
 // IDEA no longer automatically downloads sources/javadoc jars for dependencies, so we need to explicitly enable the behavior.
