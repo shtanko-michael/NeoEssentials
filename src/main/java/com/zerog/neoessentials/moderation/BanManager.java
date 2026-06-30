@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.zerog.neoessentials.api.permissions.PermissionAPI;
+import com.zerog.neoessentials.util.MessageUtil;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.network.chat.Component;
@@ -218,7 +219,9 @@ public class BanManager {
             // Broadcast to staff if enabled
             if (com.zerog.neoessentials.config.ConfigManager.getInstance().isBroadcastBansEnabled()) {
                 String staffPerm = com.zerog.neoessentials.config.ConfigManager.getInstance().getStaffNotificationPermission();
-                String staffMsg = "[NeoEssentials] Player " + playerName + " was permanently banned by " + bannedBy + (reason != null && !reason.isEmpty() ? " for: " + reason : "");
+                String staffMsg = (reason != null && !reason.isEmpty())
+                    ? MessageUtil.localize("neoessentials.moderation.staff_ban_permanent_reason", playerName, bannedBy, reason)
+                    : MessageUtil.localize("neoessentials.moderation.staff_ban_permanent", playerName, bannedBy);
                 for (ServerPlayer staff : server.getPlayerList().getPlayers()) {
                     if (staff.hasPermissions(2) || PermissionAPI.hasPermission(staff.getUUID(), staffPerm)) {
                         staff.sendSystemMessage(Component.literal(staffMsg));
@@ -275,7 +278,9 @@ public class BanManager {
             // Broadcast to staff if enabled
             if (com.zerog.neoessentials.config.ConfigManager.getInstance().isBroadcastBansEnabled()) {
                 String staffPerm = com.zerog.neoessentials.config.ConfigManager.getInstance().getStaffNotificationPermission();
-                String staffMsg = "[NeoEssentials] Player " + playerName + " was temporarily banned by " + bannedBy + " for " + formatDuration(durationMillis) + (reason != null && !reason.isEmpty() ? " - Reason: " + reason : "");
+                String staffMsg = (reason != null && !reason.isEmpty())
+                    ? MessageUtil.localize("neoessentials.moderation.staff_ban_temp_reason", playerName, bannedBy, formatDuration(durationMillis), reason)
+                    : MessageUtil.localize("neoessentials.moderation.staff_ban_temp", playerName, bannedBy, formatDuration(durationMillis));
                 for (ServerPlayer staff : server.getPlayerList().getPlayers()) {
                     if (staff.hasPermissions(2) || PermissionAPI.hasPermission(staff.getUUID(), staffPerm)) {
                         staff.sendSystemMessage(Component.literal(staffMsg));
@@ -350,8 +355,9 @@ public class BanManager {
         if (server != null) {
             for (ServerPlayer player : new ArrayList<>(server.getPlayerList().getPlayers())) {
                 if (getPlayerIP(player).equals(ipAddress)) {
-                    String msg = "You have been temporarily IP banned for " + formatDuration(durationMillis)
-                        + (reason != null && !reason.isEmpty() ? ": " + reason : "");
+                    String msg = (reason != null && !reason.isEmpty())
+                        ? MessageUtil.localize("neoessentials.moderation.ip_tempban_disconnect_reason", formatDuration(durationMillis), reason)
+                        : MessageUtil.localize("neoessentials.moderation.ip_tempban_disconnect", formatDuration(durationMillis));
                     player.connection.disconnect(Component.literal(msg));
                 }
             }
@@ -373,7 +379,7 @@ public class BanManager {
             MinecraftServer server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
             if (server != null && com.zerog.neoessentials.config.ConfigManager.getInstance().isBroadcastBansEnabled()) {
                 String staffPerm = com.zerog.neoessentials.config.ConfigManager.getInstance().getStaffNotificationPermission();
-                String staffMsg = "[NeoEssentials] Player " + removed.playerName + " was unbanned.";
+                String staffMsg = MessageUtil.localize("neoessentials.moderation.staff_unban", removed.playerName);
                 for (ServerPlayer staff : server.getPlayerList().getPlayers()) {
                     if (staff.hasPermissions(2) || PermissionAPI.hasPermission(staff.getUUID(), staffPerm)) {
                         staff.sendSystemMessage(Component.literal(staffMsg));

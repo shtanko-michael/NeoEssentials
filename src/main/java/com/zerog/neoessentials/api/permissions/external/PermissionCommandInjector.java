@@ -6,6 +6,7 @@ import com.mojang.brigadier.suggestion.SuggestionProvider;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
+import com.zerog.neoessentials.util.MessageUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,10 +47,9 @@ public class PermissionCommandInjector {
                                 .executes(ctx -> {
                                     String permission = StringArgumentType.getString(ctx, "permission");
                                     String group = StringArgumentType.getString(ctx, "groupname");
-                                    ctx.getSource().sendSuccess(() -> 
+                                    ctx.getSource().sendSuccess(() ->
                                         net.minecraft.network.chat.Component.literal(
-                                            "§6NeoEssentials Permission Bridge: §7Use §f/pex group " + group + " add " + permission + 
-                                            " §7in your actual PermissionsEX plugin"
+                                            MessageUtil.localize("commands.neoessentials.pex.bridge.group_add", group, permission)
                                         ), false);
                                     return 1;
                                 })
@@ -61,10 +61,9 @@ public class PermissionCommandInjector {
                                 .executes(ctx -> {
                                     String permission = StringArgumentType.getString(ctx, "permission");
                                     String group = StringArgumentType.getString(ctx, "groupname");
-                                    ctx.getSource().sendSuccess(() -> 
+                                    ctx.getSource().sendSuccess(() ->
                                         net.minecraft.network.chat.Component.literal(
-                                            "§6NeoEssentials Permission Bridge: §7Use §f/pex group " + group + " remove " + permission + 
-                                            " §7in your actual PermissionsEX plugin"
+                                            MessageUtil.localize("commands.neoessentials.pex.bridge.group_remove", group, permission)
                                         ), false);
                                     return 1;
                                 })
@@ -80,10 +79,9 @@ public class PermissionCommandInjector {
                                 .executes(ctx -> {
                                     String permission = StringArgumentType.getString(ctx, "permission");
                                     String user = StringArgumentType.getString(ctx, "username");
-                                    ctx.getSource().sendSuccess(() -> 
+                                    ctx.getSource().sendSuccess(() ->
                                         net.minecraft.network.chat.Component.literal(
-                                            "§6NeoEssentials Permission Bridge: §7Use §f/pex user " + user + " add " + permission + 
-                                            " §7in your actual PermissionsEX plugin"
+                                            MessageUtil.localize("commands.neoessentials.pex.bridge.user_add", user, permission)
                                         ), false);
                                     return 1;
                                 })
@@ -95,10 +93,9 @@ public class PermissionCommandInjector {
                                 .executes(ctx -> {
                                     String permission = StringArgumentType.getString(ctx, "permission");
                                     String user = StringArgumentType.getString(ctx, "username");
-                                    ctx.getSource().sendSuccess(() -> 
+                                    ctx.getSource().sendSuccess(() ->
                                         net.minecraft.network.chat.Component.literal(
-                                            "§6NeoEssentials Permission Bridge: §7Use §f/pex user " + user + " remove " + permission + 
-                                            " §7in your actual PermissionsEX plugin"
+                                            MessageUtil.localize("commands.neoessentials.pex.bridge.user_remove", user, permission)
                                         ), false);
                                     return 1;
                                 })
@@ -107,14 +104,14 @@ public class PermissionCommandInjector {
                     )
                 )
                 .executes(ctx -> {
-                    ctx.getSource().sendSuccess(() -> 
+                    ctx.getSource().sendSuccess(() ->
                         net.minecraft.network.chat.Component.literal(
-                            "§6=== NeoEssentials PermissionsEX Bridge ===\n" +
-                            "§7This command provides tab completion for NeoEssentials permissions.\n" +
-                            "§7Use: §f/neoessentials-pex-bridge group <name> add <permission>\n" +
-                            "§7Use: §f/neoessentials-pex-bridge user <name> add <permission>\n" +
-                            "§7Total permissions available: §f" + permissions.size() + "\n" +
-                            "§7For actual permission management, use your PermissionsEX plugin."
+                            MessageUtil.localize("commands.neoessentials.pex.bridge.help_title") + "\n" +
+                            MessageUtil.localize("commands.neoessentials.pex.bridge.help_description") + "\n" +
+                            MessageUtil.localize("commands.neoessentials.pex.bridge.help_group_usage") + "\n" +
+                            MessageUtil.localize("commands.neoessentials.pex.bridge.help_user_usage") + "\n" +
+                            MessageUtil.localize("commands.neoessentials.pex.bridge.help_total_permissions", permissions.size()) + "\n" +
+                            MessageUtil.localize("commands.neoessentials.pex.bridge.help_footer")
                         ), false);
                     return 1;
                 })
@@ -165,13 +162,13 @@ public class PermissionCommandInjector {
             .executes(ctx -> {
                 List<String> permissions = ExternalPermissionProvider.getAllNeoEssentialsPermissions();
                 
-                ctx.getSource().sendSuccess(() -> 
+                ctx.getSource().sendSuccess(() ->
                     net.minecraft.network.chat.Component.literal(
-                        "§6=== PermissionsEX Integration Test ===\n" +
-                        "§7Available NeoEssentials permissions: §f" + permissions.size() + "\n" +
-                        "§7Sample permissions:\n" +
+                        MessageUtil.localize("commands.neoessentials.pex.test.title") + "\n" +
+                        MessageUtil.localize("commands.neoessentials.pex.test.available_permissions", permissions.size()) + "\n" +
+                        MessageUtil.localize("commands.neoessentials.pex.test.sample_permissions") + "\n" +
                         "§f" + String.join("\n", permissions.subList(0, Math.min(10, permissions.size()))) +
-                        (permissions.size() > 10 ? "\n§7... and " + (permissions.size() - 10) + " more" : "")
+                        (permissions.size() > 10 ? "\n" + MessageUtil.localize("commands.neoessentials.pex.test.and_more", permissions.size() - 10) : "")
                     ), false);
                 return 1;
             })

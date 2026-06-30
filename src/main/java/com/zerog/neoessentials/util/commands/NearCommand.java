@@ -161,44 +161,44 @@ public class NearCommand {
         String direction = CommandUtil.getSimpleDirection(info.relativePos.x, info.relativePos.z);
         
         // Base message with distance and direction
-        MutableComponent message = Component.literal(String.format("§7- §f%s §7(§e%sm §7%s)", 
+        MutableComponent message = Component.literal(MessageUtil.localize("commands.neoessentials.near.entry",
             info.player.getName().getString(), distanceStr, direction));
         
         // Add status indicators
         List<String> statusList = new ArrayList<>();
         
         if (isAfk(info.player)) {
-            statusList.add("§eAFK");
+            statusList.add(MessageUtil.localize("commands.neoessentials.near.status_afk"));
         }
-        
+
         if (isVanished(info.player)) {
-            statusList.add("§7Vanished");
+            statusList.add(MessageUtil.localize("commands.neoessentials.near.status_vanished"));
         }
-        
+
         if (info.player.hasPermissions(4)) {
-            statusList.add("§cOP");
+            statusList.add(MessageUtil.localize("commands.neoessentials.near.status_op"));
         }
-        
+
         if (!statusList.isEmpty()) {
-            message.append(Component.literal(" §7[" + String.join("§7,", statusList) + "§7]"));
+            message.append(Component.literal(MessageUtil.localize("commands.neoessentials.near.status_wrap", String.join("§7,", statusList))));
         }
         
         // Create hover text with detailed info
         MutableComponent hoverText = Component.literal("")
-            .append(Component.literal("§6Player: §f" + info.player.getName().getString() + "\n"))
-            .append(Component.literal("§6Distance: §f" + distanceStr + " blocks\n"))
-            .append(Component.literal("§6Direction: §f" + direction + "\n"))
-            .append(Component.literal("§6World: §f" + info.player.level().dimension().location() + "\n"))
-            .append(Component.literal("§6Coordinates: §f" +
-                (int)info.player.getX() + ", " + (int)info.player.getY() + ", " + (int)info.player.getZ() + "\n"))
-            .append(Component.literal("§6Health: §f" + String.format("%.1f", info.player.getHealth()) + "/" + 
-                String.format("%.1f", info.player.getMaxHealth()) + "\n"));
-        
+            .append(Component.literal(MessageUtil.localize("commands.neoessentials.near.hover_player", info.player.getName().getString()) + "\n"))
+            .append(Component.literal(MessageUtil.localize("commands.neoessentials.near.hover_distance", distanceStr) + "\n"))
+            .append(Component.literal(MessageUtil.localize("commands.neoessentials.near.hover_direction", direction) + "\n"))
+            .append(Component.literal(MessageUtil.localize("commands.neoessentials.near.hover_world", info.player.level().dimension().location()) + "\n"))
+            .append(Component.literal(MessageUtil.localize("commands.neoessentials.near.hover_coordinates",
+                (int)info.player.getX(), (int)info.player.getY(), (int)info.player.getZ()) + "\n"))
+            .append(Component.literal(MessageUtil.localize("commands.neoessentials.near.hover_health",
+                String.format("%.1f", info.player.getHealth()), String.format("%.1f", info.player.getMaxHealth())) + "\n"));
+
         if (isAfk(info.player)) {
-            hoverText.append(Component.literal("§eCurrently AFK\n"));
+            hoverText.append(Component.literal(MessageUtil.localize("commands.neoessentials.near.hover_afk") + "\n"));
         }
-        
-        hoverText.append(Component.literal("\n§7Click to teleport to this player"));
+
+        hoverText.append(Component.literal("\n" + MessageUtil.localize("commands.neoessentials.near.hover_click_teleport")));
         
         // Add click event for teleportation (if has permission)
         PermissionValidator.PermissionResult tpResult = 

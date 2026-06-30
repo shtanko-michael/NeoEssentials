@@ -3,6 +3,7 @@ package com.zerog.neoessentials.commands.utility;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.zerog.neoessentials.util.MessageUtil;
 import com.zerog.neoessentials.util.PermissionValidator;
 import com.zerog.neoessentials.webdashboard.security.DashboardRegistrationManager;
 import com.zerog.neoessentials.webdashboard.security.DashboardAccountRegistration;
@@ -35,13 +36,13 @@ public class DashboardRegisterCommand {
                 // Default action when just /dashboardregister is used - show help
                 CommandSourceStack source = context.getSource();
                 source.sendSuccess(() -> Component.literal("§6§l═══════════════════════════════════"), false);
-                source.sendSuccess(() -> Component.literal("§e§lDashboard Registration"), false);
+                source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.help.title")), false);
                 source.sendSuccess(() -> Component.literal("§6§l═══════════════════════════════════"), false);
                 source.sendSuccess(() -> Component.literal(""), false);
-                source.sendSuccess(() -> Component.literal("§7Available commands:"), false);
-                source.sendSuccess(() -> Component.literal("  §e/dashboardregister start §7- Begin registration"), false);
-                source.sendSuccess(() -> Component.literal("  §e/dashboardregister complete <user> <pass> §7- Finish registration"), false);
-                source.sendSuccess(() -> Component.literal("  §e/dashboardregister status §7- Check your status"), false);
+                source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.help.available")), false);
+                source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.help.start")), false);
+                source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.help.complete")), false);
+                source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.help.status")), false);
                 source.sendSuccess(() -> Component.literal(""), false);
                 source.sendSuccess(() -> Component.literal("§6§l═══════════════════════════════════"), false);
                 return 1;
@@ -61,7 +62,7 @@ public class DashboardRegisterCommand {
         CommandSourceStack source = context.getSource();
 
         if (!source.isPlayer()) {
-            source.sendSuccess(() -> Component.literal("§cThis command can only be used by players"), false);
+            source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.general.player_only")), false);
             return 0;
         }
 
@@ -73,8 +74,8 @@ public class DashboardRegisterCommand {
 
         // Check if already registered
         if (manager.isRegistered(player.getUUID())) {
-            source.sendSuccess(() -> Component.literal("§e§lINFO: §eYou already have a registered dashboard account!"), false);
-            source.sendSuccess(() -> Component.literal("§7Use your dashboard credentials to log in"), false);
+            source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.already_registered_info")), false);
+            source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.use_credentials")), false);
             System.out.println("[DashboardRegister] Player already registered");
             return 0;
         }
@@ -85,25 +86,25 @@ public class DashboardRegisterCommand {
         System.out.println("[DashboardRegister] Registration token generated: " + (token != null ? "SUCCESS" : "FAILED"));
 
         if (token == null) {
-            source.sendSuccess(() -> Component.literal("§c§lERROR: §cFailed to start registration"), false);
-            source.sendSuccess(() -> Component.literal("§7Please contact a server administrator"), false);
+            source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.start_failed")), false);
+            source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.contact_admin")), false);
             return 0;
         }
 
         source.sendSuccess(() -> Component.literal("§6§l═══════════════════════════════════"), false);
-        source.sendSuccess(() -> Component.literal("§a§lDashboard Registration Started"), false);
+        source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.started_title")), false);
         source.sendSuccess(() -> Component.literal("§6§l═══════════════════════════════════"), false);
         source.sendSuccess(() -> Component.literal(""), false);
-        source.sendSuccess(() -> Component.literal("§7Your registration token: §e" + token), false);
-        source.sendSuccess(() -> Component.literal("§7This token expires in §c5 minutes"), false);
+        source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.your_token", token)), false);
+        source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.token_expires")), false);
         source.sendSuccess(() -> Component.literal(""), false);
-        source.sendSuccess(() -> Component.literal("§7To complete registration, use:"), false);
-        source.sendSuccess(() -> Component.literal("§b/dashboardregister complete <username> <password>"), false);
+        source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.to_complete")), false);
+        source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.complete_syntax")), false);
         source.sendSuccess(() -> Component.literal(""), false);
-        source.sendSuccess(() -> Component.literal("§eExample:"), false);
-        source.sendSuccess(() -> Component.literal("§7/dashboardregister complete myusername MySecurePass123"), false);
+        source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.example_label")), false);
+        source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.example_usage")), false);
         source.sendSuccess(() -> Component.literal(""), false);
-        source.sendSuccess(() -> Component.literal("§c§lWARNING: §cPassword must be at least 8 characters"), false);
+        source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.password_warning")), false);
         source.sendSuccess(() -> Component.literal("§6§l═══════════════════════════════════"), false);
 
         return 1;
@@ -113,7 +114,7 @@ public class DashboardRegisterCommand {
         CommandSourceStack source = context.getSource();
 
         if (!source.isPlayer()) {
-            source.sendSuccess(() -> Component.literal("§cThis command can only be used by players"), false);
+            source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.general.player_only")), false);
             return 0;
         }
 
@@ -125,19 +126,19 @@ public class DashboardRegisterCommand {
 
         // Check if already registered
         if (manager.isRegistered(player.getUUID())) {
-            source.sendSuccess(() -> Component.literal("§c§lERROR: §cYou already have a registered dashboard account!"), false);
+            source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.already_registered_error")), false);
             return 0;
         }
 
         // Validate username
         if (username.length() < 3 || username.length() > 20) {
-            source.sendSuccess(() -> Component.literal("§c§lERROR: §cUsername must be 3-20 characters"), false);
+            source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.username_length")), false);
             return 0;
         }
 
         // Validate password
         if (password.length() < 8) {
-            source.sendSuccess(() -> Component.literal("§c§lERROR: §cPassword must be at least 8 characters"), false);
+            source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.password_length")), false);
             return 0;
         }
 
@@ -145,33 +146,33 @@ public class DashboardRegisterCommand {
         // Since we can't pass it securely, we'll lookup by UUID
         // This requires a small modification to complete registration
 
-        source.sendSuccess(() -> Component.literal("§6Processing registration..."), false);
+        source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.processing")), false);
 
         // Try to complete registration
         DashboardAccountRegistration registration = completeRegistrationByUuid(
             player.getUUID(), username, password);
 
         if (registration == null) {
-            source.sendSuccess(() -> Component.literal("§c§lERROR: §cRegistration failed!"), false);
-            source.sendSuccess(() -> Component.literal("§7Possible reasons:"), false);
-            source.sendSuccess(() -> Component.literal("§7- Registration token expired (5 min limit)"), false);
-            source.sendSuccess(() -> Component.literal("§7- Username already taken"), false);
-            source.sendSuccess(() -> Component.literal("§7- No registration started"), false);
-            source.sendSuccess(() -> Component.literal("§7Use §e/dashboardregister start §7to begin"), false);
+            source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.failed")), false);
+            source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.possible_reasons")), false);
+            source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.reason_expired")), false);
+            source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.reason_taken")), false);
+            source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.reason_not_started")), false);
+            source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.use_start_to_begin")), false);
             return 0;
         }
 
         source.sendSuccess(() -> Component.literal("§6§l═══════════════════════════════════"), false);
-        source.sendSuccess(() -> Component.literal("§a§l✓ Registration Successful!"), false);
+        source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.success_title")), false);
         source.sendSuccess(() -> Component.literal("§6§l═══════════════════════════════════"), false);
         source.sendSuccess(() -> Component.literal(""), false);
-        source.sendSuccess(() -> Component.literal("§7Dashboard Username: §a" + registration.getDashboardUsername()), false);
-        source.sendSuccess(() -> Component.literal("§7Linked to: §e" + player.getName().getString()), false);
+        source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.dashboard_username", registration.getDashboardUsername())), false);
+        source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.linked_to", player.getName().getString())), false);
         source.sendSuccess(() -> Component.literal(""), false);
-        source.sendSuccess(() -> Component.literal("§7You can now log in to the dashboard at:"), false);
-        source.sendSuccess(() -> Component.literal("§b§n/dashboard url"), false);
+        source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.login_at")), false);
+        source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.dashboard_url")), false);
         source.sendSuccess(() -> Component.literal(""), false);
-        source.sendSuccess(() -> Component.literal("§7Use your dashboard username and password to log in"), false);
+        source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.login_instructions")), false);
         source.sendSuccess(() -> Component.literal("§6§l═══════════════════════════════════"), false);
 
         return 1;
@@ -181,7 +182,7 @@ public class DashboardRegisterCommand {
         CommandSourceStack source = context.getSource();
 
         if (!source.isPlayer()) {
-            source.sendSuccess(() -> Component.literal("§cThis command can only be used by players"), false);
+            source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.general.player_only")), false);
             return 0;
         }
 
@@ -189,27 +190,27 @@ public class DashboardRegisterCommand {
         DashboardRegistrationManager manager = DashboardRegistrationManager.getInstance();
 
         source.sendSuccess(() -> Component.literal("§6§l═══════════════════════════════════"), false);
-        source.sendSuccess(() -> Component.literal("§e§lDashboard Registration Status"), false);
+        source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.status_title")), false);
         source.sendSuccess(() -> Component.literal("§6§l═══════════════════════════════════"), false);
         source.sendSuccess(() -> Component.literal(""), false);
 
         if (manager.isRegistered(player.getUUID())) {
             DashboardAccountRegistration reg = manager.getRegistration(player.getUUID());
-            source.sendSuccess(() -> Component.literal("§a§l✓ §aRegistered"), false);
+            source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.status_registered")), false);
             source.sendSuccess(() -> Component.literal(""), false);
-            source.sendSuccess(() -> Component.literal("§7Dashboard Username: §a" + reg.getDashboardUsername()), false);
-            source.sendSuccess(() -> Component.literal("§7Minecraft Account: §e" + reg.getMinecraftUsername()), false);
-            source.sendSuccess(() -> Component.literal("§7Registered: §7" + formatTimestamp(reg.getRegisteredAt())), false);
+            source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.dashboard_username", reg.getDashboardUsername())), false);
+            source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.minecraft_account", reg.getMinecraftUsername())), false);
+            source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.registered_at", formatTimestamp(reg.getRegisteredAt()))), false);
 
             if (reg.isDiscordLinked()) {
-                source.sendSuccess(() -> Component.literal("§7Discord: §b" + reg.getDiscordUsername() + " §a(Linked)"), false);
+                source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.discord_linked", reg.getDiscordUsername())), false);
             } else {
-                source.sendSuccess(() -> Component.literal("§7Discord: §c(Not Linked)"), false);
+                source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.discord_not_linked")), false);
             }
         } else {
-            source.sendSuccess(() -> Component.literal("§c§l✗ §cNot Registered"), false);
+            source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.status_not_registered")), false);
             source.sendSuccess(() -> Component.literal(""), false);
-            source.sendSuccess(() -> Component.literal("§7Use §e/dashboardregister start §7to register"), false);
+            source.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.dashboardregister.use_start_to_register")), false);
         }
 
         source.sendSuccess(() -> Component.literal(""), false);

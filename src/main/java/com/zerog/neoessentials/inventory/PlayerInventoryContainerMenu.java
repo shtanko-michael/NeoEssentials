@@ -7,6 +7,7 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.network.chat.Component;
+import com.zerog.neoessentials.util.MessageUtil;
 
 import javax.annotation.Nonnull;
 
@@ -37,6 +38,6 @@ public class PlayerInventoryContainerMenu extends AbstractContainerMenu {
     }
 
     public static Component getTitle(ServerPlayer target) {
-        return Component.literal(target.getName().getString() + "'s Inventory (Editable)");
+        return Component.literal(MessageUtil.localize("gui.neoessentials.invsee.title_editable", target.getName().getString()));
     }
 }

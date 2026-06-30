@@ -336,7 +336,7 @@ public class MailCommand {
         player.sendSystemMessage(MessageUtil.info("commands.neoessentials.mail.status",
             msgs.size(), unread));
         player.sendSystemMessage(Component.literal(
-            "§7Use §f/mail read §7to read, §f/mail send <player> <msg> §7to send"));
+            MessageUtil.localize("commands.neoessentials.mail.status_hint")));
         return 1;
     }
 
@@ -363,7 +363,7 @@ public class MailCommand {
         int end   = Math.min(start + ITEMS_PER_PAGE, msgs.size());
 
         player.sendSystemMessage(Component.literal(
-            "§6══════ §eMail §7(§f" + page + "§7/§f" + totalPages + "§7) §6══════"));
+            MessageUtil.localize("commands.neoessentials.mail.read_header", page, totalPages)));
 
         for (int i = start; i < end; i++) {
             MailMessage mail = msgs.get(i);
@@ -375,18 +375,18 @@ public class MailCommand {
 
             String unreadMarker = wasUnread ? "§e● " : "";
             String expireInfo   = mail.timeExpire > 0
-                ? " §7[expires: §f" + mail.formattedExpiry() + "§7]" : "";
+                ? MessageUtil.localize("commands.neoessentials.mail.entry_expires", mail.formattedExpiry()) : "";
 
-            MutableComponent line = Component.literal(String.format(
-                "§7[§f%d§7] %s§f%s§7: %s%s",
+            MutableComponent line = Component.literal(MessageUtil.localize(
+                "commands.neoessentials.mail.entry",
                 displayIndex, unreadMarker, mail.senderName, mail.message, expireInfo
             ));
 
             // Hover: full details; click: suggest delete
-            MutableComponent hover = Component.literal("§6Sent: §f" + mail.formattedTime() + "\n")
-                .append(Component.literal("§6ID: §f" + mail.id + "\n"))
-                .append(Component.literal("§6From: §f" + mail.senderName + "\n"))
-                .append(Component.literal("§7Click to delete this message"));
+            MutableComponent hover = Component.literal(MessageUtil.localize("commands.neoessentials.mail.hover_sent", mail.formattedTime()) + "\n")
+                .append(Component.literal(MessageUtil.localize("commands.neoessentials.mail.hover_id", mail.id) + "\n"))
+                .append(Component.literal(MessageUtil.localize("commands.neoessentials.mail.hover_from", mail.senderName) + "\n"))
+                .append(Component.literal(MessageUtil.localize("commands.neoessentials.mail.hover_delete")));
 
             line = line.withStyle(s -> s
                 .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, hover))
@@ -400,13 +400,13 @@ public class MailCommand {
         if (totalPages > 1) {
             MutableComponent footer = Component.literal("§7");
             if (page > 1) {
-                footer.append(Component.literal("§7[§a◀ Prev§7] ")
+                footer.append(Component.literal(MessageUtil.localize("commands.neoessentials.mail.prev_button"))
                     .withStyle(s -> s.withClickEvent(new ClickEvent(
                         ClickEvent.Action.RUN_COMMAND, "/mail read " + (page - 1)))));
             }
-            footer.append(Component.literal("§7Page §f" + page + "§7/§f" + totalPages));
+            footer.append(Component.literal(MessageUtil.localize("commands.neoessentials.mail.page_indicator", page, totalPages)));
             if (page < totalPages) {
-                footer.append(Component.literal(" §7[§aNext ▶§7]")
+                footer.append(Component.literal(MessageUtil.localize("commands.neoessentials.mail.next_button"))
                     .withStyle(s -> s.withClickEvent(new ClickEvent(
                         ClickEvent.Action.RUN_COMMAND, "/mail read " + (page + 1)))));
             }
@@ -414,7 +414,7 @@ public class MailCommand {
         }
 
         player.sendSystemMessage(Component.literal(
-            "§7Use §f/mail clear §7to clear all mail."));
+            MessageUtil.localize("commands.neoessentials.mail.clear_hint")));
 
         if (removed) saveMailData();
         else saveMailData(); // always persist read flags

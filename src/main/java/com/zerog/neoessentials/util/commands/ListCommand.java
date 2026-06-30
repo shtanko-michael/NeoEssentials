@@ -207,8 +207,8 @@ public class ListCommand {
                 groupPlayers.sort(Comparator.comparing(p -> p.getName().getString().toLowerCase()));
 
                 // Group header with weight indicator
-                String weightIndicator = groupInfo.weight > 0 ? " §8[" + groupInfo.weight + "]" : "";
-                MutableComponent groupHeader = Component.literal("§6" + groupName + weightIndicator + " §7(" + groupPlayers.size() + "): ");
+                String weightIndicator = groupInfo.weight > 0 ? MessageUtil.localize("commands.neoessentials.list.group_weight", groupInfo.weight) : "";
+                MutableComponent groupHeader = Component.literal(MessageUtil.localize("commands.neoessentials.list.group_header", groupName, weightIndicator, groupPlayers.size()));
                 source.sendSuccess(() -> groupHeader, false);
 
                 // Build player list for this group
@@ -256,7 +256,7 @@ public class ListCommand {
             groupPlayers.sort(Comparator.comparing(p -> p.getName().getString().toLowerCase()));
 
             // Group header
-            MutableComponent groupHeader = Component.literal("§6" + groupName + " §7(" + groupPlayers.size() + "): ");
+            MutableComponent groupHeader = Component.literal(MessageUtil.localize("commands.neoessentials.list.group_header_simple", groupName, groupPlayers.size()));
             source.sendSuccess(() -> groupHeader, false);
 
             // Build player list
@@ -328,34 +328,34 @@ public class ListCommand {
 
         // Add hover text with detailed info
         List<Component> hoverLines = new ArrayList<>();
-        hoverLines.add(Component.literal("§6Player: §f" + playerName));
+        hoverLines.add(Component.literal(MessageUtil.localize("commands.neoessentials.list.hover_player", playerName)));
         // Level objects in Minecraft don't need to be closed with try-with-resources
         @SuppressWarnings("resource")
         String worldName = player.level().dimension().location().getPath();
-        hoverLines.add(Component.literal("§6World: §f" + worldName));
-        hoverLines.add(Component.literal("§6Location: §f" +
-            (int)player.getX() + ", " + (int)player.getY() + ", " + (int)player.getZ()));
+        hoverLines.add(Component.literal(MessageUtil.localize("commands.neoessentials.list.hover_world", worldName)));
+        hoverLines.add(Component.literal(MessageUtil.localize("commands.neoessentials.list.hover_location",
+            (int)player.getX(), (int)player.getY(), (int)player.getZ())));
 
         // Add LuckPerms group info if available
         String groupInfo = getLuckPermsGroupInfo(player);
         if (groupInfo != null) {
-            hoverLines.add(Component.literal("§6Group: §f" + groupInfo));
+            hoverLines.add(Component.literal(MessageUtil.localize("commands.neoessentials.list.hover_group", groupInfo)));
         }
 
         if (isAfk(player)) {
             String reason = getAfkReason(player);
             if (reason != null && !reason.isEmpty()) {
-                hoverLines.add(Component.literal("§6AFK Reason: §f" + reason));
+                hoverLines.add(Component.literal(MessageUtil.localize("commands.neoessentials.list.hover_afk_reason", reason)));
             } else {
-                hoverLines.add(Component.literal("§eCurrently AFK"));
+                hoverLines.add(Component.literal(MessageUtil.localize("commands.neoessentials.list.hover_afk")));
             }
         }
 
         // Get player's ping
-        hoverLines.add(Component.literal("§6Ping: §f" + player.connection.latency() + "ms"));
+        hoverLines.add(Component.literal(MessageUtil.localize("commands.neoessentials.list.hover_ping", player.connection.latency())));
 
         hoverLines.add(Component.literal(""));
-        hoverLines.add(Component.literal("§7Click to message this player"));
+        hoverLines.add(Component.literal(MessageUtil.localize("commands.neoessentials.list.hover_click_message")));
 
         MutableComponent hoverText = Component.empty();
         for (int i = 0; i < hoverLines.size(); i++) {
@@ -390,19 +390,19 @@ public class ListCommand {
         List<String> statusSummary = new ArrayList<>();
 
         if (afkCount > 0) {
-            statusSummary.add("§e" + afkCount + " AFK");
+            statusSummary.add(MessageUtil.localize("commands.neoessentials.list.status_afk", afkCount));
         }
 
         if (vanishedCount > 0 && canSeeVanished) {
-            statusSummary.add("§7" + vanishedCount + " Vanished");
+            statusSummary.add(MessageUtil.localize("commands.neoessentials.list.status_vanished", vanishedCount));
         }
 
         if (opCount > 0) {
-            statusSummary.add("§c" + opCount + " OP");
+            statusSummary.add(MessageUtil.localize("commands.neoessentials.list.status_op", opCount));
         }
 
         if (!statusSummary.isEmpty()) {
-            MutableComponent footer = Component.literal("§7Status: " + String.join("§7, ", statusSummary));
+            MutableComponent footer = Component.literal(MessageUtil.localize("commands.neoessentials.list.status_footer", String.join("§7, ", statusSummary)));
             source.sendSuccess(() -> footer, false);
         }
     }

@@ -209,9 +209,9 @@ private final ScheduledExecutorService scheduler = Executors.newScheduledThreadP
             target.sendSystemMessage(MessageUtil.component("commands.neoessentials.teleport.request.instructions"));
             // Send clickable [Accept] and [Deny] buttons
             net.minecraft.network.chat.Component acceptBtn = MessageUtil.clickableCommand(
-                "[Accept]", "tpaccept", "Click to accept the teleport request");
+                MessageUtil.localize("commands.neoessentials.teleport.request.button_accept"), "tpaccept", MessageUtil.localize("commands.neoessentials.teleport.request.button_accept_hover"));
             net.minecraft.network.chat.Component denyBtn = MessageUtil.clickableCommand(
-                "[Deny]", "tpdeny", "Click to deny the teleport request");
+                MessageUtil.localize("commands.neoessentials.teleport.request.button_deny"), "tpdeny", MessageUtil.localize("commands.neoessentials.teleport.request.button_deny_hover"));
             target.sendSystemMessage(
                 net.minecraft.network.chat.Component.literal("")
                     .append(acceptBtn)
@@ -642,14 +642,14 @@ private final ScheduledExecutorService scheduler = Executors.newScheduledThreadP
                                                     sender.getName().getString(), typeText));
             target.sendSystemMessage(MessageUtil.component("commands.neoessentials.teleport.request.instructions"));
             // Send clickable accept/deny buttons to the target
-            MutableComponent accept = Component.literal("[Accept]")
+            MutableComponent accept = Component.literal(MessageUtil.localize("commands.neoessentials.teleport.request.button_accept"))
                 .withStyle(style -> style.withColor(ChatFormatting.GREEN).withBold(true))
                 .withStyle(style -> style.withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/tpaaccept " + sender.getName().getString())))
-                .withStyle(style -> style.withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal("Accept teleport request"))));
-            MutableComponent deny = Component.literal("[Deny]")
+                .withStyle(style -> style.withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(MessageUtil.localize("commands.neoessentials.teleport.request.button_accept_hover_v2")))));
+            MutableComponent deny = Component.literal(MessageUtil.localize("commands.neoessentials.teleport.request.button_deny"))
                 .withStyle(style -> style.withColor(ChatFormatting.RED).withBold(true))
                 .withStyle(style -> style.withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/tpadeny " + sender.getName().getString())))
-                .withStyle(style -> style.withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal("Deny teleport request"))));
+                .withStyle(style -> style.withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(MessageUtil.localize("commands.neoessentials.teleport.request.button_deny_hover_v2")))));
             MutableComponent message = Component.literal("")
                 .append(accept)
                 .append(Component.literal(" "))

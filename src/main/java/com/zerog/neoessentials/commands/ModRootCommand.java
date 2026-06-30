@@ -169,7 +169,7 @@ public class ModRootCommand {
         CommandSourceStack source = ctx.getSource();
         
         try {
-            source.sendSuccess(() -> MessageUtil.info("Reloading NeoEssentials configuration..."), false);
+            source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.reload_start"), false);
             int successCount = 0;
             int totalCount = 0;
 
@@ -181,7 +181,7 @@ public class ModRootCommand {
                 successCount++;
             } catch (Exception e) {
                 LOGGER.error("✗ Failed to reload configuration files: {}", e.getMessage(), e);
-                source.sendFailure(MessageUtil.error("Failed to reload configuration: " + e.getMessage()));
+                source.sendFailure(MessageUtil.error("commands.neoessentials.root.reload_config_failed", e.getMessage()));
             }
 
             // Reload translations
@@ -192,7 +192,7 @@ public class ModRootCommand {
                 successCount++;
             } catch (Exception e) {
                 LOGGER.error("✗ Failed to reload translations: {}", e.getMessage(), e);
-                source.sendFailure(MessageUtil.warning("Failed to reload translations: " + e.getMessage()));
+                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_translations_failed", e.getMessage()));
             }
             
             // Reload permissions if enabled
@@ -203,7 +203,7 @@ public class ModRootCommand {
                 successCount++;
             } catch (Exception e) {
                 LOGGER.error("✗ Failed to reload permissions: {}", e.getMessage(), e);
-                source.sendFailure(MessageUtil.warning("Failed to reload permissions: " + e.getMessage()));
+                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_permissions_failed", e.getMessage()));
             }
             
             // Reload KitManager
@@ -214,7 +214,7 @@ public class ModRootCommand {
                 successCount++;
             } catch (Exception e) {
                 LOGGER.error("✗ Failed to reload kit system: {}", e.getMessage(), e);
-                source.sendFailure(MessageUtil.warning("Failed to reload kits: " + e.getMessage()));
+                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_kits_failed", e.getMessage()));
             }
 
             // Reload HomeManager
@@ -225,7 +225,7 @@ public class ModRootCommand {
                 successCount++;
             } catch (Exception e) {
                 LOGGER.error("✗ Failed to reload home system: {}", e.getMessage(), e);
-                source.sendFailure(MessageUtil.warning("Failed to reload homes: " + e.getMessage()));
+                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_homes_failed", e.getMessage()));
             }
 
             // Reload WarpManager
@@ -236,7 +236,7 @@ public class ModRootCommand {
                 successCount++;
             } catch (Exception e) {
                 LOGGER.error("✗ Failed to reload warp system: {}", e.getMessage(), e);
-                source.sendFailure(MessageUtil.warning("Failed to reload warps: " + e.getMessage()));
+                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_warps_failed", e.getMessage()));
             }
 
             // Reload SpawnManager
@@ -247,7 +247,7 @@ public class ModRootCommand {
                 successCount++;
             } catch (Exception e) {
                 LOGGER.error("✗ Failed to reload spawn system: {}", e.getMessage(), e);
-                source.sendFailure(MessageUtil.warning("Failed to reload spawn: " + e.getMessage()));
+                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_spawn_failed", e.getMessage()));
             }
 
             // Reload ChatManager configuration
@@ -266,7 +266,7 @@ public class ModRootCommand {
                 successCount++;
             } catch (Exception e) {
                 LOGGER.error("✗ Failed to reload chat system: {}", e.getMessage(), e);
-                source.sendFailure(MessageUtil.warning("Failed to reload chat configuration: " + e.getMessage()));
+                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_chat_failed", e.getMessage()));
             }
             
             // Reload AfkManager
@@ -277,7 +277,7 @@ public class ModRootCommand {
                 successCount++;
             } catch (Exception e) {
                 LOGGER.error("✗ Failed to reload AFK system: {}", e.getMessage(), e);
-                source.sendFailure(MessageUtil.warning("Failed to reload AFK system: " + e.getMessage()));
+                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_afk_failed", e.getMessage()));
             }
 
             // Reload JailManager
@@ -288,17 +288,17 @@ public class ModRootCommand {
                 successCount++;
             } catch (Exception e) {
                 LOGGER.error("✗ Failed to reload jail system: {}", e.getMessage(), e);
-                source.sendFailure(MessageUtil.warning("Failed to reload jail system: " + e.getMessage()));
+                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_jail_failed", e.getMessage()));
             }
 
             // Build success message
-            String resultMessage = String.format("NeoEssentials reload complete: %d/%d systems reloaded successfully",
-                successCount, totalCount);
+            final int finalSuccessCount = successCount;
+            final int finalTotalCount = totalCount;
 
             if (successCount == totalCount) {
-                source.sendSuccess(() -> MessageUtil.success(resultMessage), true);
+                source.sendSuccess(() -> MessageUtil.success("commands.neoessentials.root.reload_complete", finalSuccessCount, finalTotalCount), true);
             } else {
-                source.sendSuccess(() -> MessageUtil.warning(resultMessage + " (check console for errors)"), true);
+                source.sendSuccess(() -> MessageUtil.warning("commands.neoessentials.root.reload_complete_with_errors", finalSuccessCount, finalTotalCount), true);
             }
 
             LOGGER.info("Configuration reload completed: {}/{} systems reloaded successfully by {}",
@@ -307,7 +307,7 @@ public class ModRootCommand {
             
         } catch (Exception e) {
             LOGGER.error("CRITICAL: Failed to reload configuration: {}", e.getMessage(), e);
-            source.sendFailure(MessageUtil.error("Failed to reload configuration: " + e.getMessage()));
+            source.sendFailure(MessageUtil.error("commands.neoessentials.root.reload_config_failed", e.getMessage()));
             return 0;
         }
     }
@@ -318,43 +318,43 @@ public class ModRootCommand {
         try {
             // Check if already using split configs
             if (ConfigSplitter.isSplittingEnabled()) {
-                source.sendSuccess(() -> MessageUtil.warning("Split configs are already enabled!"), false);
-                source.sendSuccess(() -> MessageUtil.info("Config files are already split into smaller files."), false);
+                source.sendSuccess(() -> MessageUtil.warning("commands.neoessentials.root.split_already_enabled"), false);
+                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.split_already_split"), false);
                 return 0;
             }
-            
+
             source.sendSuccess(() -> MessageUtil.info("§6" + "─".repeat(40)), false);
-            source.sendSuccess(() -> MessageUtil.info("§eMigrating to split configuration files..."), false);
+            source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.split_migrating"), false);
             source.sendSuccess(() -> MessageUtil.info("§6" + "─".repeat(40)), false);
 
             // Perform the migration
             boolean success = ConfigSplitter.migrateToSplitConfigs();
 
             if (success) {
-                source.sendSuccess(() -> MessageUtil.success("✓ Successfully migrated to split configs!"), false);
-                source.sendSuccess(() -> MessageUtil.info("§aYour config.json has been split into smaller files:"), false);
-                source.sendSuccess(() -> MessageUtil.info("  - main.json (modules, logging, permissions)"), false);
-                source.sendSuccess(() -> MessageUtil.info("  - commands.json (command enable/disable)"), false);
-                source.sendSuccess(() -> MessageUtil.info("  - chat.json (chat system settings)"), false);
-                source.sendSuccess(() -> MessageUtil.info("  - teleportation.json (teleport settings)"), false);
-                source.sendSuccess(() -> MessageUtil.info("  - moderation.json (ban, jail, freeze, etc.)"), false);
-                source.sendSuccess(() -> MessageUtil.info("  - webdashboard.json (web interface settings)"), false);
-                source.sendSuccess(() -> MessageUtil.info("  - items.json (item spawn settings)"), false);
-                source.sendSuccess(() -> MessageUtil.info("  - afk.json (AFK system settings)"), false);
-                source.sendSuccess(() -> MessageUtil.info("  - security.json (security settings)"), false);
-                source.sendSuccess(() -> MessageUtil.info("§eOriginal config backed up to: config.json.backup"), false);
-                source.sendSuccess(() -> MessageUtil.info("§aReload configs with: /neoessentials reload"), false);
+                source.sendSuccess(() -> MessageUtil.success("commands.neoessentials.root.split_success"), false);
+                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.split_files_header"), false);
+                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.split_file_main"), false);
+                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.split_file_commands"), false);
+                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.split_file_chat"), false);
+                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.split_file_teleportation"), false);
+                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.split_file_moderation"), false);
+                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.split_file_webdashboard"), false);
+                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.split_file_items"), false);
+                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.split_file_afk"), false);
+                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.split_file_security"), false);
+                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.split_backup"), false);
+                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.split_reload_hint"), false);
                 
                 LOGGER.info("Configuration split completed successfully by {}", source.getTextName());
                 return 1;
             } else {
-                source.sendFailure(MessageUtil.error("Failed to split configuration. Check console for details."));
+                source.sendFailure(MessageUtil.error("commands.neoessentials.root.split_failed"));
                 return 0;
             }
             
         } catch (Exception e) {
             LOGGER.error("Failed to split configuration: {}", e.getMessage(), e);
-            source.sendFailure(MessageUtil.error("An error occurred while splitting configs: " + e.getMessage()));
+            source.sendFailure(MessageUtil.error("commands.neoessentials.root.split_error", e.getMessage()));
             return 0;
         }
     }

@@ -4,6 +4,7 @@ import com.zerog.neoessentials.api.permissions.PermissionAPI;
 import com.zerog.neoessentials.shop.ShopManager;
 import com.zerog.neoessentials.shop.ShopParser;
 import com.zerog.neoessentials.shop.model.ShopData;
+import com.zerog.neoessentials.util.MessageUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
@@ -162,18 +163,18 @@ public class ShopSignHandler {
         boolean wantsAdmin = ShopData.ADMIN_SHOP_NAME.equalsIgnoreCase(ownerLine);
 
         if (wantsAdmin && !PermissionAPI.hasPermission(player.getUUID(), "neoessentials.shop.create.admin")) {
-            player.sendSystemMessage(Component.literal("§cYou don't have permission to create admin shops."));
+            player.sendSystemMessage(Component.literal(MessageUtil.localize("commands.neoessentials.shop.no_permission_create_admin")));
             return;
         }
         if (!wantsAdmin && !PermissionAPI.hasPermission(player.getUUID(), "neoessentials.shop.create")) {
-            player.sendSystemMessage(Component.literal("§cYou don't have permission to create shops."));
+            player.sendSystemMessage(Component.literal(MessageUtil.localize("commands.neoessentials.shop.no_permission_create")));
             return;
         }
 
         // Check for duplicate sign position before parsing
         ShopData existing = ShopManager.getInstance().getShopBySign(dimension, pos);
         if (existing != null) {
-            player.sendSystemMessage(Component.literal("§cA shop already exists at this sign."));
+            player.sendSystemMessage(Component.literal(MessageUtil.localize("commands.neoessentials.shop.already_exists")));
             return;
         }
 
@@ -183,10 +184,10 @@ public class ShopSignHandler {
         if (parsed.isEmpty()) {
             if (!wantsAdmin && ShopParser.findAdjacentChest(pos, level) == null) {
                 player.sendSystemMessage(Component.literal(
-                    "§cNo chest found next to this sign. Place a chest first."));
+                    MessageUtil.localize("commands.neoessentials.shop.no_chest_found")));
             } else {
                 player.sendSystemMessage(Component.literal(
-                    "§cInvalid shop sign format.  Lines: [name or blank] / [qty] / [B x:S y] / [item or ?]"));
+                    MessageUtil.localize("commands.neoessentials.shop.invalid_format")));
             }
             return;
         }
@@ -200,17 +201,17 @@ public class ShopSignHandler {
         if (shop.itemPending) {
             // Shop is registered but non-functional — item still needed
             player.sendSystemMessage(Component.literal(
-                "§aShop frame created! §eRight-click this sign while holding the item you want to sell/buy."));
+                MessageUtil.localize("commands.neoessentials.shop.frame_created")));
         } else {
-            player.sendSystemMessage(Component.literal("§aShop created successfully!"));
+            player.sendSystemMessage(Component.literal(MessageUtil.localize("commands.neoessentials.shop.created")));
             String currency = com.zerog.neoessentials.economy.managers.EconomyManager.getInstance().getCurrencySymbol();
             if (!shop.isAdminShop()) {
                 if (shop.buyPrice  != null) player.sendSystemMessage(Component.literal(
-                    "§eBuy price:  §f" + currency + shop.buyPrice.toPlainString()));
+                    MessageUtil.localize("commands.neoessentials.shop.buy_price", currency + shop.buyPrice.toPlainString())));
                 if (shop.sellPrice != null) player.sendSystemMessage(Component.literal(
-                    "§eSell price: §f" + currency + shop.sellPrice.toPlainString()));
+                    MessageUtil.localize("commands.neoessentials.shop.sell_price", currency + shop.sellPrice.toPlainString())));
             } else {
-                player.sendSystemMessage(Component.literal("§2[Admin Shop] Unlimited stock."));
+                player.sendSystemMessage(Component.literal(MessageUtil.localize("commands.neoessentials.shop.admin_unlimited")));
             }
         }
     }

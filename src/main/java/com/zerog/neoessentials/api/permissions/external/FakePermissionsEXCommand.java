@@ -6,6 +6,7 @@ import com.mojang.brigadier.suggestion.SuggestionProvider;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
+import com.zerog.neoessentials.util.MessageUtil;
 import net.minecraft.network.chat.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,12 +58,11 @@ public class FakePermissionsEXCommand {
                                     String permission = StringArgumentType.getString(ctx, "permission");
                                     
                                     ctx.getSource().sendSuccess(() -> Component.literal(
-                                        "§c[FAKE PEX] §6Would add permission §f" + permission + 
-                                        " §6to group §f" + group + "§6.\n" +
-                                        "§7This is a NeoEssentials simulation. Install actual PermissionsEX for real functionality.\n" +
-                                        "§7Permission is valid: §a" + ExternalPermissionProvider.hasPermission(permission)
+                                        MessageUtil.localize("commands.neoessentials.pex.fake.group_add", permission, group) + "\n" +
+                                        MessageUtil.localize("commands.neoessentials.pex.fake.simulation_notice") + "\n" +
+                                        MessageUtil.localize("commands.neoessentials.pex.fake.permission_valid", ExternalPermissionProvider.hasPermission(permission))
                                     ), false);
-                                    
+
                                     LOGGER.info("Fake PEX: Would add {} to group {}", permission, group);
                                     return 1;
                                 })
@@ -77,9 +77,8 @@ public class FakePermissionsEXCommand {
                                     String permission = StringArgumentType.getString(ctx, "permission");
                                     
                                     ctx.getSource().sendSuccess(() -> Component.literal(
-                                        "§c[FAKE PEX] §6Would remove permission §f" + permission + 
-                                        " §6from group §f" + group + "§6.\n" +
-                                        "§7This is a NeoEssentials simulation. Install actual PermissionsEX for real functionality."
+                                        MessageUtil.localize("commands.neoessentials.pex.fake.group_remove", permission, group) + "\n" +
+                                        MessageUtil.localize("commands.neoessentials.pex.fake.simulation_notice")
                                     ), false);
                                     
                                     return 1;
@@ -91,9 +90,9 @@ public class FakePermissionsEXCommand {
                             .executes(ctx -> {
                                 String group = StringArgumentType.getString(ctx, "groupname");
                                 ctx.getSource().sendSuccess(() -> Component.literal(
-                                    "§c[FAKE PEX] §6Group §f" + group + " §6permissions:\n" +
-                                    "§7This is a simulation. Install actual PermissionsEX to manage real permissions.\n" +
-                                    "§7Available NeoEssentials permissions: §f" + ExternalPermissionProvider.getAllNeoEssentialsPermissions().size()
+                                    MessageUtil.localize("commands.neoessentials.pex.fake.group_list_header", group) + "\n" +
+                                    MessageUtil.localize("commands.neoessentials.pex.fake.list_simulation_notice") + "\n" +
+                                    MessageUtil.localize("commands.neoessentials.pex.fake.available_permissions", ExternalPermissionProvider.getAllNeoEssentialsPermissions().size())
                                 ), false);
                                 return 1;
                             })
@@ -118,12 +117,11 @@ public class FakePermissionsEXCommand {
                                     String permission = StringArgumentType.getString(ctx, "permission");
                                     
                                     ctx.getSource().sendSuccess(() -> Component.literal(
-                                        "§c[FAKE PEX] §6Would add permission §f" + permission + 
-                                        " §6to user §f" + user + "§6.\n" +
-                                        "§7This is a NeoEssentials simulation. Install actual PermissionsEX for real functionality.\n" +
-                                        "§7Permission is valid: §a" + ExternalPermissionProvider.hasPermission(permission)
+                                        MessageUtil.localize("commands.neoessentials.pex.fake.user_add", permission, user) + "\n" +
+                                        MessageUtil.localize("commands.neoessentials.pex.fake.simulation_notice") + "\n" +
+                                        MessageUtil.localize("commands.neoessentials.pex.fake.permission_valid", ExternalPermissionProvider.hasPermission(permission))
                                     ), false);
-                                    
+
                                     LOGGER.info("Fake PEX: Would add {} to user {}", permission, user);
                                     return 1;
                                 })
@@ -138,9 +136,8 @@ public class FakePermissionsEXCommand {
                                     String permission = StringArgumentType.getString(ctx, "permission");
                                     
                                     ctx.getSource().sendSuccess(() -> Component.literal(
-                                        "§c[FAKE PEX] §6Would remove permission §f" + permission + 
-                                        " §6from user §f" + user + "§6.\n" +
-                                        "§7This is a NeoEssentials simulation. Install actual PermissionsEX for real functionality."
+                                        MessageUtil.localize("commands.neoessentials.pex.fake.user_remove", permission, user) + "\n" +
+                                        MessageUtil.localize("commands.neoessentials.pex.fake.simulation_notice")
                                     ), false);
                                     
                                     return 1;
@@ -155,16 +152,16 @@ public class FakePermissionsEXCommand {
                     List<String> permissions = ExternalPermissionProvider.getAllNeoEssentialsPermissions();
                     
                     ctx.getSource().sendSuccess(() -> Component.literal(
-                        "§c[FAKE PermissionsEX] §6NeoEssentials Permission Bridge\n" +
-                        "§7This is a simulation providing tab completion for NeoEssentials permissions.\n" +
-                        "§7Install actual PermissionsEX for real permission management.\n\n" +
-                        "§eAvailable commands:\n" +
-                        "§f/pex group <name> add <permission> §7- Add permission to group\n" +
-                        "§f/pex user <name> add <permission> §7- Add permission to user\n" +
-                        "§f/pex group <name> remove <permission> §7- Remove permission from group\n" +
-                        "§f/pex user <name> remove <permission> §7- Remove permission from user\n\n" +
-                        "§7NeoEssentials permissions available: §f" + permissions.size() + "\n" +
-                        "§7Try typing: §f/pex group admin add neoessentials.§7 and press TAB"
+                        MessageUtil.localize("commands.neoessentials.pex.fake.help_title") + "\n" +
+                        MessageUtil.localize("commands.neoessentials.pex.fake.help_simulation") + "\n" +
+                        MessageUtil.localize("commands.neoessentials.pex.fake.help_install") + "\n\n" +
+                        MessageUtil.localize("commands.neoessentials.pex.fake.help_commands_header") + "\n" +
+                        MessageUtil.localize("commands.neoessentials.pex.fake.help_group_add") + "\n" +
+                        MessageUtil.localize("commands.neoessentials.pex.fake.help_user_add") + "\n" +
+                        MessageUtil.localize("commands.neoessentials.pex.fake.help_group_remove") + "\n" +
+                        MessageUtil.localize("commands.neoessentials.pex.fake.help_user_remove") + "\n\n" +
+                        MessageUtil.localize("commands.neoessentials.pex.fake.help_permissions_count", permissions.size()) + "\n" +
+                        MessageUtil.localize("commands.neoessentials.pex.fake.help_try_typing")
                     ), false);
                     
                     return 1;

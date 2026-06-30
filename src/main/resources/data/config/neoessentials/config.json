@@ -1,6 +1,8 @@
 {
-  "_configVersion": 20,
+  "_configVersion": 21,
   "_configVersion_comment": "DO NOT MODIFY: This field is used by NeoEssentials for automatic config updates. Changing this may cause config corruption.",
+  "language": "ru_ru",
+  "language_comment": "In-game language code (e.g. en_us, ru_ru, de_de). Loads data/lang/<code>.json over the en_us base; untranslated keys fall back to English. Edit neoessentials/languages/custom/<code>.json to customize, then run /neoessentials reload.",
   "modules": {
     "economyEnabled": true,
     "permissionsEnabled": true,

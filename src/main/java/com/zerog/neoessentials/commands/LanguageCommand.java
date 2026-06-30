@@ -55,11 +55,11 @@ public class LanguageCommand {
         List<LanguageFileInfo> languages = manager.getCustomLanguages();
 
         if (languages.isEmpty()) {
-            source.sendSuccess(() -> MessageUtil.warning("No custom languages installed."), false);
-            source.sendSuccess(() -> MessageUtil.info("To add a language, place a .json file in: neoessentials/languages/custom/"), false);
-            source.sendSuccess(() -> MessageUtil.info("Use '/language template <code>' to generate a template."), false);
+            source.sendSuccess(() -> MessageUtil.warning("commands.neoessentials.language.list.none"), false);
+            source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.list.add_hint"), false);
+            source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.list.template_hint"), false);
         } else {
-            source.sendSuccess(() -> MessageUtil.success("═══ Custom Languages ({0}) ═══", languages.size()), false);
+            source.sendSuccess(() -> MessageUtil.success("commands.neoessentials.language.list.header", languages.size()), false);
 
             for (LanguageFileInfo lang : languages) {
                 String info = String.format("  §e%s §7- §f%s §7(§f%s§7) §7by §f%s §7v%s",
@@ -86,10 +86,10 @@ public class LanguageCommand {
             CustomLanguageManager.getInstance().reload();
             int count = CustomLanguageManager.getInstance().getCustomLanguages().size();
 
-            source.sendSuccess(() -> MessageUtil.success("Successfully reloaded custom languages ({0} loaded).", count), true);
+            source.sendSuccess(() -> MessageUtil.success("commands.neoessentials.language.reload.success", count), true);
             LOGGER.info("Custom languages reloaded by {}", source.getTextName());
         } catch (Exception e) {
-            source.sendFailure(MessageUtil.error("Failed to reload languages: {0}", e.getMessage()));
+            source.sendFailure(MessageUtil.error("commands.neoessentials.language.reload.failed", e.getMessage()));
             LOGGER.error("Failed to reload languages", e);
         }
 
@@ -103,16 +103,16 @@ public class LanguageCommand {
         CommandSourceStack source = ctx.getSource();
         Map<String, Object> stats = CustomLanguageManager.getInstance().getStatistics();
 
-        source.sendSuccess(() -> MessageUtil.success("═══ Language System Statistics ═══"), false);
-        source.sendSuccess(() -> MessageUtil.info("Custom languages loaded: {0}", stats.get("customLanguagesLoaded")), false);
-        source.sendSuccess(() -> MessageUtil.info("Missing keys tracked: {0}", stats.get("missingKeysTracked")), false);
-        source.sendSuccess(() -> MessageUtil.info("Custom language directory: §e{0}", stats.get("customLanguageDirectory")), false);
-        source.sendSuccess(() -> MessageUtil.info("Template directory: §e{0}", stats.get("templateDirectory")), false);
+        source.sendSuccess(() -> MessageUtil.success("commands.neoessentials.language.stats.header"), false);
+        source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.stats.loaded", stats.get("customLanguagesLoaded")), false);
+        source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.stats.missing_tracked", stats.get("missingKeysTracked")), false);
+        source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.stats.custom_dir", stats.get("customLanguageDirectory")), false);
+        source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.stats.template_dir", stats.get("templateDirectory")), false);
 
         @SuppressWarnings("unchecked")
         List<String> codes = (List<String>) stats.get("languageCodes");
         if (!codes.isEmpty()) {
-            source.sendSuccess(() -> MessageUtil.info("Available languages: §e{0}", String.join(", ", codes)), false);
+            source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.stats.available", String.join(", ", codes)), false);
         }
 
         return 1;
@@ -132,16 +132,16 @@ public class LanguageCommand {
                 Paths.get("neoessentials", "languages", "templates", fileName)
             );
 
-            source.sendSuccess(() -> MessageUtil.success("Generated template for language: {0}", languageCode), true);
-            source.sendSuccess(() -> MessageUtil.info("Template saved to: §eneoessentials/languages/templates/{0}", fileName), false);
-            source.sendSuccess(() -> MessageUtil.info("Instructions:"), false);
-            source.sendSuccess(() -> MessageUtil.info("  1. Edit the template file and translate the text"), false);
-            source.sendSuccess(() -> MessageUtil.info("  2. Save it as §e{0}.json§7 in §eneoessentials/languages/custom/", languageCode), false);
-            source.sendSuccess(() -> MessageUtil.info("  3. Run §e/language reload§7 to load it"), false);
+            source.sendSuccess(() -> MessageUtil.success("commands.neoessentials.language.template.success", languageCode), true);
+            source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.template.saved", fileName), false);
+            source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.template.instructions"), false);
+            source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.template.step1"), false);
+            source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.template.step2", languageCode), false);
+            source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.template.step3"), false);
 
             LOGGER.info("Generated language template for {} by {}", languageCode, source.getTextName());
         } catch (Exception e) {
-            source.sendFailure(MessageUtil.error("Failed to generate template: {0}", e.getMessage()));
+            source.sendFailure(MessageUtil.error("commands.neoessentials.language.template.failed", e.getMessage()));
             LOGGER.error("Failed to generate template for {}", languageCode, e);
         }
 
@@ -158,8 +158,8 @@ public class LanguageCommand {
             int count = CustomLanguageManager.getInstance().getMissingKeys().size();
 
             if (count == 0) {
-                source.sendSuccess(() -> MessageUtil.info("No missing translation keys tracked."), false);
-                source.sendSuccess(() -> MessageUtil.info("Missing keys are tracked when translations are requested but not found."), false);
+                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.exportmissing.none"), false);
+                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.exportmissing.none_hint"), false);
                 return 1;
             }
 
@@ -168,12 +168,12 @@ public class LanguageCommand {
                 Paths.get("neoessentials", "languages", "templates", fileName)
             );
 
-            source.sendSuccess(() -> MessageUtil.success("Exported {0} missing keys", count), true);
-            source.sendSuccess(() -> MessageUtil.info("File: §eneoessentials/languages/templates/{0}", fileName), false);
+            source.sendSuccess(() -> MessageUtil.success("commands.neoessentials.language.exportmissing.success", count), true);
+            source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.exportmissing.file", fileName), false);
 
             LOGGER.info("Exported {} missing keys by {}", count, source.getTextName());
         } catch (Exception e) {
-            source.sendFailure(MessageUtil.error("Failed to export missing keys: {0}", e.getMessage()));
+            source.sendFailure(MessageUtil.error("commands.neoessentials.language.exportmissing.failed", e.getMessage()));
             LOGGER.error("Failed to export missing keys", e);
         }
 
@@ -189,7 +189,7 @@ public class LanguageCommand {
 
         CustomLanguageManager.getInstance().clearMissingKeys();
 
-        source.sendSuccess(() -> MessageUtil.success("Cleared {0} missing keys from tracker", count), true);
+        source.sendSuccess(() -> MessageUtil.success("commands.neoessentials.language.clearmissing.success", count), true);
 
         return 1;
     }
@@ -200,26 +200,26 @@ public class LanguageCommand {
     private static int showInfo(CommandContext<CommandSourceStack> ctx) {
         CommandSourceStack source = ctx.getSource();
 
-        source.sendSuccess(() -> MessageUtil.success("═══ NeoEssentials Language System ═══"), false);
-        source.sendSuccess(() -> MessageUtil.info("The language system supports custom translations."), false);
+        source.sendSuccess(() -> MessageUtil.success("commands.neoessentials.language.info.header"), false);
+        source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.intro"), false);
         source.sendSuccess(() -> MessageUtil.info(""), false);
-        source.sendSuccess(() -> MessageUtil.info("§eAvailable Commands:"), false);
-        source.sendSuccess(() -> MessageUtil.info("  §e/language list §7- List all custom languages"), false);
-        source.sendSuccess(() -> MessageUtil.info("  §e/language reload §7- Reload language files"), false);
-        source.sendSuccess(() -> MessageUtil.info("  §e/language stats §7- Show statistics"), false);
-        source.sendSuccess(() -> MessageUtil.info("  §e/language template <code> §7- Generate template"), false);
-        source.sendSuccess(() -> MessageUtil.info("  §e/language exportmissing §7- Export missing keys"), false);
-        source.sendSuccess(() -> MessageUtil.info("  §e/language clearmissing §7- Clear missing keys tracker"), false);
+        source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.commands_header"), false);
+        source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.cmd_list"), false);
+        source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.cmd_reload"), false);
+        source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.cmd_stats"), false);
+        source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.cmd_template"), false);
+        source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.cmd_exportmissing"), false);
+        source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.cmd_clearmissing"), false);
         source.sendSuccess(() -> MessageUtil.info(""), false);
-        source.sendSuccess(() -> MessageUtil.info("§eSupported Language Codes:"), false);
-        source.sendSuccess(() -> MessageUtil.info("  en_us, es_es, fr_fr, de_de, it_it, pt_br,"), false);
-        source.sendSuccess(() -> MessageUtil.info("  ru_ru, ja_jp, ko_kr, zh_cn, nl_nl, etc."), false);
+        source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.codes_header"), false);
+        source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.codes_line1"), false);
+        source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.codes_line2"), false);
         source.sendSuccess(() -> MessageUtil.info(""), false);
-        source.sendSuccess(() -> MessageUtil.info("§eTo create a custom language:"), false);
-        source.sendSuccess(() -> MessageUtil.info("  1. Use §e/language template <code>§7 to generate a template"), false);
-        source.sendSuccess(() -> MessageUtil.info("  2. Translate the text in the template file"), false);
-        source.sendSuccess(() -> MessageUtil.info("  3. Save as §e<code>.json§7 in §eneoessentials/languages/custom/"), false);
-        source.sendSuccess(() -> MessageUtil.info("  4. Run §e/language reload"), false);
+        source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.create_header"), false);
+        source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.create_step1"), false);
+        source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.create_step2"), false);
+        source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.create_step3"), false);
+        source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.create_step4"), false);
 
         return 1;
     }

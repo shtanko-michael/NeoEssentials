@@ -55,7 +55,7 @@ public class KickCommand {
             // Validate reason length and content
             InputValidator.ValidationResult reasonResult = InputValidator.validateReason(reason);
             if (!reasonResult.isValid()) {
-                source.sendFailure(MessageUtil.error("Invalid reason: " + reasonResult.getErrorMessage()));
+                source.sendFailure(MessageUtil.error("neoessentials.moderation.invalid_reason", reasonResult.getErrorMessage()));
                 return 0;
             }
             reason = (String) reasonResult.getValue();
@@ -119,7 +119,7 @@ public class KickCommand {
 
         } catch (Exception e) {
             LOGGER.error("Error executing kick command", e);
-            source.sendFailure(MessageUtil.error("An error occurred while executing the kick command."));
+            source.sendFailure(MessageUtil.error("neoessentials.moderation.kick_error"));
             return 0;
         }
     }
@@ -162,7 +162,7 @@ public class KickCommand {
             
         } catch (Exception e) {
             LOGGER.error("Error executing kickall command", e);
-            source.sendFailure(MessageUtil.error("An error occurred while executing the kickall command."));
+            source.sendFailure(MessageUtil.error("neoessentials.moderation.kickall_error"));
             return 0;
         }
     }

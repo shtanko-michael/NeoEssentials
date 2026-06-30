@@ -284,21 +284,21 @@ public class WarpManager {
      */
     public boolean teleportToPlayerWarp(ServerPlayer admin, UUID targetPlayerId, String warpName) {
         if (!isAdmin(admin)) {
-            admin.sendSystemMessage(MessageUtil.error("You do not have permission to access other players' warps."));
+            admin.sendSystemMessage(MessageUtil.error("commands.neoessentials.warp.no_permission_others"));
             return false;
         }
         Map<String, TeleportLocation> warps = playerWarps.get(targetPlayerId);
         if (warps == null) {
-            admin.sendSystemMessage(MessageUtil.error("Target player has no warps."));
+            admin.sendSystemMessage(MessageUtil.error("commands.neoessentials.warp.target_no_warps"));
             return false;
         }
         TeleportLocation location = warps.get(caseSensitiveNames ? warpName : warpName.toLowerCase());
         if (location == null) {
-            admin.sendSystemMessage(MessageUtil.error("Warp not found for target player."));
+            admin.sendSystemMessage(MessageUtil.error("commands.neoessentials.warp.target_warp_not_found"));
             return false;
         }
             TeleportUtil.teleportPlayer(admin, location);
-        admin.sendSystemMessage(MessageUtil.success("Teleported to target player's warp."));
+        admin.sendSystemMessage(MessageUtil.success("commands.neoessentials.warp.teleported_to_target"));
         return true;
     }
 
@@ -307,7 +307,7 @@ public class WarpManager {
      */
     public List<String> listPlayerWarps(UUID targetPlayerId, ServerPlayer admin) {
         if (!isAdmin(admin)) {
-            admin.sendSystemMessage(MessageUtil.error("You do not have permission to list other players' warps."));
+            admin.sendSystemMessage(MessageUtil.error("commands.neoessentials.warp.no_permission_list_others"));
             return List.of();
         }
         Map<String, TeleportLocation> warps = playerWarps.get(targetPlayerId);

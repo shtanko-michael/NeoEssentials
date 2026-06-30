@@ -200,28 +200,28 @@ public class RulesCommand {
             String rule = serverRules.get(i);
             String formattedRule = rule.replace("&", "§");
             
-            MutableComponent ruleComponent = Component.literal(String.format("§6%d. §f%s", i + 1, formattedRule));
+            MutableComponent ruleComponent = Component.literal(MessageUtil.localize("commands.neoessentials.rules.entry", i + 1, formattedRule));
             source.sendSuccess(() -> ruleComponent, false);
         }
         
         // Footer with navigation
         if (totalPages > 1) {
-            MutableComponent footer = Component.literal("§7Page " + page + "/" + totalPages + " ");
-            
+            MutableComponent footer = Component.literal(MessageUtil.localize("commands.neoessentials.rules.page_indicator", page, totalPages));
+
             if (page > 1) {
-                footer.append(Component.literal("§7[§a◀ Prev§7]")
+                footer.append(Component.literal(MessageUtil.localize("commands.neoessentials.rules.prev_button"))
                     .withStyle(style -> style
                         .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/rules " + (page - 1)))
-                        .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal("§7Click to view previous page")))
+                        .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(MessageUtil.localize("commands.neoessentials.rules.prev_hover"))))
                     ));
                 footer.append(Component.literal(" "));
             }
-            
+
             if (page < totalPages) {
-                footer.append(Component.literal("§7[§aNext ▶§7]")
+                footer.append(Component.literal(MessageUtil.localize("commands.neoessentials.rules.next_button"))
                     .withStyle(style -> style
                         .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/rules " + (page + 1)))
-                        .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal("§7Click to view next page")))
+                        .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(MessageUtil.localize("commands.neoessentials.rules.next_hover"))))
                     ));
             }
             

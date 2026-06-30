@@ -272,7 +272,7 @@ public class FunCommands {
         for (ServerPlayer target : targets) {
             ServerLevel level = target.serverLevel();
             // Message the target
-            target.sendSystemMessage(Component.literal("§c☢ INCOMING NUKE! ☢"));
+            target.sendSystemMessage(Component.literal(MessageUtil.localize("commands.neoessentials.nuke.incoming")));
             // Spawn a 5x5 grid of TNT 64 blocks above the player
             int bx = target.getBlockX();
             int bz = target.getBlockZ();
@@ -360,17 +360,17 @@ public class FunCommands {
 
         // Build output
         var sb = new StringBuilder();
-        sb.append("§e--- §fItem Info: §b").append(displayName).append(" §e---\n");
-        sb.append("§7ID: §f").append(registryId).append("\n");
-        sb.append("§7Max Stack: §f").append(maxStack);
+        sb.append(MessageUtil.localize("commands.neoessentials.itemdb.header", displayName)).append("\n");
+        sb.append(MessageUtil.localize("commands.neoessentials.itemdb.id", registryId)).append("\n");
+        sb.append(MessageUtil.localize("commands.neoessentials.itemdb.max_stack", maxStack));
         if (maxDamage > 0) {
-            sb.append("  §7Max Durability: §f").append(maxDamage);
+            sb.append(MessageUtil.localize("commands.neoessentials.itemdb.max_durability", maxDamage));
         }
 
         // Show custom name if present
         var customName = stack.get(DataComponents.CUSTOM_NAME);
         if (customName != null) {
-            sb.append("\n§7Custom Name: §f").append(customName.getString());
+            sb.append("\n").append(MessageUtil.localize("commands.neoessentials.itemdb.custom_name", customName.getString()));
         }
 
         src.sendSuccess(() -> Component.literal(sb.toString()), false);
@@ -514,13 +514,13 @@ public class FunCommands {
 
         // Show MOTD + Rules summary together as /info
         src.sendSuccess(() -> Component.literal(
-            "§b============ §fServer Info §b============\n" +
+            MessageUtil.localize("commands.neoessentials.info.header") + "\n" +
             motdResolved + "\n" +
-            "§7Type §f/rules §7to view server rules."
+            MessageUtil.localize("commands.neoessentials.info.rules_hint")
         ), false);
 
         if (!finalRules.isEmpty() && !finalRules.equals("No rules set.")) {
-            src.sendSuccess(() -> Component.literal("§e--- §fRules §e---\n" + finalRules), false);
+            src.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.info.rules_header") + "\n" + finalRules), false);
         }
         return 1;
     }
@@ -555,9 +555,9 @@ public class FunCommands {
         if (flavour) {
             var server = src.getServer();
             server.getPlayerList().broadcastSystemMessage(
-                Component.literal("§6...lobbest thou thy Holy Hand Grenade of Antioch towards thy foe,"), false);
+                Component.literal(MessageUtil.localize("commands.neoessentials.antioch.flavour_1")), false);
             server.getPlayerList().broadcastSystemMessage(
-                Component.literal("§6who being naughty in My sight, shall snuff it."), false);
+                Component.literal(MessageUtil.localize("commands.neoessentials.antioch.flavour_2")), false);
         }
 
         var hit = player.pick(20, 1.0f, false);
@@ -731,19 +731,19 @@ public class FunCommands {
         var server = src.getServer();
 
         // Step 1: save-all
-        src.sendSuccess(() -> Component.literal("§eSaving world data..."), false);
+        src.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.backup.saving")), false);
         server.getAllLevels().forEach(level -> level.save(null, true, false));
 
         // Step 2: run configured backup command (if any)
         String backupCmd = ConfigManager.getInstance().getBackupCommand();
         if (backupCmd != null && !backupCmd.isBlank() && !backupCmd.equalsIgnoreCase("save-all")) {
-            src.sendSuccess(() -> Component.literal("§eRunning backup command: §f" + backupCmd), false);
+            src.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.backup.running", backupCmd)), false);
             try {
                 new ProcessBuilder(backupCmd.split("\\s+"))
                     .inheritIO()
                     .start();
             } catch (Exception e) {
-                src.sendFailure(Component.literal("§cBackup command failed: " + e.getMessage()));
+                src.sendFailure(Component.literal(MessageUtil.localize("commands.neoessentials.backup.failed", e.getMessage())));
                 LOGGER.error("Backup command '{}' failed: {}", backupCmd, e.getMessage(), e);
                 return 0;
             }

@@ -127,8 +127,8 @@ public class HelpopCommand {
             locationComponent = Component.literal("§e" + location)
                 .withStyle(style -> style
                     .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, tpCommand))
-                    .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, 
-                        Component.literal("§7Click to teleport to " + playerName)))
+                    .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
+                        Component.literal(MessageUtil.localize("commands.neoessentials.helpop.hover_teleport", playerName))))
                 );
         } else {
             locationComponent = Component.literal("§e" + location);
@@ -139,11 +139,11 @@ public class HelpopCommand {
         
         // Create reply component with click-to-reply
         String replyCommand = "/msg " + playerName + " ";
-        Component replyComponent = Component.literal("§a[Reply]")
+        Component replyComponent = Component.literal(MessageUtil.localize("commands.neoessentials.helpop.reply_button"))
             .withStyle(style -> style
                 .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, replyCommand))
-                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, 
-                    Component.literal("§7Click to reply to " + playerName)))
+                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
+                    Component.literal(MessageUtil.localize("commands.neoessentials.helpop.hover_reply", playerName))))
             );
         
         // Send all components to staff member

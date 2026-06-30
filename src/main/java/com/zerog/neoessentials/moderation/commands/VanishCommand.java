@@ -175,7 +175,7 @@ public class VanishCommand {
             
         } catch (Exception e) {
             LOGGER.error("Error executing vanish command", e);
-            source.sendFailure(MessageUtil.error("An error occurred while executing the vanish command."));
+            source.sendFailure(MessageUtil.error("neoessentials.moderation.vanish_error"));
             return 0;
         }
     }
@@ -250,7 +250,7 @@ public class VanishCommand {
             
         } catch (Exception e) {
             LOGGER.error("Error executing unvanish command", e);
-            source.sendFailure(MessageUtil.error("An error occurred while executing the unvanish command."));
+            source.sendFailure(MessageUtil.error("neoessentials.moderation.unvanish_error"));
             return 0;
         }
     }
@@ -289,7 +289,7 @@ public class VanishCommand {
             
         } catch (Exception e) {
             LOGGER.error("Error executing vanishlist command", e);
-            source.sendFailure(MessageUtil.error("An error occurred while executing the vanishlist command."));
+            source.sendFailure(MessageUtil.error("neoessentials.moderation.vanishlist_error"));
             return 0;
         }
     }

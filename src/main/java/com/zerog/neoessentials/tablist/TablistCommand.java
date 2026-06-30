@@ -86,7 +86,7 @@ public class TablistCommand {
                     }
                     var server = player.getServer();
                     if (server != null) TablistManager.getInstance().updatePlayer(player, server);
-                    ctx.getSource().sendSuccess(() -> Component.literal("§aPreviewing your tablist header/footer."), false);
+                    ctx.getSource().sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.tablist.previewing")), false);
                     return 1;
                 })
             )
@@ -94,9 +94,11 @@ public class TablistCommand {
             .then(Commands.literal("info")
                 .executes(ctx -> {
                     boolean enabled = TablistManager.getInstance().isEnabled();
+                    String stateLabel = enabled
+                        ? "§a" + MessageUtil.localize("commands.neoessentials.general.enabled")
+                        : "§c" + MessageUtil.localize("commands.neoessentials.general.disabled");
                     ctx.getSource().sendSuccess(() -> Component.literal(
-                        "§6Tablist System §8— §" + (enabled ? "aEnabled" : "cDisabled") + "\n" +
-                        "§7Use §e/tablist reload §7to reload config, §e/tablist preview §7to preview your tab."
+                        MessageUtil.localize("commands.neoessentials.tablist.info_status", stateLabel)
                     ), false);
                     return 1;
                 })
@@ -136,18 +138,7 @@ public class TablistCommand {
     }
 
     private static void showHelp(CommandSourceStack src) {
-        src.sendSuccess(() -> Component.literal(
-            "§6§lTablist Commands:\n" +
-            "§e/tablist reload §7— reload tablist.json config\n" +
-            "§e/tablist enable §7— enable tablist\n" +
-            "§e/tablist disable §7— disable tablist\n" +
-            "§e/tablist preview §7— preview your header/footer\n" +
-            "§e/tablist set header <text> §7— runtime header override\n" +
-            "§e/tablist set footer <text> §7— runtime footer override\n" +
-            "§e/tablist info §7— show status and config file path\n" +
-            "§e/tablist config §7— show current settings summary\n" +
-            "§7Config file: §fconfig/neoessentials/tablist.json"
-        ), false);
+        src.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.tablist.help")), false);
     }
 }
 

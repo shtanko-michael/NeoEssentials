@@ -353,7 +353,7 @@ public class PowertoolCommand {
             String command = entry.getValue();
             // Extract just the item name from the full ID (e.g., "minecraft:diamond_sword" -> "diamond_sword")
             String itemName = itemId.contains(":") ? itemId.substring(itemId.indexOf(":") + 1) : itemId;
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal("  §e" + itemName + "§r: §7" + command));
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(MessageUtil.localize("commands.neoessentials.powertool.list.entry", itemName, command)));
         }
 
         return 1;

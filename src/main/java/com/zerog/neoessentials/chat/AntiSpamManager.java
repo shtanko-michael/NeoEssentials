@@ -2,6 +2,7 @@ package com.zerog.neoessentials.chat;
 
 import net.minecraft.server.level.ServerPlayer;
 import com.zerog.neoessentials.api.permissions.PermissionAPI;
+import com.zerog.neoessentials.util.MessageUtil;
 import com.google.gson.JsonObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -117,7 +118,7 @@ public class AntiSpamManager {
             if (!tracker.allowMessage()) {
                 String action = config.get("action").getAsString();
                 if ("block".equals(action)) {
-                    return new FilterResult(false, null, "§cYou are sending messages too quickly! Please slow down.");
+                    return new FilterResult(false, null, MessageUtil.localize("commands.neoessentials.chat.antispam.too_fast"));
                 }
             }
 
@@ -194,7 +195,7 @@ public class AntiSpamManager {
             if (matcher.find()) {
                 // Block all links
                 if ("block".equals(action)) {
-                    return new FilterResult(false, null, "§cLinks are not allowed in chat!");
+                    return new FilterResult(false, null, MessageUtil.localize("commands.neoessentials.chat.antispam.no_links"));
                 }
 
                 // Whitelist mode
@@ -212,7 +213,7 @@ public class AntiSpamManager {
                     }
 
                     if (!allowed) {
-                        return new FilterResult(false, null, "§cOnly whitelisted links are allowed in chat!");
+                        return new FilterResult(false, null, MessageUtil.localize("commands.neoessentials.chat.antispam.whitelisted_links_only"));
                     }
                 }
             }
@@ -272,7 +273,7 @@ public class AntiSpamManager {
                     // Convert to lowercase
                     return new FilterResult(true, message.toLowerCase(), null);
                 } else if ("block".equals(action)) {
-                    return new FilterResult(false, null, "§cPlease don't use excessive caps in chat!");
+                    return new FilterResult(false, null, MessageUtil.localize("commands.neoessentials.chat.antispam.no_caps"));
                 } else if ("warn".equals(action)) {
                     player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
                         "§ePlease avoid using excessive caps in your messages."

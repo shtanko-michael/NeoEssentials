@@ -97,18 +97,18 @@ public class InventoryViewCommands {
 
         // Don't allow viewing own inventory (use regular 'E' key)
         if (viewer.getUUID().equals(target.getUUID())) {
-            viewer.sendSystemMessage(MessageUtil.error("You cannot view your own inventory with this command!"));
+            viewer.sendSystemMessage(MessageUtil.error("commands.neoessentials.invsee.cannot_view_self"));
             return 0;
         }
 
         // Open the inventory view
         if (editable) {
             openEditableInventory(viewer, target);
-            viewer.sendSystemMessage(MessageUtil.success("Opening editable inventory of " + target.getName().getString()));
+            viewer.sendSystemMessage(MessageUtil.success("commands.neoessentials.invsee.opening_editable", target.getName().getString()));
             LOGGER.info("{} is viewing and editing {}'s inventory", viewer.getName().getString(), target.getName().getString());
         } else {
             openReadOnlyInventory(viewer, target);
-            viewer.sendSystemMessage(MessageUtil.success("Viewing inventory of " + target.getName().getString()));
+            viewer.sendSystemMessage(MessageUtil.success("commands.neoessentials.invsee.viewing", target.getName().getString()));
             LOGGER.info("{} is viewing {}'s inventory (read-only)", viewer.getName().getString(), target.getName().getString());
         }
 
@@ -126,14 +126,14 @@ public class InventoryViewCommands {
         if (editable) {
             viewer.openMenu(new SimpleMenuProvider(
                 (id, playerInventory, player) -> ChestMenu.threeRows(id, playerInventory, target.getEnderChestInventory()),
-                Component.literal(target.getName().getString() + "'s Ender Chest (Editable)")
+                Component.literal(MessageUtil.localize("gui.neoessentials.enderchest.title_editable", target.getName().getString()))
             ));
-            viewer.sendSystemMessage(MessageUtil.success("Opening editable ender chest of " + target.getName().getString()));
+            viewer.sendSystemMessage(MessageUtil.success("commands.neoessentials.enderchest.opening_editable", target.getName().getString()));
             LOGGER.info("{} is viewing and editing {}'s ender chest", viewer.getName().getString(), target.getName().getString());
         } else {
             // For read-only, we create a copy of the ender chest
             openReadOnlyEnderChest(viewer, target);
-            viewer.sendSystemMessage(MessageUtil.success("Viewing ender chest of " + target.getName().getString()));
+            viewer.sendSystemMessage(MessageUtil.success("commands.neoessentials.enderchest.viewing", target.getName().getString()));
             LOGGER.info("{} is viewing {}'s ender chest (read-only)", viewer.getName().getString(), target.getName().getString());
         }
 
@@ -153,7 +153,7 @@ public class InventoryViewCommands {
             }
             viewer.openMenu(new SimpleMenuProvider(
                 (id, playerInventory, player) -> ChestMenu.threeRows(id, playerInventory, inventoryCopy),
-                Component.literal(target.getName().getString() + "'s Inventory (Read-Only)")
+                Component.literal(MessageUtil.localize("gui.neoessentials.invsee.title_readonly", target.getName().getString()))
             ));
         } else {
             // More than 27: always use 54 slots (sixRows)
@@ -166,7 +166,7 @@ public class InventoryViewCommands {
             }
             viewer.openMenu(new SimpleMenuProvider(
                 (id, playerInventory, player) -> ChestMenu.sixRows(id, playerInventory, inventoryCopy),
-                Component.literal(target.getName().getString() + "'s Inventory (Read-Only)")
+                Component.literal(MessageUtil.localize("gui.neoessentials.invsee.title_readonly", target.getName().getString()))
             ));
         }
     }
@@ -198,7 +198,7 @@ public class InventoryViewCommands {
         // Open as a chest menu (read-only)
         viewer.openMenu(new SimpleMenuProvider(
             (id, playerInventory, player) -> ChestMenu.threeRows(id, playerInventory, enderChestCopy),
-            Component.literal(target.getName().getString() + "'s Ender Chest (Read-Only)")
+            Component.literal(MessageUtil.localize("gui.neoessentials.enderchest.title_readonly", target.getName().getString()))
         ));
     }
 }

@@ -240,7 +240,7 @@ public class JailCommand {
             // Validate reason length and content
             InputValidator.ValidationResult reasonResult = InputValidator.validateReason(reason);
             if (!reasonResult.isValid()) {
-                source.sendFailure(MessageUtil.error("Invalid reason: " + reasonResult.getErrorMessage()));
+                source.sendFailure(MessageUtil.error("neoessentials.moderation.invalid_reason", reasonResult.getErrorMessage()));
                 return 0;
             }
             reason = (String) reasonResult.getValue();
@@ -251,7 +251,7 @@ public class JailCommand {
             // Enforce requireJailLocation config: must have at least one jail location set
             boolean requireJailLocation = com.zerog.neoessentials.config.ConfigManager.isRequireJailLocationEnabled();
             if (requireJailLocation && jailManager.getAllJailLocations().isEmpty()) {
-                source.sendFailure(MessageUtil.error("No jail locations are set. Please set a jail location before jailing players."));
+                source.sendFailure(MessageUtil.error("neoessentials.moderation.no_jail_locations"));
                 return 0;
             }
             // Check if jail exists
@@ -306,7 +306,7 @@ public class JailCommand {
             }
         } catch (Exception e) {
             LOGGER.error("Error executing jail command", e);
-            source.sendFailure(MessageUtil.error("An error occurred while executing the jail command."));
+            source.sendFailure(MessageUtil.error("neoessentials.moderation.jail_error"));
             return 0;
         }
     }
@@ -367,7 +367,7 @@ public class JailCommand {
             }
         } catch (Exception e) {
             LOGGER.error("Error executing unjail command", e);
-            source.sendFailure(MessageUtil.error("An error occurred while executing the unjail command."));
+            source.sendFailure(MessageUtil.error("neoessentials.moderation.unjail_error"));
             return 0;
         }
     }
@@ -404,7 +404,7 @@ public class JailCommand {
             
         } catch (Exception e) {
             LOGGER.error("Error executing setjail command", e);
-            source.sendFailure(MessageUtil.error("An error occurred while executing the setjail command."));
+            source.sendFailure(MessageUtil.error("neoessentials.moderation.setjail_error"));
             return 0;
         }
     }
@@ -435,7 +435,7 @@ public class JailCommand {
             
         } catch (Exception e) {
             LOGGER.error("Error executing jaillist command", e);
-            source.sendFailure(MessageUtil.error("An error occurred while executing the jaillist command."));
+            source.sendFailure(MessageUtil.error("neoessentials.moderation.jaillist_error"));
             return 0;
         }
     }
@@ -498,7 +498,7 @@ public class JailCommand {
             
         } catch (Exception e) {
             LOGGER.error("Error executing jailinfo command", e);
-            source.sendFailure(MessageUtil.error("An error occurred while executing the jailinfo command."));
+            source.sendFailure(MessageUtil.error("neoessentials.moderation.jailinfo_error"));
             return 0;
         }
     }
@@ -534,7 +534,7 @@ public class JailCommand {
             return 1;
         } catch (Exception e) {
             LOGGER.error("Error executing deljail command", e);
-            source.sendFailure(MessageUtil.error("An error occurred while deleting the jail."));
+            source.sendFailure(MessageUtil.error("neoessentials.moderation.deljail_error"));
             return 0;
         }
     }

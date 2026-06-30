@@ -148,7 +148,7 @@ public class EcoCommand {
         BigDecimal amount;
         if ("set".equals(action)) {
             if (amountRaw < 0 || Double.isNaN(amountRaw) || Double.isInfinite(amountRaw)) {
-                ctx.getSource().sendFailure(MessageUtil.error("Invalid amount: must be non-negative"));
+                ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.eco.invalid_amount"));
                 return 0;
             }
             amount = BigDecimal.valueOf(amountRaw);

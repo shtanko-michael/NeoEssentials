@@ -1,5 +1,6 @@
 package com.zerog.neoessentials.webdashboard.security;
 
+import com.zerog.neoessentials.util.MessageUtil;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -58,7 +59,7 @@ public class DiscordSyncEventHandler {
                 player.sendSystemMessage(
                     Component.literal("✓ ")
                         .withStyle(ChatFormatting.GREEN)
-                        .append(Component.literal("Your permissions have been synced from Discord.")
+                        .append(Component.literal(MessageUtil.localize("neoessentials.discord.permissions_synced"))
                             .withStyle(ChatFormatting.GRAY))
                 );
                 

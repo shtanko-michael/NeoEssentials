@@ -3,6 +3,7 @@ package com.zerog.neoessentials.moderation;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
+import com.zerog.neoessentials.util.MessageUtil;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.network.chat.Component;
@@ -91,9 +92,9 @@ public class ModerationManager {
                 UUID uuid = UUID.fromString(target);
                 ServerPlayer player = server.getPlayerList().getPlayer(uuid);
                 if (player != null) {
-                    String kickMessage = "You have been banned from this server.\nReason: " + reason;
+                    String kickMessage = MessageUtil.localize("neoessentials.moderation.ban_kick_message", reason);
                     if (!ban.isPermanent()) {
-                        kickMessage += "\nExpires: " + expiresAt.toString();
+                        kickMessage += MessageUtil.localize("neoessentials.moderation.ban_kick_expires", expiresAt.toString());
                     }
                     player.connection.disconnect(Component.literal(kickMessage));
                 }
@@ -247,7 +248,7 @@ public class ModerationManager {
      */
     public void setWhitelistEnabled(boolean enabled) {
         this.whitelistEnabled = enabled;
-        LOGGER.info("Whitelist {}", enabled ? "enabled" : "disabled");
+        LOGGER.info("Whitelist {}", enabled ? MessageUtil.localize("commands.neoessentials.general.enabled") : MessageUtil.localize("commands.neoessentials.general.disabled"));
     }
     
     /**

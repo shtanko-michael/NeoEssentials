@@ -46,7 +46,7 @@ public class MessageUtil {
     
     // Language version tracking - increment when translations change
     private static final String LANG_VERSION_KEY = "_langVersion";
-    private static final int CURRENT_LANG_VERSION = 10;
+    private static final int CURRENT_LANG_VERSION = 16;
 
     /**
      * Load translations from server directory, updating from JAR if needed.
@@ -149,12 +149,98 @@ public class MessageUtil {
                 translations.putAll(jarTranslations);
             }
         }
+        // Overlay the configured language over the en_us base (untranslated keys keep English)
+        applyLanguageOverlay();
+
         LOGGER.debug("Translation loading complete. Total keys: {}", translations.size());
         if (serverLangFile.length() == 0) {
             LOGGER.error("Server language file is empty after creation! Check file permissions and JAR resource.");
         }
     }
     
+    /**
+     * Overlay the configured language on top of the en_us base map.
+     * en_us is always loaded first as the fallback layer; this replaces any key that the
+     * selected language actually translates, leaving English for the rest. No-op when the
+     * configured language is en_us (or unset/blank).
+     */
+    private static void applyLanguageOverlay() {
+        String lang;
+        try {
+            lang = com.zerog.neoessentials.config.ConfigManager.getLanguage();
+        } catch (Exception e) {
+            lang = "en_us";
+            LOGGER.warn("NeoEssentials: could not read 'language' from config, defaulting to en_us: {}", e.getMessage());
+        }
+        LOGGER.info("NeoEssentials i18n: configured language = '{}' (read from config.json key 'language'; en_us is the base/fallback)", lang);
+        if (lang == null || lang.isBlank() || lang.equalsIgnoreCase("en_us")) {
+            LOGGER.info("NeoEssentials i18n: using en_us base — no language overlay applied. To switch, set \"language\" in the SERVER config (config/neoessentials/config.json) and run /neoessentials reload.");
+            return; // en_us is already the base layer
+        }
+
+        Map<String, String> langMap = loadLanguageMap(lang);
+        if (langMap == null || langMap.isEmpty()) {
+            LOGGER.warn("NeoEssentials: configured language '{}' has no usable translation file; staying on en_us.", lang);
+            return;
+        }
+
+        int overlaid = 0;
+        for (Map.Entry<String, String> e : langMap.entrySet()) {
+            String key = e.getKey();
+            String value = e.getValue();
+            if (key == null || key.startsWith("_")) continue; // skip metadata/version keys
+            if (value != null && !value.isEmpty()) {
+                translations.put(key, value);
+                overlaid++;
+            }
+        }
+        LOGGER.info("NeoEssentials: applied language '{}' ({} keys overlaid over the en_us base, total {})",
+            lang, overlaid, translations.size());
+    }
+
+    /**
+     * Load a language map by code, preferring the admin-editable on-disk file
+     * (neoessentials/languages/custom/&lt;code&gt;.json, deployed by CustomLanguageManager),
+     * falling back to the bundled JAR resource data/lang/&lt;code&gt;.json.
+     */
+    private static Map<String, String> loadLanguageMap(String lang) {
+        Map<String, String> merged = new HashMap<>();
+        // 1) JAR base — the complete, up-to-date translation shipped with the mod.
+        try (InputStream in = ResourceUtil.getJarLangResource(lang + ".json")) {
+            if (in != null) {
+                try (java.util.Scanner scanner = new java.util.Scanner(in, java.nio.charset.StandardCharsets.UTF_8).useDelimiter("\\A")) {
+                    String json = scanner.hasNext() ? scanner.next() : "";
+                    Gson gson = new Gson();
+                    Type type = new TypeToken<Map<String, String>>(){}.getType();
+                    Map<String, String> jarMap = gson.fromJson(json, type);
+                    if (jarMap != null) {
+                        merged.putAll(jarMap);
+                        LOGGER.info("NeoEssentials i18n: loaded {} keys from JAR data/lang/{}.json", jarMap.size(), lang);
+                    }
+                }
+            } else {
+                LOGGER.warn("NeoEssentials i18n: no bundled translation 'data/lang/{}.json' in the JAR for language '{}'", lang, lang);
+            }
+        } catch (Exception e) {
+            LOGGER.warn("NeoEssentials i18n: failed reading bundled language '{}': {}", lang, e.getMessage());
+        }
+        // 2) on-disk custom file overlaid on top — lets an admin override/add specific keys
+        // (overlay, not replace, so a partial/stale custom file can't hide the JAR translation).
+        try {
+            File diskFile = new File(getNeoEssentialsLangCustomDir(), lang + ".json");
+            if (diskFile.exists() && diskFile.length() > 0) {
+                Map<String, String> diskMap = loadServerTranslations(diskFile);
+                if (diskMap != null && !diskMap.isEmpty()) {
+                    merged.putAll(diskMap);
+                    LOGGER.info("NeoEssentials i18n: overlaid {} custom keys from {}", diskMap.size(), diskFile.getAbsolutePath());
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.warn("NeoEssentials i18n: failed reading on-disk language '{}': {}", lang, e.getMessage());
+        }
+        return merged.isEmpty() ? null : merged;
+    }
+
     /**
      * Load translations from JAR resource
      */
@@ -486,18 +572,18 @@ public class MessageUtil {
      * Create a clickable confirmation message for home actions
      */
     public static MutableComponent homeConfirmComponent(String homeName, String action, String commandConfirm, String commandDeny) {
-        MutableComponent confirm = Component.literal("[Confirm]")
+        MutableComponent confirm = Component.literal(localize("commands.neoessentials.home.confirm.button_confirm"))
             .withStyle(style -> style.withColor(TextColor.fromRgb(0x4CAF50)))
             .withStyle(style -> style.withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, commandConfirm)))
-            .withStyle(style -> style.withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal("Click to confirm " + action + " of home '" + homeName + "'"))));
-        MutableComponent deny = Component.literal("[Deny]")
+            .withStyle(style -> style.withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(localize("commands.neoessentials.home.confirm.hover_confirm", action, homeName)))));
+        MutableComponent deny = Component.literal(localize("commands.neoessentials.home.confirm.button_deny"))
             .withStyle(style -> style.withColor(TextColor.fromRgb(0xF44336)))
             .withStyle(style -> style.withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, commandDeny)))
-            .withStyle(style -> style.withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal("Click to cancel " + action + " of home '" + homeName + "'"))));
+            .withStyle(style -> style.withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(localize("commands.neoessentials.home.confirm.hover_cancel", action, homeName)))));
         return Component.literal("")
-            .append(Component.literal("Are you sure you want to "+action+" home '").withStyle(style -> style.withColor(TextColor.fromRgb(0xFFD600))))
+            .append(Component.literal(localize("commands.neoessentials.home.confirm.question_prefix", action)).withStyle(style -> style.withColor(TextColor.fromRgb(0xFFD600))))
             .append(Component.literal(homeName).withStyle(style -> style.withColor(TextColor.fromRgb(0xFF9800))))
-            .append(Component.literal("'? "))
+            .append(Component.literal(localize("commands.neoessentials.home.confirm.question_suffix")))
             .append(confirm)
             .append(Component.literal(" "))
             .append(deny);

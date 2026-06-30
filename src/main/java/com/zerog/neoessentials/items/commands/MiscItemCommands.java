@@ -216,13 +216,13 @@ public class MiscItemCommands {
             }
             // Cooldown line
             long cdMs = kit.getCooldownMillis();
-            String cdStr = cdMs <= 0 ? "No cooldown" : formatDuration(cdMs);
-            src.sendSuccess(() -> Component.literal("§7Cooldown: §e" + cdStr), false);
+            String cdStr = cdMs <= 0 ? MessageUtil.localize("commands.neoessentials.showkit.no_cooldown") : formatDuration(cdMs);
+            src.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.showkit.cooldown", cdStr)), false);
             // Items
             for (ItemStack stack : kit.getItems()) {
                 String itemName = stack.getItem().getDescription().getString();
                 int count = stack.getCount();
-                src.sendSuccess(() -> Component.literal("  §a- §f" + count + "x §e" + itemName), false);
+                src.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.showkit.item_entry", count, itemName)), false);
             }
             shown++;
         }
@@ -264,7 +264,7 @@ public class MiscItemCommands {
         for (Map.Entry<String, String> entry : powers.entrySet()) {
             String itemName = entry.getKey().contains(":") ? entry.getKey().substring(entry.getKey().indexOf(':') + 1) : entry.getKey();
             String cmd = entry.getValue();
-            src.sendSuccess(() -> Component.literal("  §e" + itemName + " §8→ §7" + cmd), false);
+            src.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.powertoollist.entry", itemName, cmd)), false);
         }
         return 1;
     }
@@ -326,9 +326,7 @@ public class MiscItemCommands {
                 Files.createDirectories(textDir);
                 if (safeChapter.equals("info")) {
                     Files.writeString(file,
-                        "§6Welcome to the server!\n" +
-                        "§7Edit this file at: config/neoessentials/text/info.txt\n" +
-                        "§7You can use §r&§7 colour codes.\n");
+                        MessageUtil.localize("commands.neoessentials.customtext.seed_info"));
                 }
             } catch (IOException e) {
                 LOGGER.warn("Could not create text dir: {}", e.getMessage());
@@ -360,7 +358,7 @@ public class MiscItemCommands {
         int start = (p - 1) * LINES_PER_PAGE;
         int end = Math.min(start + LINES_PER_PAGE, formatted.size());
 
-        final String header = "§6══ §e" + safeChapter + " §7(Page " + p + "/" + totalPages + ") §6══";
+        final String header = MessageUtil.localize("commands.neoessentials.customtext.page_header", safeChapter, p, totalPages);
         src.sendSuccess(() -> Component.literal(header), false);
         for (int i = start; i < end; i++) {
             String line = formatted.get(i);
@@ -368,7 +366,7 @@ public class MiscItemCommands {
         }
         if (totalPages > 1) {
             src.sendSuccess(() -> Component.literal(
-                "§7Use §e/customtext " + safeChapter + " <page>§7 to view other pages."), false);
+                MessageUtil.localize("commands.neoessentials.customtext.page_nav", safeChapter)), false);
         }
         return 1;
     }
@@ -399,7 +397,7 @@ public class MiscItemCommands {
             payConfirmDisabled.add(uuid);
             nowDisabled = true;
         }
-        String state = nowDisabled ? "§cdisabled" : "§aenabled";
+        String state = nowDisabled ? MessageUtil.localize("commands.neoessentials.general.disabled") : MessageUtil.localize("commands.neoessentials.general.enabled");
         src.sendSuccess(() -> MessageUtil.success("commands.neoessentials.payconfirmtoggle.toggled", state), false);
         return 1;
     }
@@ -442,7 +440,7 @@ public class MiscItemCommands {
             ciConfirmDisabled.add(uuid);
             nowDisabled = true;
         }
-        String state = nowDisabled ? "§cdisabled" : "§aenabled";
+        String state = nowDisabled ? MessageUtil.localize("commands.neoessentials.general.disabled") : MessageUtil.localize("commands.neoessentials.general.enabled");
         src.sendSuccess(() -> MessageUtil.success("commands.neoessentials.ciconfirmtoggle.toggled", state), false);
         return 1;
     }
@@ -572,7 +570,7 @@ public class MiscItemCommands {
         boolean curDisabled = rToggleDisabled.contains(uuid);
         boolean newDisabled = enable != null ? !enable : !curDisabled;
         if (newDisabled) rToggleDisabled.add(uuid); else rToggleDisabled.remove(uuid);
-        String label = newDisabled ? "§cdisabled" : "§aenabled";
+        String label = newDisabled ? MessageUtil.localize("commands.neoessentials.general.disabled") : MessageUtil.localize("commands.neoessentials.general.enabled");
         boolean isOther = src.getPlayer() == null || !src.getPlayer().getUUID().equals(uuid);
         if (isOther) {
             src.sendSuccess(() -> MessageUtil.success("commands.neoessentials.rtoggle.other",

@@ -68,7 +68,7 @@ public class WhoisCommand {
         boolean canSeeDetailed = detailedResult.hasPermission();
         
         // Header
-        MutableComponent header = Component.literal("§6§l┌─ Player Information: " + targetPlayer.getName().getString() + " ─┐");
+        MutableComponent header = Component.literal(MessageUtil.localize("commands.neoessentials.whois.header", targetPlayer.getName().getString()));
         source.sendSuccess(() -> header, false);
         
         // Basic Information
@@ -78,7 +78,7 @@ public class WhoisCommand {
         String displayName = targetPlayer.getDisplayName().getString();
         String realName = targetPlayer.getName().getString();
         if (!displayName.equals(realName)) {
-            MutableComponent nickInfo = Component.literal("§aNickname: §f" + displayName + " §7(Real: " + realName + ")");
+            MutableComponent nickInfo = Component.literal(MessageUtil.localize("commands.neoessentials.whois.nickname", displayName, realName));
             source.sendSuccess(() -> nickInfo, false);
         } else {
             source.sendSuccess(() -> MessageUtil.component("commands.neoessentials.whois.username", realName), false);
@@ -86,10 +86,10 @@ public class WhoisCommand {
         
         // UUID (for admins)
         if (canSeeDetailed) {
-            MutableComponent uuidComponent = Component.literal("§bUUID: §7" + targetPlayer.getUUID().toString())
+            MutableComponent uuidComponent = Component.literal(MessageUtil.localize("commands.neoessentials.whois.uuid", targetPlayer.getUUID().toString()))
                 .withStyle(style -> style
                     .withClickEvent(new ClickEvent(ClickEvent.Action.COPY_TO_CLIPBOARD, targetPlayer.getUUID().toString()))
-                    .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal("Click to copy UUID")))
+                    .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(MessageUtil.localize("commands.neoessentials.whois.hover_copy_uuid"))))
                 );
             source.sendSuccess(() -> uuidComponent, false);
         }
@@ -141,13 +141,12 @@ public class WhoisCommand {
             double z = targetPlayer.getZ();
             String dimension = targetPlayer.level().dimension().location().toString();
             
-            MutableComponent locationComponent = Component.literal("§dLocation: §f" + 
-                DECIMAL_FORMAT.format(x) + ", " + DECIMAL_FORMAT.format(y) + ", " + DECIMAL_FORMAT.format(z) + 
-                " §7in §f" + dimension)
+            MutableComponent locationComponent = Component.literal(MessageUtil.localize("commands.neoessentials.whois.location",
+                DECIMAL_FORMAT.format(x), DECIMAL_FORMAT.format(y), DECIMAL_FORMAT.format(z), dimension))
                 .withStyle(style -> style
-                    .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, 
+                    .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND,
                         "/tp " + DECIMAL_FORMAT.format(x) + " " + DECIMAL_FORMAT.format(y) + " " + DECIMAL_FORMAT.format(z)))
-                    .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal("Click to get teleport command")))
+                    .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(MessageUtil.localize("commands.neoessentials.whois.hover_teleport_command"))))
                 );
             source.sendSuccess(() -> locationComponent, false);
         }

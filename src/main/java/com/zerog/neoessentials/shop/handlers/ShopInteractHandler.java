@@ -7,6 +7,7 @@ import com.zerog.neoessentials.shop.ShopParser;
 import com.zerog.neoessentials.shop.ShopTransaction;
 import com.zerog.neoessentials.shop.ShopTransaction.TransactionResult;
 import com.zerog.neoessentials.shop.model.ShopData;
+import com.zerog.neoessentials.util.MessageUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
@@ -56,7 +57,7 @@ public class ShopInteractHandler {
                 net.minecraft.world.item.ItemStack held = player.getItemInHand(InteractionHand.MAIN_HAND);
                 if (held.isEmpty()) {
                     player.sendSystemMessage(Component.literal(
-                        "§eHold the item you want this shop to trade, then right-click the sign."));
+                        MessageUtil.localize("commands.neoessentials.shop.autofill_hold_item")));
                 } else {
                     // Assign the held item
                     shop.itemId      = com.zerog.neoessentials.economy.worth.WorthManager.getItemId(held);
@@ -65,15 +66,15 @@ public class ShopInteractHandler {
                     ShopSignHandler.writeSignLines(level, pos, ShopParser.formatSignLines(shop));
                     String currency = EconomyManager.getInstance().getCurrencySymbol();
                     player.sendSystemMessage(Component.literal(
-                        "§aItem set to §f" + ShopParser.buildItemDisplayName(shop.itemId) + "§a!"));
+                        MessageUtil.localize("commands.neoessentials.shop.item_set", ShopParser.buildItemDisplayName(shop.itemId))));
                     if (shop.buyPrice  != null) player.sendSystemMessage(Component.literal(
-                        "§eBuy price:  §f" + currency + shop.buyPrice.toPlainString()));
+                        MessageUtil.localize("commands.neoessentials.shop.buy_price", currency + shop.buyPrice.toPlainString())));
                     if (shop.sellPrice != null) player.sendSystemMessage(Component.literal(
-                        "§eSell price: §f" + currency + shop.sellPrice.toPlainString()));
-                    player.sendSystemMessage(Component.literal("§aShop is now active."));
+                        MessageUtil.localize("commands.neoessentials.shop.sell_price", currency + shop.sellPrice.toPlainString())));
+                    player.sendSystemMessage(Component.literal(MessageUtil.localize("commands.neoessentials.shop.now_active")));
                 }
             } else {
-                player.sendSystemMessage(Component.literal("§cThis shop is not yet ready."));
+                player.sendSystemMessage(Component.literal(MessageUtil.localize("commands.neoessentials.shop.not_ready")));
             }
             return;
         }
@@ -86,12 +87,12 @@ public class ShopInteractHandler {
         }
 
         if (!PermissionAPI.hasPermission(player.getUUID(), "neoessentials.shop.use")) {
-            player.sendSystemMessage(Component.literal("§cYou don't have permission to use shops."));
+            player.sendSystemMessage(Component.literal(MessageUtil.localize("commands.neoessentials.shop.no_permission_use")));
             return;
         }
 
         if (!shop.canBuy()) {
-            player.sendSystemMessage(Component.literal("§cThis shop does not sell items."));
+            player.sendSystemMessage(Component.literal(MessageUtil.localize("commands.neoessentials.shop.does_not_sell")));
             return;
         }
 
@@ -123,13 +124,13 @@ public class ShopInteractHandler {
 
         if (!PermissionAPI.hasPermission(player.getUUID(), "neoessentials.shop.use")) {
             event.setCanceled(true);
-            player.sendSystemMessage(Component.literal("§cYou don't have permission to use shops."));
+            player.sendSystemMessage(Component.literal(MessageUtil.localize("commands.neoessentials.shop.no_permission_use")));
             return;
         }
 
         if (!shop.canSell()) {
             event.setCanceled(true);
-            player.sendSystemMessage(Component.literal("§cThis shop does not buy items."));
+            player.sendSystemMessage(Component.literal(MessageUtil.localize("commands.neoessentials.shop.does_not_buy")));
             return;
         }
 
@@ -161,12 +162,12 @@ public class ShopInteractHandler {
 
         if (!isOwner && !isAdmin) {
             event.setCanceled(true);
-            player.sendSystemMessage(Component.literal("§cYou cannot break someone else's shop."));
+            player.sendSystemMessage(Component.literal(MessageUtil.localize("commands.neoessentials.shop.cannot_break_other")));
             return;
         }
 
         ShopManager.getInstance().removeShop(dimension, shop.getSignPos());
-        player.sendSystemMessage(Component.literal("§aShop removed."));
+        player.sendSystemMessage(Component.literal(MessageUtil.localize("commands.neoessentials.shop.removed")));
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -179,55 +180,55 @@ public class ShopInteractHandler {
         switch (result.type) {
             case SUCCESS -> {
                 if (buying) {
-                    player.sendSystemMessage(Component.literal(String.format(
-                        "§aYou bought §f%dx %s §afor §f%s%s§a from §f%s§a.",
+                    player.sendSystemMessage(Component.literal(MessageUtil.localize(
+                        "commands.neoessentials.shop.bought",
                         result.quantity, itemDisplay,
                         currency, result.price.toPlainString(),
                         shop.ownerName)));
                 } else {
-                    player.sendSystemMessage(Component.literal(String.format(
-                        "§aYou sold §f%dx %s §afor §f%s%s§a.",
+                    player.sendSystemMessage(Component.literal(MessageUtil.localize(
+                        "commands.neoessentials.shop.sold",
                         result.quantity, itemDisplay,
                         currency, result.price.toPlainString())));
                 }
             }
             case NOT_ENOUGH_MONEY ->
                 player.sendSystemMessage(Component.literal(buying
-                    ? "§cYou don't have enough money to buy that."
-                    : "§cThe shop owner can't afford to buy that."));
+                    ? MessageUtil.localize("commands.neoessentials.shop.not_enough_money_buy")
+                    : MessageUtil.localize("commands.neoessentials.shop.owner_cannot_afford")));
             case NOT_ENOUGH_STOCK ->
                 player.sendSystemMessage(Component.literal(buying
-                    ? "§cThis shop is out of stock."
-                    : "§cYou don't have enough of that item."));
+                    ? MessageUtil.localize("commands.neoessentials.shop.out_of_stock")
+                    : MessageUtil.localize("commands.neoessentials.shop.not_enough_item")));
             case NO_SPACE ->
                 player.sendSystemMessage(Component.literal(buying
-                    ? "§cYour inventory is full."
-                    : "§cThe shop's chest is full."));
+                    ? MessageUtil.localize("commands.neoessentials.shop.inventory_full")
+                    : MessageUtil.localize("commands.neoessentials.shop.chest_full")));
             case NO_CHEST ->
-                player.sendSystemMessage(Component.literal("§cShop has no linked chest."));
+                player.sendSystemMessage(Component.literal(MessageUtil.localize("commands.neoessentials.shop.no_linked_chest")));
             case SHOP_DISABLED ->
                 player.sendSystemMessage(Component.literal(buying
-                    ? "§cThis shop doesn't sell items."
-                    : "§cThis shop doesn't buy items."));
+                    ? MessageUtil.localize("commands.neoessentials.shop.disabled_no_sell")
+                    : MessageUtil.localize("commands.neoessentials.shop.disabled_no_buy")));
             default ->
-                player.sendSystemMessage(Component.literal("§cTransaction failed (internal error)."));
+                player.sendSystemMessage(Component.literal(MessageUtil.localize("commands.neoessentials.shop.transaction_failed")));
         }
     }
 
     private static void sendShopInfo(ServerPlayer player, ShopData shop) {
         String currency = EconomyManager.getInstance().getCurrencySymbol();
         String itemDisplay = ShopParser.buildItemDisplayName(shop.itemId);
-        player.sendSystemMessage(Component.literal("§6§l--- Shop Info ---"));
-        player.sendSystemMessage(Component.literal("§eOwner: §f" + shop.ownerName));
-        player.sendSystemMessage(Component.literal("§eItem:  §f" + shop.quantity + "x " + itemDisplay));
+        player.sendSystemMessage(Component.literal(MessageUtil.localize("commands.neoessentials.shop.info_header")));
+        player.sendSystemMessage(Component.literal(MessageUtil.localize("commands.neoessentials.shop.info_owner", shop.ownerName)));
+        player.sendSystemMessage(Component.literal(MessageUtil.localize("commands.neoessentials.shop.info_item", shop.quantity, itemDisplay)));
         if (shop.buyPrice  != null) player.sendSystemMessage(Component.literal(
-            "§eBuy:   §f" + currency + shop.buyPrice.toPlainString()));
+            MessageUtil.localize("commands.neoessentials.shop.info_buy", currency + shop.buyPrice.toPlainString())));
         if (shop.sellPrice != null) player.sendSystemMessage(Component.literal(
-            "§eSell:  §f" + currency + shop.sellPrice.toPlainString()));
+            MessageUtil.localize("commands.neoessentials.shop.info_sell", currency + shop.sellPrice.toPlainString())));
         if (!shop.isAdminShop() && shop.hasChest) {
             // Show stock count
             player.sendSystemMessage(Component.literal(
-                "§eChest: §f" + shop.chestX + ", " + shop.chestY + ", " + shop.chestZ));
+                MessageUtil.localize("commands.neoessentials.shop.info_chest", shop.chestX, shop.chestY, shop.chestZ)));
         }
     }
 }

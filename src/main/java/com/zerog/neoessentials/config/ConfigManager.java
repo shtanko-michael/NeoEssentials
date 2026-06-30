@@ -1195,7 +1195,7 @@ public class ConfigManager {
 
     // Expected versions for each config file (must match the version in JAR resources)
     private static final java.util.Map<String, Integer> EXPECTED_CONFIG_VERSIONS = new java.util.HashMap<>() {{
-        put(MAIN_CONFIG, 20);
+        put(MAIN_CONFIG, 21);
         put(ECONOMY_CONFIG, 2);
         put(PERMISSIONS_CONFIG, 5);
         put(KITS_CONFIG, 1);
@@ -1506,6 +1506,26 @@ public class ConfigManager {
             }
         }
         return true;
+    }
+
+    /**
+     * Returns the configured in-game language code (top-level "language" in config.json).
+     * Controls which data/lang/&lt;code&gt;.json MessageUtil overlays over the en_us base.
+     * Defaults to "en_us" if not set or blank.
+     */
+    public static String getLanguage() {
+        JsonObject config = getInstance().getConfig(MAIN_CONFIG);
+        if (config.has("language")) {
+            try {
+                String val = config.get("language").getAsString();
+                if (val != null && !val.isBlank()) {
+                    return val.trim();
+                }
+            } catch (Exception ignored) {
+                // fall through to default
+            }
+        }
+        return "en_us";
     }
 
     /**

@@ -42,7 +42,7 @@ public class NeoEssentials {
         
         // Enhanced initialization logging with version and build info
         LOGGER.info("╔════════════════════════════════════════════════════════════════╗");
-        LOGGER.info("║         {} v{} (Build #{})         ║", MOD_NAME, MOD_VERSION, BUILD_NUMBER);
+        LOGGER.info("║         {} v{} (Farmstead Build #{})         ║", MOD_NAME, MOD_VERSION, BUILD_NUMBER);
         LOGGER.info("║    Minecraft {} | NeoForge {}        ║", MINECRAFT_VERSION, NEOFORGE_VERSION);
         LOGGER.info("╚════════════════════════════════════════════════════════════════╝");
         LOGGER.info("");

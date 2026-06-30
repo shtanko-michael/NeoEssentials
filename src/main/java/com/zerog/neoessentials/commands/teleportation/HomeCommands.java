@@ -205,7 +205,7 @@ public class HomeCommands {
     private static int executeHomeDefault(CommandContext<CommandSourceStack> context) {
         ServerPlayer player = (ServerPlayer) context.getSource().getEntity();
         if (player == null) {
-            context.getSource().sendFailure(MessageUtil.error("This command can only be used by players."));
+            context.getSource().sendFailure(MessageUtil.error("commands.neoessentials.player_only"));
             return 0;
         }
         HomeManager homeManager = HomeManager.getInstance();
@@ -231,7 +231,7 @@ public class HomeCommands {
     private static int executeHome(CommandContext<CommandSourceStack> context) {
         ServerPlayer player = (ServerPlayer) context.getSource().getEntity();
         if (player == null) {
-            context.getSource().sendFailure(MessageUtil.error("This command can only be used by players."));
+            context.getSource().sendFailure(MessageUtil.error("commands.neoessentials.player_only"));
             return 0;
         }
         String homeName = StringArgumentType.getString(context, "name");
@@ -417,7 +417,7 @@ public class HomeCommands {
     private static int executeHomes(CommandContext<CommandSourceStack> context) {
         ServerPlayer player = (ServerPlayer) context.getSource().getEntity();
         if (player == null) {
-            context.getSource().sendFailure(MessageUtil.error("This command can only be used by players."));
+            context.getSource().sendFailure(MessageUtil.error("commands.neoessentials.player_only"));
             return 0;
         }
         HomeManager homeManager = HomeManager.getInstance();

@@ -128,7 +128,7 @@ public class PlayerInfoCommands {
             }
         }
         nearby.sort(Comparator.naturalOrder());
-        final String list = nearby.isEmpty() ? "§7none" : String.join("§r, §e", nearby);
+        final String list = nearby.isEmpty() ? MessageUtil.localize("commands.neoessentials.near.none") : String.join("§r, §e", nearby);
         final int fr = radius;
         src.sendSuccess(() -> MessageUtil.info("commands.neoessentials.near.result", fr, list), false);
         return 1;
@@ -234,13 +234,10 @@ public class PlayerInfoCommands {
         int ping = target.connection.latency();
         int health = (int) target.getHealth();
         int food = target.getFoodData().getFoodLevel();
-        src.sendSuccess(() -> Component.literal(
-            "§e--- §fWhois: §b" + target.getName().getString() + " §e---\n" +
-            "§7UUID: §f" + uuid + "\n" +
-            "§7World: §f" + world + " §7@ §f" + pos + "\n" +
-            "§7Gamemode: §f" + gm + "  §7Ping: §f" + ping + "ms\n" +
-            "§7Health: §f" + health + "/20  §7Food: §f" + food + "/20"
-        ), false);
+        src.sendSuccess(() -> Component.literal(MessageUtil.localize(
+            "commands.neoessentials.whois.result",
+            target.getName().getString(), uuid, world, pos, gm, ping, health, food
+        )), false);
         return 1;
     }
 
@@ -377,7 +374,7 @@ public class PlayerInfoCommands {
         if (currentMsgToggle != newBlocked) {
             com.zerog.neoessentials.chat.MsgToggleManager.toggleMsg(target);
         }
-        String label = newBlocked ? "§cdisabled" : "§aenabled";
+        String label = newBlocked ? MessageUtil.localize("commands.neoessentials.general.disabled") : MessageUtil.localize("commands.neoessentials.general.enabled");
         boolean isOther = src.getPlayer() == null || !src.getPlayer().getUUID().equals(target.getUUID());
         if (isOther) {
             target.sendSystemMessage(MessageUtil.info("commands.neoessentials.msgtoggle.self", label));
@@ -422,7 +419,7 @@ public class PlayerInfoCommands {
         boolean cur = rtoggleEnabled.getOrDefault(target.getUUID(), true);
         boolean newState = enable != null ? enable : !cur;
         rtoggleEnabled.put(target.getUUID(), newState);
-        String label = newState ? "§aenabled" : "§cdisabled";
+        String label = newState ? MessageUtil.localize("commands.neoessentials.general.enabled") : MessageUtil.localize("commands.neoessentials.general.disabled");
         boolean isOther = src.getPlayer() == null || !src.getPlayer().getUUID().equals(target.getUUID());
         if (isOther) {
             target.sendSystemMessage(MessageUtil.info("commands.neoessentials.rtoggle.self", label));

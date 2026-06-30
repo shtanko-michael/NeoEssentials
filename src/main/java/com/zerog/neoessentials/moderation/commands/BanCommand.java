@@ -195,7 +195,7 @@ public class BanCommand {
             
         } catch (Exception e) {
             LOGGER.error("Error executing ban command", e);
-            source.sendFailure(MessageUtil.error("An error occurred while executing the ban command."));
+            source.sendFailure(MessageUtil.error("neoessentials.moderation.ban_error"));
             return 0;
         }
     }
@@ -264,7 +264,7 @@ public class BanCommand {
             
         } catch (Exception e) {
             LOGGER.error("Error executing tempban command", e);
-            source.sendFailure(MessageUtil.error("An error occurred while executing the tempban command."));
+            source.sendFailure(MessageUtil.error("neoessentials.moderation.tempban_error"));
             return 0;
         }
     }
@@ -304,7 +304,7 @@ public class BanCommand {
             }
         } catch (Exception e) {
             LOGGER.error("Error executing tempbanip command", e);
-            source.sendFailure(MessageUtil.error("An error occurred while executing the tempbanip command."));
+            source.sendFailure(MessageUtil.error("neoessentials.moderation.tempbanip_error"));
             return 0;
         }
     }
@@ -344,7 +344,7 @@ public class BanCommand {
             
         } catch (Exception e) {
             LOGGER.error("Error executing banip command", e);
-            source.sendFailure(MessageUtil.error("An error occurred while executing the banip command."));
+            source.sendFailure(MessageUtil.error("neoessentials.moderation.banip_error"));
             return 0;
         }
     }
@@ -421,7 +421,7 @@ public class BanCommand {
             
         } catch (Exception e) {
             LOGGER.error("Error executing unban command", e);
-            source.sendFailure(MessageUtil.error("An error occurred while executing the unban command."));
+            source.sendFailure(MessageUtil.error("neoessentials.moderation.unban_error"));
             return 0;
         }
     }
@@ -455,7 +455,7 @@ public class BanCommand {
             
         } catch (Exception e) {
             LOGGER.error("Error executing unbanip command", e);
-            source.sendFailure(MessageUtil.error("An error occurred while executing the unbanip command."));
+            source.sendFailure(MessageUtil.error("neoessentials.moderation.unbanip_error"));
             return 0;
         }
     }
@@ -511,7 +511,7 @@ public class BanCommand {
             
         } catch (Exception e) {
             LOGGER.error("Error executing banlist command", e);
-            source.sendFailure(MessageUtil.error("An error occurred while executing the banlist command."));
+            source.sendFailure(MessageUtil.error("neoessentials.moderation.banlist_error"));
             return 0;
         }
     }

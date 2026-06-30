@@ -2,6 +2,7 @@ package com.zerog.neoessentials.chat;
 
 import net.minecraft.server.level.ServerPlayer;
 import com.zerog.neoessentials.api.permissions.PermissionAPI;
+import com.zerog.neoessentials.util.MessageUtil;
 import java.util.UUID;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
@@ -400,7 +401,7 @@ public class ChatFormatter {
                 String itemName = mainHandItem.getHoverName().getString();
                 matcher.appendReplacement(result, "§ITEM§" + itemName + "§/ITEM§");
             } else {
-                matcher.appendReplacement(result, "[Empty Hand]");
+                matcher.appendReplacement(result, MessageUtil.localize("commands.neoessentials.chat.empty_hand"));
             }
         }
         matcher.appendTail(result);
@@ -497,7 +498,7 @@ public class ChatFormatter {
                 int urlEnd = markup.indexOf("§/URL§", urlStart);
                 if (urlEnd != -1) {
                     String url = markup.substring(urlStart + 5, urlEnd);
-                    result.append(com.zerog.neoessentials.util.ChatComponentUtil.createClickableUrl(url, url, "Click to open in browser\n" + url));
+                    result.append(com.zerog.neoessentials.util.ChatComponentUtil.createClickableUrl(url, url, MessageUtil.localize("commands.neoessentials.chat.url_hover", url)));
                     index = urlEnd + 6;
                     continue;
                 }
@@ -572,7 +573,7 @@ public class ChatFormatter {
             .withStyle(style -> style
                 .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/msg " + playerName + " "))
                 .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
-                    Component.literal("Click to message " + playerName).withStyle(ChatFormatting.GRAY)))
+                    Component.literal(MessageUtil.localize("commands.neoessentials.chat.mention_hover", playerName)).withStyle(ChatFormatting.GRAY)))
             );
     }
 

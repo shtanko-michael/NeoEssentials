@@ -487,8 +487,7 @@ public class HomeManager {
         
         for (String homeName : sortedNames) {
             TeleportLocation location = homes.get(homeName);
-            builder.append("\n  §e").append(homeName).append("§r: ")
-                   .append(location.getLocationString());
+            builder.append(MessageUtil.localize("commands.neoessentials.teleport.home.list_entry", homeName, location.getLocationString()));
         }
         
         return builder.toString();

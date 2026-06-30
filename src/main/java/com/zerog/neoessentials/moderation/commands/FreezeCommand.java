@@ -149,7 +149,7 @@ public class FreezeCommand {
 
         } catch (Exception e) {
             LOGGER.error("Error executing freeze command", e);
-            source.sendFailure(MessageUtil.error("An error occurred while executing the freeze command."));
+            source.sendFailure(MessageUtil.error("neoessentials.moderation.freeze_error"));
             return 0;
         }
     }
@@ -230,7 +230,7 @@ public class FreezeCommand {
             
         } catch (Exception e) {
             LOGGER.error("Error executing unfreeze command", e);
-            source.sendFailure(MessageUtil.error("An error occurred while executing the unfreeze command."));
+            source.sendFailure(MessageUtil.error("neoessentials.moderation.unfreeze_error"));
             return 0;
         }
     }
@@ -300,7 +300,7 @@ public class FreezeCommand {
 
         } catch (Exception e) {
             LOGGER.error("Error executing freezeall command", e);
-            source.sendFailure(MessageUtil.error("An error occurred while executing the freezeall command."));
+            source.sendFailure(MessageUtil.error("neoessentials.moderation.freezeall_error"));
             return 0;
         }
     }
@@ -349,7 +349,7 @@ public class FreezeCommand {
             
         } catch (Exception e) {
             LOGGER.error("Error executing unfreezeall command", e);
-            source.sendFailure(MessageUtil.error("An error occurred while executing the unfreezeall command."));
+            source.sendFailure(MessageUtil.error("neoessentials.moderation.unfreezeall_error"));
             return 0;
         }
     }
@@ -380,7 +380,7 @@ public class FreezeCommand {
             
         } catch (Exception e) {
             LOGGER.error("Error executing freezelist command", e);
-            source.sendFailure(MessageUtil.error("An error occurred while executing the freezelist command."));
+            source.sendFailure(MessageUtil.error("neoessentials.moderation.freezelist_error"));
             return 0;
         }
     }

@@ -398,13 +398,13 @@ public class PermissionsCommand {
 
         // Safety validations
         if (prefix.length() > 64) {
-            ctx.getSource().sendFailure(MessageUtil.error("Prefix is too long! Maximum length is 64 characters."));
+            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.permissions.prefix_too_long"));
             return 0;
         }
 
         // Validate no dangerous characters (but allow color codes &)
         if (prefix.matches(".*[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F].*")) {
-            ctx.getSource().sendFailure(MessageUtil.error("Prefix contains invalid control characters!"));
+            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.permissions.prefix_invalid_chars"));
             return 0;
         }
 
@@ -429,7 +429,7 @@ public class PermissionsCommand {
             return 1;
         } catch (Exception e) {
             LOGGER.error("Failed to save permissions after setting prefix", e);
-            ctx.getSource().sendFailure(MessageUtil.error("Failed to save prefix: " + e.getMessage()));
+            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.permissions.prefix_save_failed", e.getMessage()));
             return 0;
         }
     }
@@ -448,13 +448,13 @@ public class PermissionsCommand {
 
         // Safety validations
         if (suffix.length() > 64) {
-            ctx.getSource().sendFailure(MessageUtil.error("Suffix is too long! Maximum length is 64 characters."));
+            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.permissions.suffix_too_long"));
             return 0;
         }
 
         // Validate no dangerous characters (but allow color codes &)
         if (suffix.matches(".*[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F].*")) {
-            ctx.getSource().sendFailure(MessageUtil.error("Suffix contains invalid control characters!"));
+            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.permissions.suffix_invalid_chars"));
             return 0;
         }
 
@@ -479,7 +479,7 @@ public class PermissionsCommand {
             return 1;
         } catch (Exception e) {
             LOGGER.error("Failed to save permissions after setting suffix", e);
-            ctx.getSource().sendFailure(MessageUtil.error("Failed to save suffix: " + e.getMessage()));
+            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.permissions.suffix_save_failed", e.getMessage()));
             return 0;
         }
     }
@@ -534,7 +534,7 @@ public class PermissionsCommand {
             return 1;
         } catch (Exception e) {
             LOGGER.error("Unexpected error in addGroupPermission command", e);
-            ctx.getSource().sendFailure(MessageUtil.error("§cAn unexpected error occurred: " + e.getMessage()));
+            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.permissions.unexpected_error", e.getMessage()));
             return 0;
         }
     }
@@ -585,7 +585,7 @@ public class PermissionsCommand {
             LOGGER.error("Unexpected error in removeGroupPermission command for group '{}', permission '{}'",
                 StringArgumentType.getString(ctx, "group"),
                 StringArgumentType.getString(ctx, "permission"), e);
-            ctx.getSource().sendFailure(MessageUtil.error("§cAn unexpected error occurred: " + e.getMessage()));
+            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.permissions.unexpected_error", e.getMessage()));
             return 0;
         }
     }
@@ -652,7 +652,7 @@ public class PermissionsCommand {
             LOGGER.error("Unexpected error in setUserGroup command for player '{}', group '{}'",
                 StringArgumentType.getString(ctx, "player"),
                 StringArgumentType.getString(ctx, "group"), e);
-            ctx.getSource().sendFailure(MessageUtil.error("§cAn unexpected error occurred: " + e.getMessage()));
+            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.permissions.unexpected_error", e.getMessage()));
             return 0;
         }
     }
@@ -866,27 +866,27 @@ public class PermissionsCommand {
             return 0;
         }
 
-        ctx.getSource().sendSuccess(() -> MessageUtil.info("=== Group: " + group.getName() + " ==="), false);
-        ctx.getSource().sendSuccess(() -> MessageUtil.info("Prefix: " + (group.getPrefix() != null ? group.getPrefix() : "None")), false);
-        ctx.getSource().sendSuccess(() -> MessageUtil.info("Suffix: " + (group.getSuffix() != null ? group.getSuffix() : "None")), false);
-        ctx.getSource().sendSuccess(() -> MessageUtil.info("Permissions (" + group.getPermissions().size() + "):"), false);
+        ctx.getSource().sendSuccess(() -> MessageUtil.info("commands.neoessentials.permissions.info.group_header", group.getName()), false);
+        ctx.getSource().sendSuccess(() -> MessageUtil.info("commands.neoessentials.permissions.info.prefix", (group.getPrefix() != null ? group.getPrefix() : "None")), false);
+        ctx.getSource().sendSuccess(() -> MessageUtil.info("commands.neoessentials.permissions.info.suffix", (group.getSuffix() != null ? group.getSuffix() : "None")), false);
+        ctx.getSource().sendSuccess(() -> MessageUtil.info("commands.neoessentials.permissions.info.permissions_count", group.getPermissions().size()), false);
 
         if (group.getPermissions().isEmpty()) {
-            ctx.getSource().sendSuccess(() -> MessageUtil.info("  - No permissions"), false);
+            ctx.getSource().sendSuccess(() -> MessageUtil.info("commands.neoessentials.permissions.info.no_permissions"), false);
         } else {
             group.getPermissions().stream().limit(10).forEach(perm ->
-                ctx.getSource().sendSuccess(() -> MessageUtil.info("  - " + perm), false));
+                ctx.getSource().sendSuccess(() -> MessageUtil.info("commands.neoessentials.permissions.info.list_entry", perm), false));
             if (group.getPermissions().size() > 10) {
-                ctx.getSource().sendSuccess(() -> MessageUtil.info("  ... and " + (group.getPermissions().size() - 10) + " more"), false);
+                ctx.getSource().sendSuccess(() -> MessageUtil.info("commands.neoessentials.permissions.info.and_more", (group.getPermissions().size() - 10)), false);
             }
         }
 
-        ctx.getSource().sendSuccess(() -> MessageUtil.info("Inherits (" + group.getInherits().size() + "):"), false);
+        ctx.getSource().sendSuccess(() -> MessageUtil.info("commands.neoessentials.permissions.info.inherits_count", group.getInherits().size()), false);
         if (group.getInherits().isEmpty()) {
-            ctx.getSource().sendSuccess(() -> MessageUtil.info("  - No inheritance"), false);
+            ctx.getSource().sendSuccess(() -> MessageUtil.info("commands.neoessentials.permissions.info.no_inheritance"), false);
         } else {
             group.getInherits().forEach(inherit ->
-                ctx.getSource().sendSuccess(() -> MessageUtil.info("  - " + inherit), false));
+                ctx.getSource().sendSuccess(() -> MessageUtil.info("commands.neoessentials.permissions.info.list_entry", inherit), false));
         }
 
         return 1;
@@ -916,18 +916,18 @@ public class PermissionsCommand {
             return 0;
         }
 
-        ctx.getSource().sendSuccess(() -> MessageUtil.info("=== User: " + playerName + " ==="), false);
-        ctx.getSource().sendSuccess(() -> MessageUtil.info("UUID: " + playerUUID), false);
-        ctx.getSource().sendSuccess(() -> MessageUtil.info("Group: " + (user.getGroup() != null ? user.getGroup() : "default")), false);
-        ctx.getSource().sendSuccess(() -> MessageUtil.info("Direct Permissions (" + user.getPermissions().size() + "):"), false);
+        ctx.getSource().sendSuccess(() -> MessageUtil.info("commands.neoessentials.permissions.info.user_header", playerName), false);
+        ctx.getSource().sendSuccess(() -> MessageUtil.info("commands.neoessentials.permissions.info.uuid", playerUUID), false);
+        ctx.getSource().sendSuccess(() -> MessageUtil.info("commands.neoessentials.permissions.info.group", (user.getGroup() != null ? user.getGroup() : "default")), false);
+        ctx.getSource().sendSuccess(() -> MessageUtil.info("commands.neoessentials.permissions.info.direct_permissions_count", user.getPermissions().size()), false);
 
         if (user.getPermissions().isEmpty()) {
-            ctx.getSource().sendSuccess(() -> MessageUtil.info("  - No direct permissions"), false);
+            ctx.getSource().sendSuccess(() -> MessageUtil.info("commands.neoessentials.permissions.info.no_direct_permissions"), false);
         } else {
             user.getPermissions().stream().limit(10).forEach(perm ->
-                ctx.getSource().sendSuccess(() -> MessageUtil.info("  - " + perm), false));
+                ctx.getSource().sendSuccess(() -> MessageUtil.info("commands.neoessentials.permissions.info.list_entry", perm), false));
             if (user.getPermissions().size() > 10) {
-                ctx.getSource().sendSuccess(() -> MessageUtil.info("  ... and " + (user.getPermissions().size() - 10) + " more"), false);
+                ctx.getSource().sendSuccess(() -> MessageUtil.info("commands.neoessentials.permissions.info.and_more", (user.getPermissions().size() - 10)), false);
             }
         }
 
@@ -956,9 +956,9 @@ public class PermissionsCommand {
         boolean hasPermission = PermissionAPI.getManager().hasPermission(playerUUID, permission);
 
         if (hasPermission) {
-            ctx.getSource().sendSuccess(() -> MessageUtil.success("✓ " + playerName + " has permission: " + permission), false);
+            ctx.getSource().sendSuccess(() -> MessageUtil.success("commands.neoessentials.permissions.check.user_has", playerName, permission), false);
         } else {
-            ctx.getSource().sendSuccess(() -> MessageUtil.error("✗ " + playerName + " does NOT have permission: " + permission), false);
+            ctx.getSource().sendSuccess(() -> MessageUtil.error("commands.neoessentials.permissions.check.user_has_not", playerName, permission), false);
         }
 
         return 1;
@@ -984,9 +984,9 @@ public class PermissionsCommand {
         boolean hasPermission = group.getPermissions().contains(permission.toLowerCase());
 
         if (hasPermission) {
-            ctx.getSource().sendSuccess(() -> MessageUtil.success("✓ Group '" + groupName + "' has permission: " + permission), false);
+            ctx.getSource().sendSuccess(() -> MessageUtil.success("commands.neoessentials.permissions.check.group_has", groupName, permission), false);
         } else {
-            ctx.getSource().sendSuccess(() -> MessageUtil.error("✗ Group '" + groupName + "' does NOT have permission: " + permission), false);
+            ctx.getSource().sendSuccess(() -> MessageUtil.error("commands.neoessentials.permissions.check.group_has_not", groupName, permission), false);
         }
 
         return 1;
@@ -1012,21 +1012,21 @@ public class PermissionsCommand {
                 .toList();
 
             if (matches.isEmpty()) {
-                ctx.getSource().sendSuccess(() -> MessageUtil.info("No permissions found matching: " + pattern), false);
+                ctx.getSource().sendSuccess(() -> MessageUtil.info("commands.neoessentials.permissions.search.no_matches", pattern), false);
                 return 1;
             }
 
-            ctx.getSource().sendSuccess(() -> MessageUtil.success("Found " + matches.size() + " permissions matching '" + pattern + "':"), false);
+            ctx.getSource().sendSuccess(() -> MessageUtil.success("commands.neoessentials.permissions.search.found", matches.size(), pattern), false);
             matches.stream().limit(20).forEach(perm ->
-                ctx.getSource().sendSuccess(() -> MessageUtil.info("  - " + perm), false));
+                ctx.getSource().sendSuccess(() -> MessageUtil.info("commands.neoessentials.permissions.info.list_entry", perm), false));
 
             if (matches.size() > 20) {
-                ctx.getSource().sendSuccess(() -> MessageUtil.info("  ... and " + (matches.size() - 20) + " more"), false);
+                ctx.getSource().sendSuccess(() -> MessageUtil.info("commands.neoessentials.permissions.info.and_more", (matches.size() - 20)), false);
             }
 
             return 1;
         } catch (Exception e) {
-            ctx.getSource().sendFailure(MessageUtil.error("Failed to search permissions: " + e.getMessage()));
+            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.permissions.search.failed", e.getMessage()));
             return 0;
         }
     }
@@ -1043,7 +1043,7 @@ public class PermissionsCommand {
         PermissionManager manager = PermissionAPI.getManager();
 
         if (manager.getGroup(groupName) != null) {
-            ctx.getSource().sendFailure(MessageUtil.error("Group '" + groupName + "' already exists!"));
+            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.permissions.group_already_exists", groupName));
             return 0;
         }
 
@@ -1053,12 +1053,12 @@ public class PermissionsCommand {
 
         try {
             PermissionStorage.save(manager);
-            ctx.getSource().sendSuccess(() -> MessageUtil.success("Created group: " + groupName), false);
+            ctx.getSource().sendSuccess(() -> MessageUtil.success("commands.neoessentials.permissions.group_created", groupName), false);
             LOGGER.info("Created new permission group: {}", groupName);
             return 1;
         } catch (Exception e) {
             LOGGER.error("Failed to save permissions after creating group", e);
-            ctx.getSource().sendFailure(MessageUtil.error("Failed to save: " + e.getMessage()));
+            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.permissions.save_failed_detail", e.getMessage()));
             return 0;
         }
     }
@@ -1075,13 +1075,13 @@ public class PermissionsCommand {
         PermissionManager manager = PermissionAPI.getManager();
 
         if (manager.getGroup(groupName) == null) {
-            ctx.getSource().sendFailure(MessageUtil.error("Group '" + groupName + "' does not exist!"));
+            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.permissions.group_does_not_exist", groupName));
             return 0;
         }
 
         // Prevent deleting default group
         if (groupName.equalsIgnoreCase(manager.getDefaultGroup())) {
-            ctx.getSource().sendFailure(MessageUtil.error("Cannot delete the default group!"));
+            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.permissions.cannot_delete_default"));
             return 0;
         }
 
@@ -1090,12 +1090,12 @@ public class PermissionsCommand {
 
         try {
             PermissionStorage.save(manager);
-            ctx.getSource().sendSuccess(() -> MessageUtil.success("Deleted group: " + groupName), false);
+            ctx.getSource().sendSuccess(() -> MessageUtil.success("commands.neoessentials.permissions.group_deleted", groupName), false);
             LOGGER.info("Deleted permission group: {}", groupName);
             return 1;
         } catch (Exception e) {
             LOGGER.error("Failed to save permissions after deleting group", e);
-            ctx.getSource().sendFailure(MessageUtil.error("Failed to save: " + e.getMessage()));
+            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.permissions.save_failed_detail", e.getMessage()));
             return 0;
         }
     }
@@ -1114,12 +1114,12 @@ public class PermissionsCommand {
 
         PermissionGroup oldGroup = manager.getGroup(oldName);
         if (oldGroup == null) {
-            ctx.getSource().sendFailure(MessageUtil.error("Group '" + oldName + "' does not exist!"));
+            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.permissions.group_does_not_exist", oldName));
             return 0;
         }
 
         if (manager.getGroup(newName) != null) {
-            ctx.getSource().sendFailure(MessageUtil.error("Group '" + newName + "' already exists!"));
+            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.permissions.group_already_exists", newName));
             return 0;
         }
 
@@ -1143,12 +1143,12 @@ public class PermissionsCommand {
 
         try {
             PermissionStorage.save(manager);
-            ctx.getSource().sendSuccess(() -> MessageUtil.success("Renamed group '" + oldName + "' to '" + newName + "'"), false);
+            ctx.getSource().sendSuccess(() -> MessageUtil.success("commands.neoessentials.permissions.group_renamed", oldName, newName), false);
             LOGGER.info("Renamed permission group '{}' to '{}'", oldName, newName);
             return 1;
         } catch (Exception e) {
             LOGGER.error("Failed to save permissions after renaming group", e);
-            ctx.getSource().sendFailure(MessageUtil.error("Failed to save: " + e.getMessage()));
+            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.permissions.save_failed_detail", e.getMessage()));
             return 0;
         }
     }
@@ -1167,12 +1167,12 @@ public class PermissionsCommand {
 
         PermissionGroup sourceGroup = manager.getGroup(sourceName);
         if (sourceGroup == null) {
-            ctx.getSource().sendFailure(MessageUtil.error("Group '" + sourceName + "' does not exist!"));
+            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.permissions.group_does_not_exist", sourceName));
             return 0;
         }
 
         if (manager.getGroup(newName) != null) {
-            ctx.getSource().sendFailure(MessageUtil.error("Group '" + newName + "' already exists!"));
+            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.permissions.group_already_exists", newName));
             return 0;
         }
 
@@ -1188,12 +1188,12 @@ public class PermissionsCommand {
 
         try {
             PermissionStorage.save(manager);
-            ctx.getSource().sendSuccess(() -> MessageUtil.success("Cloned group '" + sourceName + "' to '" + newName + "'"), false);
+            ctx.getSource().sendSuccess(() -> MessageUtil.success("commands.neoessentials.permissions.group_cloned", sourceName, newName), false);
             LOGGER.info("Cloned permission group '{}' to '{}'", sourceName, newName);
             return 1;
         } catch (Exception e) {
             LOGGER.error("Failed to save permissions after cloning group", e);
-            ctx.getSource().sendFailure(MessageUtil.error("Failed to save: " + e.getMessage()));
+            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.permissions.save_failed_detail", e.getMessage()));
             return 0;
         }
     }
@@ -1220,12 +1220,12 @@ public class PermissionsCommand {
 
         try {
             PermissionStorage.save(PermissionAPI.getManager());
-            ctx.getSource().sendSuccess(() -> MessageUtil.success("Cleared " + count + " permissions from group: " + groupName), false);
+            ctx.getSource().sendSuccess(() -> MessageUtil.success("commands.neoessentials.permissions.group_perms_cleared", count, groupName), false);
             LOGGER.info("Cleared all permissions from group '{}'", groupName);
             return 1;
         } catch (Exception e) {
             LOGGER.error("Failed to save permissions after clearing group", e);
-            ctx.getSource().sendFailure(MessageUtil.error("Failed to save: " + e.getMessage()));
+            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.permissions.save_failed_detail", e.getMessage()));
             return 0;
         }
     }
@@ -1260,12 +1260,12 @@ public class PermissionsCommand {
 
         try {
             PermissionStorage.save(PermissionAPI.getManager());
-            ctx.getSource().sendSuccess(() -> MessageUtil.success("Cleared " + count + " permissions from user: " + playerName), false);
+            ctx.getSource().sendSuccess(() -> MessageUtil.success("commands.neoessentials.permissions.user_perms_cleared", count, playerName), false);
             LOGGER.info("Cleared all permissions from user '{}'", playerName);
             return 1;
         } catch (Exception e) {
             LOGGER.error("Failed to save permissions after clearing user", e);
-            ctx.getSource().sendFailure(MessageUtil.error("Failed to save: " + e.getMessage()));
+            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.permissions.save_failed_detail", e.getMessage()));
             return 0;
         }
     }
@@ -1290,17 +1290,17 @@ public class PermissionsCommand {
 
         PermissionGroup targetGroup = manager.getGroup(inheritGroup);
         if (targetGroup == null) {
-            ctx.getSource().sendFailure(MessageUtil.error("Inherit group '" + inheritGroup + "' does not exist!"));
+            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.permissions.inherit_group_not_found", inheritGroup));
             return 0;
         }
 
         if (groupName.equalsIgnoreCase(inheritGroup)) {
-            ctx.getSource().sendFailure(MessageUtil.error("A group cannot inherit from itself!"));
+            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.permissions.inherit_self"));
             return 0;
         }
 
         if (group.getInherits().contains(inheritGroup)) {
-            ctx.getSource().sendFailure(MessageUtil.error("Group '" + groupName + "' already inherits from '" + inheritGroup + "'!"));
+            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.permissions.already_inherits", groupName, inheritGroup));
             return 0;
         }
 
@@ -1309,12 +1309,12 @@ public class PermissionsCommand {
 
         try {
             PermissionStorage.save(manager);
-            ctx.getSource().sendSuccess(() -> MessageUtil.success("Group '" + groupName + "' now inherits from '" + inheritGroup + "'"), false);
+            ctx.getSource().sendSuccess(() -> MessageUtil.success("commands.neoessentials.permissions.inheritance_added", groupName, inheritGroup), false);
             LOGGER.info("Added inheritance from '{}' to group '{}'", inheritGroup, groupName);
             return 1;
         } catch (Exception e) {
             LOGGER.error("Failed to save permissions after adding inheritance", e);
-            ctx.getSource().sendFailure(MessageUtil.error("Failed to save: " + e.getMessage()));
+            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.permissions.save_failed_detail", e.getMessage()));
             return 0;
         }
     }
@@ -1338,7 +1338,7 @@ public class PermissionsCommand {
         }
 
         if (!group.getInherits().contains(inheritGroup)) {
-            ctx.getSource().sendFailure(MessageUtil.error("Group '" + groupName + "' does not inherit from '" + inheritGroup + "'!"));
+            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.permissions.not_inherits", groupName, inheritGroup));
             return 0;
         }
 
@@ -1347,12 +1347,12 @@ public class PermissionsCommand {
 
         try {
             PermissionStorage.save(manager);
-            ctx.getSource().sendSuccess(() -> MessageUtil.success("Removed inheritance of '" + inheritGroup + "' from group '" + groupName + "'"), false);
+            ctx.getSource().sendSuccess(() -> MessageUtil.success("commands.neoessentials.permissions.inheritance_removed", inheritGroup, groupName), false);
             LOGGER.info("Removed inheritance from '{}' from group '{}'", inheritGroup, groupName);
             return 1;
         } catch (Exception e) {
             LOGGER.error("Failed to save permissions after removing inheritance", e);
-            ctx.getSource().sendFailure(MessageUtil.error("Failed to save: " + e.getMessage()));
+            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.permissions.save_failed_detail", e.getMessage()));
             return 0;
         }
     }

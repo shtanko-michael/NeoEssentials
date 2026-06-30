@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.zerog.neoessentials.api.permissions.PermissionAPI;
+import com.zerog.neoessentials.util.MessageUtil;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import net.minecraft.server.level.ServerPlayer;
@@ -364,22 +365,22 @@ public class KitManager {
         // If allowKitOverride is enabled and player has override permission, skip all restrictions
         if (com.zerog.neoessentials.config.ConfigManager.getInstance().isAllowKitOverrideEnabled() &&
             com.zerog.neoessentials.api.permissions.PermissionAPI.hasPermission(player.getUUID(), "neoessentials.kits.override")) {
-            return new KitUsageResult(true, "Kit can be used (override)");
+            return new KitUsageResult(true, MessageUtil.localize("commands.neoessentials.kits.reason.can_use_override"));
         }
         
         Kit kit = getKit(kitName);
         if (kit == null) {
-            return new KitUsageResult(false, "Kit not found");
+            return new KitUsageResult(false, MessageUtil.localize("commands.neoessentials.kits.reason.not_found"));
         }
-        
+
         if (!kit.isEnabled()) {
-            return new KitUsageResult(false, "Kit is currently disabled");
+            return new KitUsageResult(false, MessageUtil.localize("commands.neoessentials.kits.reason.disabled"));
         }
         
         // Check permission
         if (kit.getPermission() != null) {
             if (!PermissionAPI.hasPermission(player.getUUID(), kit.getPermission())) {
-                return new KitUsageResult(false, "You don't have permission to use this kit");
+                return new KitUsageResult(false, MessageUtil.localize("commands.neoessentials.kits.reason.no_permission"));
             }
         }
         
@@ -387,7 +388,7 @@ public class KitManager {
         if (!hasCooldownExemption(player, kitName)) {
             long remainingCooldown = getRemainingCooldown(player.getUUID(), kitName);
             if (remainingCooldown > 0) {
-                return new KitUsageResult(false, "Kit is still on cooldown for " + formatTime(remainingCooldown));
+                return new KitUsageResult(false, MessageUtil.localize("commands.neoessentials.kits.reason.cooldown", formatTime(remainingCooldown)));
             }
         }
 
@@ -395,7 +396,7 @@ public class KitManager {
         if (kit.getMaxUses() > 0) {
             int usageCount = getUsageCount(player.getUUID(), kitName);
             if (usageCount >= kit.getMaxUses()) {
-                return new KitUsageResult(false, "You have reached the maximum uses for this kit");
+                return new KitUsageResult(false, MessageUtil.localize("commands.neoessentials.kits.reason.max_uses"));
             }
         }
 
@@ -422,11 +423,11 @@ public class KitManager {
                 }
             }
             if (!alreadyOnCooldown && activeCooldowns >= maxKits) {
-                return new KitUsageResult(false, "You have reached the maximum number of kits on cooldown (" + maxKits + ")");
+                return new KitUsageResult(false, MessageUtil.localize("commands.neoessentials.kits.reason.max_kits_cooldown", maxKits));
             }
         }
 
-        return new KitUsageResult(true, "Kit can be used");
+        return new KitUsageResult(true, MessageUtil.localize("commands.neoessentials.kits.reason.can_use"));
     }
     
     /**
@@ -461,14 +462,14 @@ public class KitManager {
                     }
                 }
                 if (!alreadyOnCooldown && activeCooldowns >= maxKits) {
-                    return new KitUsageResult(false, "You have reached the maximum number of kits on cooldown (" + maxKits + ")");
+                    return new KitUsageResult(false, MessageUtil.localize("commands.neoessentials.kits.reason.max_kits_cooldown", maxKits));
                 }
             }
         }
 
         Kit kit = getKit(kitName);
         if (kit == null) {
-            return new KitUsageResult(false, "Kit not found");
+            return new KitUsageResult(false, MessageUtil.localize("commands.neoessentials.kits.reason.not_found"));
         }
 
         try {
@@ -574,7 +575,7 @@ public class KitManager {
         } catch (Exception e) {
             LOGGER.error("Failed to give kit '{}' to player {}: {}", 
                         kitName, player.getName().getString(), e.getMessage(), e);
-            return new KitUsageResult(false, "An error occurred while giving the kit");
+            return new KitUsageResult(false, MessageUtil.localize("commands.neoessentials.kits.reason.error"));
         }
     }
     

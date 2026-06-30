@@ -99,7 +99,7 @@ public class MiscTeleportCommands {
         boolean cur = tpAutoState.getOrDefault(target.getUUID(), false);
         boolean newState = enable != null ? enable : !cur;
         tpAutoState.put(target.getUUID(), newState);
-        String label = newState ? "§aenabled" : "§cdisabled";
+        String label = newState ? MessageUtil.localize("commands.neoessentials.general.enabled") : MessageUtil.localize("commands.neoessentials.general.disabled");
         boolean isOther = src.getPlayer() == null || !src.getPlayer().getUUID().equals(target.getUUID());
         if (isOther) {
             src.sendSuccess(() -> MessageUtil.success("commands.neoessentials.tpauto.other",
