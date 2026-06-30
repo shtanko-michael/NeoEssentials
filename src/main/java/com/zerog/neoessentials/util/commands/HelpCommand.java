@@ -39,17 +39,15 @@ public class HelpCommand {
             })
             // /help
             .executes(ctx -> executeHelp(ctx, null, 1))
-            // /help <page>
-            .then(Commands.argument("page", IntegerArgumentType.integer(1))
-                .executes(ctx -> executeHelp(ctx, null, IntegerArgumentType.getInteger(ctx, "page")))
-            )
-            // /help <command>
-            .then(Commands.argument("command", StringArgumentType.word())
-                .executes(ctx -> executeHelp(ctx, StringArgumentType.getString(ctx, "command"), 1))
+            // /help <page|command> — ONE word argument, disambiguated in code below.
+            // Two sibling arguments (int page + word command) make Brigadier resolve
+            // "/help 2" to a command search for "2" instead of page navigation.
+            .then(Commands.argument("target", StringArgumentType.word())
+                .executes(ctx -> executeHelpTarget(ctx, StringArgumentType.getString(ctx, "target"), 1))
                 // /help <command> <page>
                 .then(Commands.argument("page", IntegerArgumentType.integer(1))
-                    .executes(ctx -> executeHelp(ctx,
-                        StringArgumentType.getString(ctx, "command"),
+                    .executes(ctx -> executeHelpTarget(ctx,
+                        StringArgumentType.getString(ctx, "target"),
                         IntegerArgumentType.getInteger(ctx, "page")))
                 )
             )
@@ -65,6 +63,22 @@ public class HelpCommand {
                 .executes(ctx -> executeHelp(ctx, null, IntegerArgumentType.getInteger(ctx, "page")))
             )
         );
+    }
+
+    /**
+     * Dispatch /help &lt;target&gt; [page]: a purely-numeric target is page navigation
+     * (/help 2 -> page 2); anything else is a command-name lookup (/help warp).
+     * Using one word argument avoids Brigadier treating "/help 2" as a command search.
+     */
+    private static int executeHelpTarget(CommandContext<CommandSourceStack> ctx, String target, int page) {
+        if (target != null && target.matches("\\d+")) {
+            try {
+                return executeHelp(ctx, null, Math.max(1, Integer.parseInt(target)));
+            } catch (NumberFormatException ignored) {
+                // huge number -> fall through to command lookup
+            }
+        }
+        return executeHelp(ctx, target, page);
     }
 
     private static int executeHelp(CommandContext<CommandSourceStack> ctx, String search, int page) {
