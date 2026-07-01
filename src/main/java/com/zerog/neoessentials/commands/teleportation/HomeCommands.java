@@ -275,7 +275,7 @@ public class HomeCommands {
             pendingSetHomeConfirmations.put(player.getUUID(), homeName);
             player.sendSystemMessage(MessageUtil.homeConfirmComponent(
                 homeName,
-                "overwrite",
+                MessageUtil.localize("commands.neoessentials.home.confirm.action_overwrite"),
                 "/sethome " + homeName + " confirm",
                 "/sethome " + homeName + " deny"
             ));
@@ -359,7 +359,7 @@ public class HomeCommands {
             pendingDeleteConfirmations.put(player.getUUID(), homeName);
             player.sendSystemMessage(MessageUtil.homeConfirmComponent(
                 homeName,
-                "delete",
+                MessageUtil.localize("commands.neoessentials.home.confirm.action_delete"),
                 "/delhome " + homeName + " confirm",
                 "/delhome " + homeName + " deny"
             ));

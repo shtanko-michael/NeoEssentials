@@ -219,6 +219,10 @@ public class NeoEssentials {
             try {
                 LOGGER.info("⚙ Initializing custom language system...");
                 com.zerog.neoessentials.i18n.CustomLanguageManager.getInstance().initialize();
+                // Force a fresh translation load now that ALL configs (incl. split files) are
+                // settled — an earlier lazy load may have run before ConfigManager was ready
+                // and silently latched the en_us fallback for the whole session.
+                com.zerog.neoessentials.util.MessageUtil.reloadTranslations();
                 LOGGER.info("✓ Custom language system initialized successfully");
             } catch (Exception e) {
                 LOGGER.error("✗ Custom language system failed to initialize!", e);

@@ -199,7 +199,9 @@ private final ScheduledExecutorService scheduler = Executors.newScheduledThreadP
         }, requestTimeoutSeconds, TimeUnit.SECONDS);
 
         // Send messages
-        String typeText = type == TeleportRequestType.TPA ? "to you" : "you to them";
+        String typeText = type == TeleportRequestType.TPA
+            ? MessageUtil.localize("commands.neoessentials.teleport.request.type_to_you")
+            : MessageUtil.localize("commands.neoessentials.teleport.request.type_you_to_them");
         requester.sendSystemMessage(MessageUtil.success("commands.neoessentials.teleport.request.sent", 
                                                         target.getName().getString(), typeText));
 
@@ -512,7 +514,9 @@ private final ScheduledExecutorService scheduler = Executors.newScheduledThreadP
         }
         
         long timeLeft = (request.getExpiryTime() - System.currentTimeMillis()) / 1000;
-        String typeText = request.getType() == TeleportRequestType.TPA ? "to teleport to you" : "you to teleport to them";
+        String typeText = request.getType() == TeleportRequestType.TPA
+            ? MessageUtil.localize("commands.neoessentials.teleport.request.type_to_you")
+            : MessageUtil.localize("commands.neoessentials.teleport.request.type_you_to_them");
         
         return MessageUtil.localize("teleport.request.pending_info", 
                                    request.getRequesterName(), typeText, timeLeft);
@@ -633,7 +637,7 @@ private final ScheduledExecutorService scheduler = Executors.newScheduledThreadP
         }, requestTimeoutSeconds, TimeUnit.SECONDS);
 
         // Send messages
-        String typeText = "to you";
+        String typeText = MessageUtil.localize("commands.neoessentials.teleport.request.type_to_you");
         sender.sendSystemMessage(MessageUtil.success("commands.neoessentials.teleport.request.sent",
                                                         target.getName().getString(), typeText));
 
