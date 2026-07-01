@@ -475,11 +475,15 @@ public class NeoEssentials {
             CommandDispatcher<CommandSourceStack> dispatcher = event.getDispatcher();
             CommandRegistry registry = CommandRegistry.getInstance();
             
-            // Remove vanilla /msg, /tell, /w commands so we can override them
+            // Remove vanilla commands we fully replace so they don't merge with ours.
+            // /help must be removed too: otherwise vanilla's greedy "command" argument
+            // stays live and hijacks "/help 2" (and "/help <name>"), throwing
+            // "commands.help.failed" — see HelpCommand for details.
             removeVanillaCommand(dispatcher, "msg");
             removeVanillaCommand(dispatcher, "tell");
             removeVanillaCommand(dispatcher, "w");
-            
+            removeVanillaCommand(dispatcher, "help");
+
             registerAllCommands(dispatcher, registry);
         }
         

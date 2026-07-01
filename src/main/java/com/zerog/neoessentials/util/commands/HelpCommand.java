@@ -40,8 +40,10 @@ public class HelpCommand {
             // /help
             .executes(ctx -> executeHelp(ctx, null, 1))
             // /help <page|command> — ONE word argument, disambiguated in code below.
-            // Two sibling arguments (int page + word command) make Brigadier resolve
-            // "/help 2" to a command search for "2" instead of page navigation.
+            // NOTE: this only works because onRegisterCommands removes vanilla /help
+            // first. Vanilla /help has a greedy "command" argument; if left in place it
+            // merges with ours and hijacks "/help 2" / "/help <name>", throwing
+            // "commands.help.failed". Do not re-add vanilla /help.
             .then(Commands.argument("target", StringArgumentType.word())
                 .executes(ctx -> executeHelpTarget(ctx, StringArgumentType.getString(ctx, "target"), 1))
                 // /help <command> <page>
