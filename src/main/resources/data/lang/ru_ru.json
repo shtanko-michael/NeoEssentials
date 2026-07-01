@@ -203,7 +203,7 @@
   "commands.neoessentials.help.entry": "  §e/{0} §7- {1}",
   "commands.neoessentials.help.footer_paged": "§7Используйте §e/help {0}§7 для следующей страницы или §e/help <команда>§7 для подробностей.",
   "commands.neoessentials.help.footer_single": "§7Используйте §e/help <команда>§7 для подробностей о конкретной команде.",
-  "commands.neoessentials.help.header": "§6════ §eСправка NeoEssentials §7(Страница {0}/{1}) §6════",
+  "commands.neoessentials.help.header": "§6════ §eСправка Farmstead §7(Страница {0}/{1}) §6════",
   "commands.neoessentials.help.no_description": "Нет описания",
   "commands.neoessentials.helpop.description": "Запросить помощь у персонала",
   "commands.neoessentials.helpop.hover_reply": "§7Нажмите, чтобы ответить {0}",

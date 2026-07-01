@@ -338,7 +338,7 @@
   "commands.neoessentials.home.confirm.question_prefix": "Are you sure you want to {0} home ''",
   "commands.neoessentials.home.confirm.question_suffix": "''? ",
   "_comment_help_migration": "=== /help renderer + command descriptions (session) ===",
-  "commands.neoessentials.help.header": "§6════ §eNeoEssentials Help §7(Page {0}/{1}) §6════",
+  "commands.neoessentials.help.header": "§6════ §eFarmstead Help §7(Page {0}/{1}) §6════",
   "commands.neoessentials.help.entry": "  §e/{0} §7- {1}",
   "commands.neoessentials.help.no_description": "No description",
   "commands.neoessentials.help.footer_paged": "§7Use §e/help {0}§7 for the next page, or §e/help <command>§7 for details.",
