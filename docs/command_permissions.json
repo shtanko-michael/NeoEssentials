@@ -1,0 +1,3683 @@
+{
+  "_readme": "Справочник: команды NeoEssentials и их permission-ноды. Сгенерировано из исходного кода (requires() + in-execute проверки). Поиск: commands.<имя команды> — прямой; permission_index.<нода> — обратный.",
+  "_generated_from": "source scan, branch farmstead-monorepo-build",
+  "_conventions": {
+    "permission=null": "команда не требует ноды (или только op_level)",
+    "op_level": "ванильный уровень оператора; для большинства команд применяется ТОЛЬКО к консоли (игроки проверяются по ноде)",
+    "sub_permissions": "отдельные ноды подкоманд/веток",
+    "extra_permissions": "связанные ноды: .others (действие над другими), exempt-защита цели, bypass и т.п.",
+    "alt_registrations": "команда регистрируется повторно в другом файле с ДРУГОЙ нодой (коллизия — активны обе ветки, Brigadier мержит деревья)"
+  },
+  "_phantom_registry_entries": {
+    "_note": "Числятся в CommandRegistry (видны в /help), но НЕ зарегистрированы как команды — выполнить их нельзя. Кандидаты на чистку в NeoEssentials.java registerCommand(...).",
+    "names": [
+      "ac",
+      "amsg",
+      "clear",
+      "fw",
+      "killme",
+      "nickname",
+      "pong",
+      "tpacancel",
+      "whisper"
+    ]
+  },
+  "commands": {
+    "afk": {
+      "permission": "neoessentials.afk",
+      "aliases": [
+        "away"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/AfkCommand.java",
+      "category": "utility",
+      "notes": "",
+      "description_ru": "Переключить статус АФК",
+      "description_en": "Toggle AFK status"
+    },
+    "antioch": {
+      "permission": "neoessentials.antioch",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/FunCommands.java",
+      "category": "fun",
+      "notes": "",
+      "description_ru": "Создать зажжённый ТНТ в точке взгляда (🐇 пасхалка)",
+      "description_en": "Spawn lit TNT at your look target (🐇 easter egg)"
+    },
+    "anvil": {
+      "permission": "neoessentials.anvil",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/AnvilCommand.java",
+      "category": "utility",
+      "notes": "",
+      "description_ru": "Открыть переносную наковальню",
+      "description_en": "Open portable anvil"
+    },
+    "back": {
+      "permission": "neoessentials.teleport.back",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "teleportation/Misc/MiscTeleportCommands.java",
+      "category": "teleportation",
+      "notes": "",
+      "description_ru": "Вернуться на предыдущую позицию",
+      "description_en": "Return to previous location"
+    },
+    "backup": {
+      "permission": "neoessentials.backup",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/FunCommands.java",
+      "category": "fun",
+      "notes": "Запускает внешнюю backup-команду из конфига.",
+      "description_ru": "Запустить сохранение и резервное копирование мира сервера",
+      "description_en": "Trigger a server world save and backup"
+    },
+    "balance": {
+      "permission": "neoessentials.economy.balance",
+      "aliases": [
+        "bal",
+        "money"
+      ],
+      "op_level": null,
+      "sub_permissions": {
+        "<player>": "neoessentials.economy.balance.others"
+      },
+      "extra_permissions": {},
+      "file": "economy/commands/BalanceCommand.java",
+      "category": "economy",
+      "notes": "Алиасы /bal /money — только свой баланс.",
+      "description_ru": "Проверить баланс",
+      "description_en": "Check your balance"
+    },
+    "baltop": {
+      "permission": "neoessentials.economy.baltop",
+      "aliases": [
+        "balancetop",
+        "btop"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {
+        "exempt": "neoessentials.economy.baltop.exempt скрывает игрока из топа"
+      },
+      "file": "economy/commands/BaltopCommand.java",
+      "category": "economy",
+      "notes": "",
+      "description_ru": "Показать топ балансов",
+      "description_en": "View top balances"
+    },
+    "ban": {
+      "permission": "neoessentials.moderation.ban",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "moderation/commands/BanCommand.java",
+      "category": "moderation",
+      "notes": "",
+      "description_ru": "Забанить игрока",
+      "description_en": "Ban a player"
+    },
+    "banip": {
+      "permission": "neoessentials.moderation.banip",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "moderation/commands/BanCommand.java",
+      "category": "moderation",
+      "notes": "",
+      "description_ru": "Забанить IP-адрес",
+      "description_en": "Ban an IP address"
+    },
+    "banlist": {
+      "permission": "neoessentials.moderation.banlist",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "players": "neoessentials.moderation.banlist",
+        "ips": "neoessentials.moderation.banlist"
+      },
+      "extra_permissions": {},
+      "file": "moderation/commands/BanCommand.java",
+      "category": "moderation",
+      "notes": "Подкоманды players/ips наследуют корневую ноду.",
+      "description_ru": "Список забаненных игроков",
+      "description_en": "List banned players"
+    },
+    "beezooka": {
+      "permission": "neoessentials.beezooka",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/FunCommands.java",
+      "category": "fun",
+      "notes": "",
+      "description_ru": "Запустить злых пчёл 🐝",
+      "description_en": "Launch angry bees 🐝"
+    },
+    "book": {
+      "permission": "neoessentials.book",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "unlock": "neoessentials.book.unlock",
+        "title": "neoessentials.book.title",
+        "author": "neoessentials.book.author"
+      },
+      "extra_permissions": {},
+      "file": "util/commands/BookCommand.java",
+      "category": "utility",
+      "notes": "",
+      "description_ru": "Управление книгами",
+      "description_en": "Manage books"
+    },
+    "bottom": {
+      "permission": "neoessentials.bottom",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/WorldInteractionCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Телепортироваться на дно мира",
+      "description_en": "Teleport to the bottom of the world"
+    },
+    "break": {
+      "permission": "neoessentials.break",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {
+        "bedrock": "neoessentials.break.bedrock"
+      },
+      "file": "util/commands/WorldInteractionCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Сломать блок, на который смотрите",
+      "description_en": "Break the looked-at block"
+    },
+    "broadcast": {
+      "permission": "neoessentials.broadcast",
+      "aliases": [
+        "bc",
+        "announce"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/ServerAdminCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Разослать сообщение всем игрокам",
+      "description_en": "Broadcast a message to all players"
+    },
+    "broadcastworld": {
+      "permission": "neoessentials.broadcastworld",
+      "aliases": [
+        "bcastworld"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/WorldInteractionCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Разослать сообщение игрокам в вашем мире",
+      "description_en": "Broadcast to players in your world"
+    },
+    "burn": {
+      "permission": "neoessentials.burn",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/PlayerStateCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Поджечь игрока",
+      "description_en": "Set a player on fire"
+    },
+    "cartography": {
+      "permission": "neoessentials.cartography",
+      "aliases": [
+        "cartographytable"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/ItemCustomisationCommands.java",
+      "category": "items",
+      "notes": "",
+      "description_ru": "Открыть переносной картографический стол",
+      "description_en": "Open portable cartography table"
+    },
+    "chestshop": {
+      "permission": null,
+      "aliases": [
+        "cshop"
+      ],
+      "op_level": null,
+      "sub_permissions": {
+        "list <player>": "neoessentials.shop.list.others (или op 3)",
+        "convert": "neoessentials.shop.create",
+        "remove <x> <y> <z>": "neoessentials.shop.admin.remove (или op 3)",
+        "reload": "neoessentials.shop.admin.reload (или op 3)"
+      },
+      "extra_permissions": {},
+      "file": "shop/commands/ShopCommand.java",
+      "category": "shop",
+      "notes": "Базовые /chestshop, list, info — без прав.",
+      "description_ru": "Система сундук-магазинов на табличках",
+      "description_en": "Sign-based chest shop system"
+    },
+    "ciconfirmtoggle": {
+      "permission": "neoessentials.ciconfirmtoggle",
+      "aliases": [
+        "clearinventoryconfirmtoggle"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "items/commands/MiscItemCommands.java",
+      "category": "items",
+      "notes": "",
+      "description_ru": "Переключить запрос подтверждения для /ci",
+      "description_en": "Toggle /ci confirmation prompts"
+    },
+    "clearinventory": {
+      "permission": "neoessentials.item.clearinventory",
+      "aliases": [
+        "ci",
+        "clearinv"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "items/commands/ClearInventoryCommand.java",
+      "category": "items",
+      "notes": "",
+      "description_ru": "Очистить инвентарь",
+      "description_en": "Clear inventory"
+    },
+    "compass": {
+      "permission": "neoessentials.compass",
+      "aliases": [
+        "direction",
+        "bearing"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {
+        "others": "neoessentials.compass.others"
+      },
+      "file": "util/commands/CompassCommand.java",
+      "category": "utility",
+      "notes": "",
+      "description_ru": "Показать направление по компасу",
+      "description_en": "Show your compass direction"
+    },
+    "condense": {
+      "permission": "neoessentials.condense",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "items/commands/MiscItemCommands.java",
+      "category": "items",
+      "notes": "Также регистрируется в UtilityCommands с той же нодой.",
+      "description_ru": "Сжать предметы в блоки хранения",
+      "description_en": "Condense items to storage blocks"
+    },
+    "crafting": {
+      "permission": "neoessentials.crafting",
+      "aliases": [
+        "craft",
+        "workbench"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/CraftingCommand.java",
+      "category": "utility",
+      "notes": "",
+      "description_ru": "Открыть переносной верстак",
+      "description_en": "Open portable crafting table"
+    },
+    "createkit": {
+      "permission": "neoessentials.kits.create",
+      "aliases": [
+        "makekit",
+        "addkit"
+      ],
+      "op_level": 4,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "kits/command/CreateKitCommand.java",
+      "category": "kits",
+      "notes": "op_level 4 — только для консоли.",
+      "description_ru": "Создать новый набор",
+      "description_en": "Create a new kit"
+    },
+    "customtext": {
+      "permission": "neoessentials.customtext",
+      "aliases": [
+        "ctext"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "items/commands/MiscItemCommands.java",
+      "category": "items",
+      "notes": "",
+      "description_ru": "Показать пользовательскую текстовую страницу сервера",
+      "description_en": "Display a custom server text page"
+    },
+    "dashboard": {
+      "permission": "neoessentials.admin.dashboard",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "commands/utility/DashboardCommand.java",
+      "category": "system",
+      "notes": "",
+      "description_ru": "Управление веб-панелью",
+      "description_en": "Manage web dashboard"
+    },
+    "dashboardregister": {
+      "permission": "neoessentials.dashboard.access",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "commands/utility/DashboardRegisterCommand.java",
+      "category": "system",
+      "notes": "",
+      "description_ru": "Зарегистрировать аккаунт панели",
+      "description_en": "Register a dashboard account"
+    },
+    "day": {
+      "permission": "neoessentials.time.set",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/ServerAdminCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Установить время на день",
+      "description_en": "Set time to day"
+    },
+    "delhome": {
+      "permission": "neoessentials.teleport.home.delete",
+      "aliases": [
+        "deletehome",
+        "removehome",
+        "rhome"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "commands/teleportation/HomeCommands.java",
+      "category": "teleportation",
+      "notes": "",
+      "description_ru": "Удалить ваш дом",
+      "description_en": "Delete your home"
+    },
+    "deljail": {
+      "permission": "neoessentials.moderation.setjail",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "moderation/commands/JailCommand.java",
+      "category": "moderation",
+      "notes": "Переиспользует ноду setjail — отдельной deljail-ноды нет.",
+      "description_ru": "Удалить точку тюрьмы",
+      "description_en": "Delete a jail location"
+    },
+    "delkit": {
+      "permission": "neoessentials.kits.delete",
+      "aliases": [
+        "deletekit",
+        "removekit",
+        "rkit"
+      ],
+      "op_level": 4,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "kits/command/DelKitCommand.java",
+      "category": "kits",
+      "notes": "",
+      "description_ru": "Удалить набор",
+      "description_en": "Delete a kit"
+    },
+    "delpwarp": {
+      "permission": "neoessentials.teleport.pwarp.delete",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "commands/teleportation/PwarpCommands.java",
+      "category": "teleportation",
+      "notes": "",
+      "description_ru": "Удалить игровой варп",
+      "description_en": "Delete a player warp"
+    },
+    "delwarp": {
+      "permission": "neoessentials.teleport.warp.delete",
+      "aliases": [
+        "deletewarp",
+        "removewarp",
+        "rwarp"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "commands/teleportation/WarpCommands.java",
+      "category": "teleportation",
+      "notes": "",
+      "description_ru": "Удалить варп",
+      "description_en": "Delete a warp"
+    },
+    "depth": {
+      "permission": "neoessentials.depth",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {
+        "others": "neoessentials.depth.others"
+      },
+      "file": "util/commands/DepthCommand.java",
+      "category": "utility",
+      "notes": "",
+      "description_ru": "Показать вашу глубину",
+      "description_en": "Show your depth"
+    },
+    "dispose": {
+      "permission": "neoessentials.item.dispose",
+      "aliases": [
+        "trash"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "items/commands/DisposeCommand.java",
+      "category": "items",
+      "notes": "",
+      "description_ru": "Утилизировать предметы",
+      "description_en": "Dispose of items"
+    },
+    "eco": {
+      "permission": "neoessentials.economy.eco",
+      "aliases": [
+        "economy"
+      ],
+      "op_level": 2,
+      "sub_permissions": {
+        "history <player>": "только op level 2"
+      },
+      "extra_permissions": {},
+      "file": "economy/commands/EcoCommand.java",
+      "category": "economy",
+      "notes": "give/take/set/reset — одна нода eco.",
+      "description_ru": "Админские команды экономики",
+      "description_en": "Admin economy commands"
+    },
+    "effect": {
+      "permission": "neoessentials.effect",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/UtilityCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Применить эффекты зелий к игрокам",
+      "description_en": "Apply potion effects to players"
+    },
+    "enchant": {
+      "permission": "neoessentials.item.enchant",
+      "aliases": [
+        "ench"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {
+        "others": "neoessentials.item.enchant.others",
+        "unsafe": "neoessentials.item.enchant.unsafe",
+        "any": "neoessentials.item.enchant.any"
+      },
+      "file": "items/commands/EnchantCommand.java",
+      "category": "items",
+      "notes": ".unsafe снимает лимит уровня; .any снимает проверку совместимости.",
+      "description_ru": "Зачаровать предметы",
+      "description_en": "Enchant items"
+    },
+    "enchanthand": {
+      "permission": "neoessentials.item.enchant",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {
+        "unsafe": "neoessentials.item.enchant.unsafe",
+        "any": "neoessentials.item.enchant.any"
+      },
+      "file": "items/commands/EnchantCommand.java",
+      "category": "items",
+      "notes": ""
+    },
+    "enderchest": {
+      "permission": "neoessentials.enderchest",
+      "aliases": [
+        "ec"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "inventory/InventoryViewCommands.java",
+      "category": "items",
+      "notes": "",
+      "description_ru": "Посмотреть эндер-сундук другого игрока",
+      "description_en": "View another player''s ender chest"
+    },
+    "enderchestedit": {
+      "permission": "neoessentials.enderchest.edit",
+      "aliases": [
+        "ecedit"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "inventory/InventoryViewCommands.java",
+      "category": "items",
+      "notes": "БАГ: алиас /ecedit сломан опечаткой redirect на 'enderchestdit'.",
+      "description_ru": "Посмотреть и редактировать эндер-сундук другого игрока",
+      "description_en": "View and edit another player''s ender chest"
+    },
+    "exp": {
+      "permission": "neoessentials.exp",
+      "aliases": [
+        "xp"
+      ],
+      "op_level": null,
+      "sub_permissions": {
+        "set": "neoessentials.exp.set",
+        "set <amount> <target>": "neoessentials.exp.set.others",
+        "give": "neoessentials.exp.give",
+        "give <amount> <target>": "neoessentials.exp.give.others"
+      },
+      "extra_permissions": {},
+      "file": "util/commands/PlayerStateCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Управление опытом игрока",
+      "description_en": "Manage player experience"
+    },
+    "ext": {
+      "permission": "neoessentials.ext",
+      "aliases": [
+        "extinguish"
+      ],
+      "op_level": null,
+      "sub_permissions": {
+        "<target>": "neoessentials.ext.others"
+      },
+      "extra_permissions": {},
+      "file": "util/commands/PlayerStateCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Потушить игрока",
+      "description_en": "Extinguish a player"
+    },
+    "feed": {
+      "permission": "neoessentials.feed",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "<target>": "neoessentials.feed.others"
+      },
+      "extra_permissions": {},
+      "file": "util/commands/PlayerStateCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Восстановить сытость игрока",
+      "description_en": "Restore player hunger"
+    },
+    "fireball": {
+      "permission": "neoessentials.fireball",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "ride": "neoessentials.fireball.ride"
+      },
+      "extra_permissions": {
+        "per_type": "neoessentials.fireball.<тип> или neoessentials.fireball.*"
+      },
+      "file": "util/commands/WorldInteractionCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Выстрелить снарядом",
+      "description_en": "Shoot a projectile"
+    },
+    "firework": {
+      "permission": "neoessentials.firework",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "fire": "neoessentials.firework.fire"
+      },
+      "extra_permissions": {},
+      "file": "util/commands/FunCommands.java",
+      "category": "fun",
+      "notes": "",
+      "description_ru": "Изменить или запустить фейерверк в руке",
+      "description_en": "Edit or fire held firework rockets"
+    },
+    "fly": {
+      "permission": "neoessentials.fly",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "<target>": "neoessentials.fly.others"
+      },
+      "extra_permissions": {},
+      "file": "util/commands/PlayerStateCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Переключить режим полёта",
+      "description_en": "Toggle flight mode"
+    },
+    "freeze": {
+      "permission": "neoessentials.moderation.freeze",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "moderation/commands/FreezeCommand.java",
+      "category": "moderation",
+      "notes": "",
+      "description_ru": "Заморозить игрока",
+      "description_en": "Freeze a player"
+    },
+    "freezeall": {
+      "permission": "neoessentials.moderation.freezeall",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "moderation/commands/FreezeCommand.java",
+      "category": "moderation",
+      "notes": "",
+      "description_ru": "Заморозить всех игроков",
+      "description_en": "Freeze all players"
+    },
+    "freezelist": {
+      "permission": "neoessentials.moderation.freezelist",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "moderation/commands/FreezeCommand.java",
+      "category": "moderation",
+      "notes": "",
+      "description_ru": "Список замороженных игроков",
+      "description_en": "List frozen players"
+    },
+    "g": {
+      "permission": null,
+      "aliases": [
+        "global",
+        "gc"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {
+        "config_driven": "канал из chat.channels.global; по умолчанию без прав"
+      },
+      "file": "chat/commands/ChannelCommands.java",
+      "category": "chat",
+      "notes": ""
+    },
+    "gamemode": {
+      "permission": "neoessentials.gamemode",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "<mode> <target>": "neoessentials.gamemode.others"
+      },
+      "extra_permissions": {},
+      "file": "util/commands/ServerAdminCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Изменить режим игры игрока",
+      "description_en": "Change player gamemode"
+    },
+    "gc": {
+      "permission": "neoessentials.gc",
+      "aliases": [
+        "mem"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/ItemCustomisationCommands.java",
+      "category": "items",
+      "notes": "",
+      "description_ru": "Показать память сервера и TPS",
+      "description_en": "Show server memory and TPS info"
+    },
+    "getpos": {
+      "permission": "neoessentials.getpos",
+      "aliases": [
+        "coords",
+        "pos",
+        "whereami"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {
+        "others": "neoessentials.getpos.others"
+      },
+      "file": "util/commands/GetPosCommand.java",
+      "category": "utility",
+      "notes": "",
+      "description_ru": "Узнать ваши текущие координаты",
+      "description_en": "Get your current position"
+    },
+    "give": {
+      "permission": "neoessentials.give",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/PlayerStateCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Выдать предметы игроку",
+      "description_en": "Give items to a player"
+    },
+    "gma": {
+      "permission": "neoessentials.gamemode",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "<player>": "neoessentials.gamemode.others"
+      },
+      "extra_permissions": {},
+      "file": "util/commands/GamemodeCommand.java",
+      "category": "utility",
+      "notes": "",
+      "description_ru": "Перейти в режим Приключение",
+      "description_en": "Change to adventure mode"
+    },
+    "gmc": {
+      "permission": "neoessentials.gamemode",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "<player>": "neoessentials.gamemode.others"
+      },
+      "extra_permissions": {},
+      "file": "util/commands/GamemodeCommand.java",
+      "category": "utility",
+      "notes": "",
+      "description_ru": "Перейти в режим Творчество",
+      "description_en": "Change to creative mode"
+    },
+    "gms": {
+      "permission": "neoessentials.gamemode",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "<player>": "neoessentials.gamemode.others"
+      },
+      "extra_permissions": {},
+      "file": "util/commands/GamemodeCommand.java",
+      "category": "utility",
+      "notes": "Шорткаты gms/gmc/gmsp/gma — одна нода gamemode.",
+      "description_ru": "Перейти в режим Выживание",
+      "description_en": "Change to survival mode"
+    },
+    "gmsp": {
+      "permission": "neoessentials.gamemode",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "<player>": "neoessentials.gamemode.others"
+      },
+      "extra_permissions": {},
+      "file": "util/commands/GamemodeCommand.java",
+      "category": "utility",
+      "notes": "",
+      "description_ru": "Перейти в режим Наблюдатель",
+      "description_en": "Change to spectator mode"
+    },
+    "god": {
+      "permission": "neoessentials.god",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "<target>": "neoessentials.god.others"
+      },
+      "extra_permissions": {},
+      "file": "util/commands/PlayerStateCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Переключить режим бога",
+      "description_en": "Toggle god mode"
+    },
+    "grindstone": {
+      "permission": "neoessentials.grindstone",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/GrindstoneCommand.java",
+      "category": "utility",
+      "notes": "",
+      "description_ru": "Открыть переносной точильный камень",
+      "description_en": "Open portable grindstone"
+    },
+    "hat": {
+      "permission": "neoessentials.hat",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/PlayerStateCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Надеть предмет из руки как шлем",
+      "description_en": "Wear held item as helmet"
+    },
+    "heal": {
+      "permission": "neoessentials.heal",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "<target>": "neoessentials.heal.others"
+      },
+      "extra_permissions": {},
+      "file": "util/commands/PlayerStateCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Восстановить здоровье и сытость игрока",
+      "description_en": "Restore player health and hunger"
+    },
+    "help": {
+      "permission": "neoessentials.help",
+      "aliases": [
+        "?"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {
+        "видимость команд": "фильтр по neoessentials.admin / neoessentials.* / neoessentials.<команда>"
+      },
+      "file": "util/commands/HelpCommand.java",
+      "category": "utility",
+      "notes": "Консоль без проверки.",
+      "description_ru": "Показать доступные команды",
+      "description_en": "Show available commands"
+    },
+    "helpop": {
+      "permission": "neoessentials.helpop",
+      "aliases": [
+        "adminhelp",
+        "request"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {
+        "receive": "neoessentials.helpop.receive у персонала для получения сообщений"
+      },
+      "file": "util/commands/HelpopCommand.java",
+      "category": "utility",
+      "notes": "",
+      "description_ru": "Запросить помощь у персонала",
+      "description_en": "Request help from staff"
+    },
+    "home": {
+      "permission": "neoessentials.teleport.home",
+      "aliases": [
+        "h"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "commands/teleportation/HomeCommands.java",
+      "category": "teleportation",
+      "notes": "Только для игроков.",
+      "description_ru": "Телепортироваться к вашему дому",
+      "description_en": "Teleport to your home"
+    },
+    "homes": {
+      "permission": "neoessentials.teleport.home.list",
+      "aliases": [
+        "listhomes",
+        "homelist"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "commands/teleportation/HomeCommands.java",
+      "category": "teleportation",
+      "notes": "",
+      "description_ru": "Список ваших домов",
+      "description_en": "List your homes"
+    },
+    "ice": {
+      "permission": "neoessentials.ice",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "<target>": "neoessentials.ice.others"
+      },
+      "extra_permissions": {},
+      "file": "util/commands/WorldInteractionCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Заморозить игрока",
+      "description_en": "Freeze a player"
+    },
+    "ignore": {
+      "permission": "neoessentials.chat.ignore",
+      "aliases": [
+        "block"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {
+        "target_exempt": "neoessentials.chat.ignore.exempt"
+      },
+      "file": "chat/command/IgnoreCommand.java",
+      "category": "chat",
+      "notes": "Цель с нодой .exempt игнорировать нельзя.",
+      "description_ru": "Игнорировать игрока",
+      "description_en": "Ignore a player"
+    },
+    "info": {
+      "permission": "neoessentials.info",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/FunCommands.java",
+      "category": "fun",
+      "notes": "",
+      "description_ru": "Показать информацию о сервере/MOTD",
+      "description_en": "Show server info/MOTD"
+    },
+    "invsee": {
+      "permission": "neoessentials.invsee",
+      "aliases": [
+        "inv"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "inventory/InventoryViewCommands.java",
+      "category": "items",
+      "notes": "Нода invsee (НЕ item.invsee!). Консоль всегда допущена.",
+      "description_ru": "Посмотреть инвентарь другого игрока",
+      "description_en": "View another player''s inventory"
+    },
+    "invseeedit": {
+      "permission": "neoessentials.invsee.edit",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "inventory/InventoryViewCommands.java",
+      "category": "items",
+      "notes": "",
+      "description_ru": "Посмотреть и изменить инвентарь другого игрока",
+      "description_en": "View and edit another player''s inventory"
+    },
+    "item": {
+      "permission": "neoessentials.item",
+      "aliases": [
+        "i"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "items/commands/MiscItemCommands.java",
+      "category": "items",
+      "notes": "",
+      "description_ru": "Выдать себе предмет по названию",
+      "description_en": "Give yourself an item by name"
+    },
+    "itemdb": {
+      "permission": "neoessentials.itemdb",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/FunCommands.java",
+      "category": "fun",
+      "notes": "",
+      "description_ru": "Узнать информацию о предмете из реестра",
+      "description_en": "Look up item registry info"
+    },
+    "itemlore": {
+      "permission": "neoessentials.itemlore",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/ItemCustomisationCommands.java",
+      "category": "items",
+      "notes": "",
+      "description_ru": "Изменить описание предмета в руке",
+      "description_en": "Edit held item lore"
+    },
+    "itemname": {
+      "permission": "neoessentials.itemname",
+      "aliases": [
+        "rename"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/ItemCustomisationCommands.java",
+      "category": "items",
+      "notes": "",
+      "description_ru": "Переименовать предмет в руке",
+      "description_en": "Rename held item"
+    },
+    "jail": {
+      "permission": "neoessentials.moderation.jail",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "moderation/commands/JailCommand.java",
+      "category": "moderation",
+      "notes": "",
+      "description_ru": "Посадить игрока в тюрьму",
+      "description_en": "Jail a player"
+    },
+    "jailfor": {
+      "permission": "neoessentials.moderation.jail",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "moderation/commands/JailCommand.java",
+      "category": "moderation",
+      "notes": "Использует ту же ноду, что /jail (отдельной нет).",
+      "description_ru": "Посадить игрока в тюрьму на заданное время",
+      "description_en": "Jail a player for a set duration"
+    },
+    "jailinfo": {
+      "permission": "neoessentials.moderation.jailinfo",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "moderation/commands/JailCommand.java",
+      "category": "moderation",
+      "notes": "",
+      "description_ru": "Показать информацию о тюрьме",
+      "description_en": "Show info about a jail"
+    },
+    "jaillist": {
+      "permission": "neoessentials.moderation.jaillist",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "moderation/commands/JailCommand.java",
+      "category": "moderation",
+      "notes": "",
+      "description_ru": "Список всех тюрем",
+      "description_en": "List all jail locations"
+    },
+    "jails": {
+      "permission": "neoessentials.moderation.jaillist",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "moderation/commands/JailCommand.java",
+      "category": "moderation",
+      "notes": "Алиас /jaillist.",
+      "description_ru": "Список всех тюрем (алиас)",
+      "description_en": "List all jail locations (alias)"
+    },
+    "jump": {
+      "permission": "neoessentials.teleport.jump",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "teleportation/DirectTeleport/DirectTeleportCommands.java",
+      "category": "teleportation",
+      "notes": "",
+      "description_ru": "Прыгнуть сквозь стены",
+      "description_en": "Jump through walls"
+    },
+    "jumpto": {
+      "permission": "neoessentials.teleport.jumpto",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "teleportation/DirectTeleport/DirectTeleportCommands.java",
+      "category": "teleportation",
+      "notes": "",
+      "description_ru": "Телепортироваться к блоку, на который вы смотрите",
+      "description_en": "Teleport to block you''re looking at"
+    },
+    "kick": {
+      "permission": "neoessentials.moderation.kick",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "moderation/commands/KickCommand.java",
+      "category": "moderation",
+      "notes": "",
+      "description_ru": "Кикнуть игрока",
+      "description_en": "Kick a player"
+    },
+    "kickall": {
+      "permission": "neoessentials.moderation.kickall",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "moderation/commands/KickCommand.java",
+      "category": "moderation",
+      "notes": "",
+      "description_ru": "Кикнуть всех игроков",
+      "description_en": "Kick all players"
+    },
+    "kill": {
+      "permission": "neoessentials.kill",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {
+        "target_exempt": "neoessentials.kill.exempt",
+        "force": "neoessentials.kill.force обходит exempt"
+      },
+      "file": "util/commands/ServerAdminCommands.java",
+      "category": "admin_utility",
+      "notes": "КОЛЛИЗИЯ с алиасом /kill команды suicide.",
+      "description_ru": "Убить игрока",
+      "description_en": "Kill a player"
+    },
+    "kit": {
+      "permission": "neoessentials.kits.use",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "<name> <player>": "neoessentials.kit.others"
+      },
+      "extra_permissions": {
+        "per_kit": "neoessentials.kits.<имя_кита> (или кастомная нода кита)"
+      },
+      "file": "kits/command/KitCommand.java",
+      "category": "kits",
+      "notes": "Для получения конкретного набора нужна пер-кит нода.",
+      "description_ru": "Получить набор",
+      "description_en": "Claim a kit"
+    },
+    "kitreset": {
+      "permission": "neoessentials.kitreset",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "<kit> <player>": "neoessentials.kitreset.others"
+      },
+      "extra_permissions": {},
+      "file": "kits/command/KitResetCommand.java",
+      "category": "kits",
+      "notes": "",
+      "description_ru": "Сбросить перезарядку набора",
+      "description_en": "Reset a kit cooldown"
+    },
+    "kittycannon": {
+      "permission": "neoessentials.kittycannon",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/FunCommands.java",
+      "category": "fun",
+      "notes": "",
+      "description_ru": "Запустить взрывающегося котёнка 🐱",
+      "description_en": "Launch an exploding baby cat 🐱"
+    },
+    "l": {
+      "permission": null,
+      "aliases": [
+        "local",
+        "lc"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {
+        "config_driven": "канал из chat.channels.local; по умолчанию без прав"
+      },
+      "file": "chat/commands/ChannelCommands.java",
+      "category": "chat",
+      "notes": "Имя/алиасы/права канала задаются конфигом."
+    },
+    "language": {
+      "permission": null,
+      "aliases": [],
+      "op_level": 4,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "commands/LanguageCommand.java",
+      "category": "system",
+      "notes": "Только OP уровня 4.",
+      "description_ru": "Управление файлами своих переводов",
+      "description_en": "Manage custom language files"
+    },
+    "lightning": {
+      "permission": "neoessentials.lightning",
+      "aliases": [
+        "smite"
+      ],
+      "op_level": null,
+      "sub_permissions": {
+        "<target>": "neoessentials.lightning.others"
+      },
+      "extra_permissions": {},
+      "file": "util/commands/ItemCustomisationCommands.java",
+      "category": "items",
+      "notes": "",
+      "description_ru": "Ударить молнией по игроку",
+      "description_en": "Strike lightning at a player"
+    },
+    "list": {
+      "permission": "neoessentials.list",
+      "aliases": [
+        "who",
+        "online"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {
+        "see_vanished": "neoessentials.vanish.see чтобы видеть скрытых"
+      },
+      "file": "util/commands/ListCommand.java",
+      "category": "utility",
+      "notes": "",
+      "description_ru": "Список игроков онлайн",
+      "description_en": "List online players"
+    },
+    "listkits": {
+      "permission": "neoessentials.kits.list",
+      "aliases": [
+        "kits"
+      ],
+      "op_level": 4,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "kits/command/ListKitsCommand.java",
+      "category": "kits",
+      "notes": "",
+      "description_ru": "Список доступных наборов (алиас)",
+      "description_en": "List available kits (alias)"
+    },
+    "loom": {
+      "permission": "neoessentials.loom",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/ItemCustomisationCommands.java",
+      "category": "items",
+      "notes": "",
+      "description_ru": "Открыть переносной ткацкий станок",
+      "description_en": "Open portable loom"
+    },
+    "mail": {
+      "permission": "neoessentials.mail",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "send": "neoessentials.mail.send",
+        "sendtemp": "neoessentials.mail.sendtemp",
+        "sendall": "neoessentials.mail.sendall",
+        "sendtempall": "neoessentials.mail.sendtempall",
+        "clear": "neoessentials.mail.clear",
+        "clear <player>": "neoessentials.mail.clear.others",
+        "clearall": "neoessentials.mail.clearall"
+      },
+      "extra_permissions": {},
+      "file": "util/commands/MailCommand.java",
+      "category": "utility",
+      "notes": "",
+      "description_ru": "Управление почтовыми сообщениями",
+      "description_en": "Manage mail messages"
+    },
+    "me": {
+      "permission": "neoessentials.me",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/ItemCustomisationCommands.java",
+      "category": "items",
+      "notes": "",
+      "description_ru": "Отправить сообщение о действии всем",
+      "description_en": "Broadcast an action message"
+    },
+    "more": {
+      "permission": "neoessentials.more",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/PlayerStateCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Дополнить стак в руке до максимума",
+      "description_en": "Fill held stack to max"
+    },
+    "motd": {
+      "permission": "neoessentials.motd",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "reload": "neoessentials.motd.reload",
+        "set": "neoessentials.motd.set",
+        "clear": "neoessentials.motd.set",
+        "broadcast": "neoessentials.motd.broadcast"
+      },
+      "extra_permissions": {},
+      "file": "util/commands/MotdCommand.java",
+      "category": "utility",
+      "notes": "",
+      "description_ru": "Показать сообщение дня",
+      "description_en": "Show message of the day"
+    },
+    "msg": {
+      "permission": "neoessentials.chat.msg",
+      "aliases": [
+        "tell",
+        "w",
+        "message",
+        "pm"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {
+        "msgtoggle_bypass": "neoessentials.chat.msgtoggle.bypass"
+      },
+      "file": "chat/command/MsgCommand.java",
+      "category": "chat",
+      "notes": "Bypass-нода нужна для письма игроку с включённым /msgtoggle.",
+      "description_ru": "Отправить личное сообщение",
+      "description_en": "Send a private message"
+    },
+    "msgtoggle": {
+      "permission": "neoessentials.chat.msgtoggle",
+      "aliases": [
+        "togglemsg",
+        "mt"
+      ],
+      "op_level": 4,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "chat/command/MsgToggleCommand.java",
+      "category": "chat",
+      "notes": "OP уровня 4 проходит без ноды.",
+      "alt_registrations": [
+        {
+          "file": "util/commands/PlayerInfoCommands.java",
+          "permission": "neoessentials.msgtoggle",
+          "op_level": null,
+          "sub_permissions": {
+            "<target>": "neoessentials.msgtoggle.others"
+          },
+          "notes": "КОЛЛИЗИЯ: /msgtoggle также в chat/MsgToggleCommand с нодой neoessentials.chat.msgtoggle."
+        }
+      ],
+      "description_ru": "Включить/выключить входящие личные сообщения",
+      "description_en": "Toggle incoming private messages"
+    },
+    "mute": {
+      "permission": "neoessentials.chat.mute",
+      "aliases": [
+        "silence"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {
+        "target_exempt": "neoessentials.chat.mute.exempt"
+      },
+      "file": "chat/command/MuteCommand.java",
+      "category": "chat",
+      "notes": "Цель с нодой .exempt замьютить нельзя.",
+      "description_ru": "Заглушить игрока",
+      "description_en": "Mute a player"
+    },
+    "mutelist": {
+      "permission": "neoessentials.chat.mute",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "chat/command/MuteListCommand.java",
+      "category": "chat",
+      "notes": "Переиспользует ноду mute — отдельной нет.",
+      "description_ru": "Список заглушённых игроков",
+      "description_en": "List muted players"
+    },
+    "near": {
+      "permission": "neoessentials.near",
+      "aliases": [
+        "nearby"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/NearCommand.java",
+      "category": "utility",
+      "notes": "",
+      "description_ru": "Список игроков поблизости",
+      "description_en": "List nearby players"
+    },
+    "neoessentials": {
+      "permission": "neoessentials.use",
+      "aliases": [
+        "neoe"
+      ],
+      "op_level": null,
+      "sub_permissions": {
+        "reload": "neoessentials.admin.reload",
+        "config split": "neoessentials.admin.reload"
+      },
+      "extra_permissions": {},
+      "file": "commands/ModRootCommand.java",
+      "category": "system",
+      "notes": "ВНИМАНИЕ: /neoe tpr зарегистрирован БЕЗ прав (обход ноды tpr)."
+    },
+    "neoessentials-permissions": {
+      "permission": null,
+      "aliases": [
+        "neoe-perms"
+      ],
+      "op_level": 4,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "api/permissions/PermissionBridge.java",
+      "category": "permissions",
+      "notes": "Только OP уровня 4."
+    },
+    "neoessentials-pex-bridge": {
+      "permission": null,
+      "aliases": [],
+      "op_level": 4,
+      "sub_permissions": {},
+      "extra_permissions": {
+        "simulation_only": true
+      },
+      "file": "api/permissions/external/PermissionCommandInjector.java",
+      "category": "permissions",
+      "notes": ""
+    },
+    "nick": {
+      "permission": "neoessentials.nick",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {
+        "color": "neoessentials.nick.color для цветных ников"
+      },
+      "file": "util/commands/NickCommand.java",
+      "category": "utility",
+      "notes": "",
+      "description_ru": "Изменить свой никнейм",
+      "description_en": "Change your nickname"
+    },
+    "night": {
+      "permission": "neoessentials.time.set",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/ServerAdminCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Установить ночное время",
+      "description_en": "Set time to night"
+    },
+    "nuke": {
+      "permission": "neoessentials.nuke",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/FunCommands.java",
+      "category": "fun",
+      "notes": "Без аргумента бьёт по ВСЕМ онлайн-игрокам.",
+      "description_ru": "Обрушить дождь из ТНТ на игрока",
+      "description_en": "Rain TNT on a player"
+    },
+    "pay": {
+      "permission": "neoessentials.economy.pay",
+      "aliases": [
+        "p"
+      ],
+      "op_level": 2,
+      "sub_permissions": {},
+      "extra_permissions": {
+        "offline": "neoessentials.economy.pay.offline для оплаты оффлайн-игроку"
+      },
+      "file": "economy/commands/PayCommand.java",
+      "category": "economy",
+      "notes": "",
+      "description_ru": "Отправить деньги другому игроку",
+      "description_en": "Send money to another player"
+    },
+    "payconfirmtoggle": {
+      "permission": "neoessentials.payconfirmtoggle",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "items/commands/MiscItemCommands.java",
+      "category": "items",
+      "notes": "",
+      "description_ru": "Включить/выключить запрос подтверждения платежа",
+      "description_en": "Toggle payment confirmation prompts"
+    },
+    "paytoggle": {
+      "permission": "neoessentials.economy.paytoggle",
+      "aliases": [
+        "pt"
+      ],
+      "op_level": 2,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "economy/commands/PayToggleCommand.java",
+      "category": "economy",
+      "notes": "ВНИМАНИЕ: /pt также регистрируется powertool'ом — конфликт алиасов.",
+      "description_ru": "Включить/выключить приём платежей",
+      "description_en": "Toggle receiving payments"
+    },
+    "permissions": {
+      "permission": null,
+      "aliases": [
+        "pex"
+      ],
+      "op_level": null,
+      "sub_permissions": {
+        "reload": "neoessentials.permissions.reload",
+        "list groups": "neoessentials.permissions.list.groups",
+        "list users": "neoessentials.permissions.list.users",
+        "info group": "neoessentials.permissions.info.group",
+        "info user": "neoessentials.permissions.info.user",
+        "check": "neoessentials.permissions.check",
+        "search": "neoessentials.permissions.search",
+        "create group": "neoessentials.permissions.group.create",
+        "delete group": "neoessentials.permissions.group.delete",
+        "rename group": "neoessentials.permissions.group.rename",
+        "clone group": "neoessentials.permissions.group.clone",
+        "group setprefix/setsuffix": "neoessentials.permissions.group.modify",
+        "group add/remove": "neoessentials.permissions.group.permissions",
+        "group clear": "neoessentials.permissions.group.clear",
+        "group inherit": "neoessentials.permissions.group.inherit",
+        "user setgroup": "neoessentials.permissions.user.groups",
+        "user add/remove": "neoessentials.permissions.user.permissions",
+        "user clear": "neoessentials.permissions.user.clear"
+      },
+      "extra_permissions": {},
+      "file": "permissions/command/PermissionsCommand.java",
+      "category": "permissions",
+      "notes": "Права проверяются по-подкомандно; корень открыт.",
+      "description_ru": "Управление правами",
+      "description_en": "Manage permissions"
+    },
+    "pex": {
+      "permission": null,
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "",
+      "category": "",
+      "notes": "",
+      "alt_registrations": [
+        {
+          "file": "api/permissions/external/FakePermissionsEXCommand.java",
+          "permission": null,
+          "op_level": 2,
+          "sub_permissions": {},
+          "notes": "Фейковый /pex (симуляция). КОЛЛИЗИЯ с /pex из PermissionsCommand."
+        }
+      ],
+      "description_ru": "Управление правами (псевдоним)",
+      "description_en": "Manage permissions (alias)"
+    },
+    "ping": {
+      "permission": "neoessentials.ping",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "<player>": "neoessentials.ping.others"
+      },
+      "extra_permissions": {},
+      "file": "util/commands/PingCommand.java",
+      "category": "utility",
+      "notes": "",
+      "description_ru": "Показать задержку сети (пинг)",
+      "description_en": "Show your network latency"
+    },
+    "playtime": {
+      "permission": "neoessentials.playtime",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "<target>": "neoessentials.playtime.others"
+      },
+      "extra_permissions": {},
+      "file": "util/commands/PlayerInfoCommands.java",
+      "category": "utility",
+      "notes": "Дублируется в PlayerStateCommands (те же ноды).",
+      "description_ru": "Показать общее время игры",
+      "description_en": "Show total play time"
+    },
+    "potion": {
+      "permission": "neoessentials.potion",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/FunCommands.java",
+      "category": "fun",
+      "notes": "",
+      "description_ru": "Редактировать эффекты зелья на предмете в руке",
+      "description_en": "Edit potion effects on held potion item"
+    },
+    "powertool": {
+      "permission": "neoessentials.item.powertool",
+      "aliases": [
+        "ptool",
+        "pt"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {
+        "target": "neoessentials.command.target для @p-таргетинга"
+      },
+      "file": "items/commands/PowertoolCommand.java",
+      "category": "items",
+      "notes": "КОЛЛИЗИЯ: /pt также регистрируется paytoggle.",
+      "description_ru": "Привязать команды к предметам",
+      "description_en": "Bind commands to items"
+    },
+    "powertoollist": {
+      "permission": "neoessentials.powertoollist",
+      "aliases": [
+        "ptlist"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "items/commands/MiscItemCommands.java",
+      "category": "items",
+      "notes": "",
+      "description_ru": "Список всех активных привязок powertool",
+      "description_en": "List all active powertool bindings"
+    },
+    "powertooltoggle": {
+      "permission": null,
+      "aliases": [
+        "ptt"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "items/commands/PowertoolCommand.java",
+      "category": "items",
+      "notes": "Права не требуются (только игрок)."
+    },
+    "ptime": {
+      "permission": "neoessentials.ptime",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "<time> <target>": "neoessentials.ptime.others"
+      },
+      "extra_permissions": {},
+      "file": "util/commands/UtilityCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Установить время отдельно для игрока",
+      "description_en": "Set per-player time override"
+    },
+    "pwarp": {
+      "permission": "neoessentials.teleport.pwarp",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "commands/teleportation/PwarpCommands.java",
+      "category": "teleportation",
+      "notes": "Все pwarp-команды активны только при включённых player warps.",
+      "description_ru": "Телепорт к вашему игровому варпу",
+      "description_en": "Teleport to your player warp"
+    },
+    "pwarps": {
+      "permission": "neoessentials.teleport.pwarp.list",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "commands/teleportation/PwarpCommands.java",
+      "category": "teleportation",
+      "notes": "",
+      "description_ru": "Список ваших игровых варпов",
+      "description_en": "List your player warps"
+    },
+    "pweather": {
+      "permission": "neoessentials.pweather",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "<w> <target>": "neoessentials.pweather.others"
+      },
+      "extra_permissions": {},
+      "file": "util/commands/UtilityCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Установить погоду отдельно для игрока",
+      "description_en": "Set per-player weather override"
+    },
+    "realname": {
+      "permission": "neoessentials.realname",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/RealnameCommand.java",
+      "category": "utility",
+      "notes": "",
+      "description_ru": "Узнать настоящее имя по никнейму",
+      "description_en": "Look up real name from nickname"
+    },
+    "recipe": {
+      "permission": "neoessentials.recipe",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/ServerAdminCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Показать/открыть рецепт предмета",
+      "description_en": "Show/unlock recipe for an item"
+    },
+    "remove": {
+      "permission": "neoessentials.remove",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/ItemCustomisationCommands.java",
+      "category": "items",
+      "notes": "",
+      "description_ru": "Удалить сущности в радиусе",
+      "description_en": "Remove entities in radius"
+    },
+    "renamehome": {
+      "permission": "neoessentials.renamehome",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {
+        "others": "neoessentials.renamehome.others"
+      },
+      "file": "commands/teleportation/HomeCommands.java",
+      "category": "teleportation",
+      "notes": "",
+      "description_ru": "Переименовать дом",
+      "description_en": "Rename a home"
+    },
+    "repair": {
+      "permission": "neoessentials.item.repair",
+      "aliases": [
+        "fix"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "items/commands/RepairCommand.java",
+      "category": "items",
+      "notes": "",
+      "description_ru": "Починить предметы",
+      "description_en": "Repair items"
+    },
+    "reply": {
+      "permission": "neoessentials.chat.reply",
+      "aliases": [
+        "r"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {
+        "msgtoggle_bypass": "neoessentials.chat.msgtoggle.bypass"
+      },
+      "file": "chat/command/ReplyCommand.java",
+      "category": "chat",
+      "notes": "",
+      "description_ru": "Ответить на последнее личное сообщение",
+      "description_en": "Reply to last private message"
+    },
+    "rest": {
+      "permission": "neoessentials.rest",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "<target>": "neoessentials.rest.others"
+      },
+      "extra_permissions": {},
+      "file": "util/commands/FunCommands.java",
+      "category": "fun",
+      "notes": "",
+      "description_ru": "Сбросить таймер сна (предотвратить фантомов)",
+      "description_en": "Reset your sleep timer (prevent phantoms)"
+    },
+    "rtoggle": {
+      "permission": "neoessentials.rtoggle",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "<target>": "neoessentials.rtoggle.others"
+      },
+      "extra_permissions": {},
+      "file": "items/commands/MiscItemCommands.java",
+      "category": "items",
+      "notes": "Дублируется в PlayerInfoCommands с теми же нодами.",
+      "description_ru": "Переключить ответ последнему отправителю",
+      "description_en": "Toggle reply-to-last-sender"
+    },
+    "rules": {
+      "permission": "neoessentials.rules",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "add/remove/edit/insert/clear/reload": "neoessentials.rules.admin"
+      },
+      "extra_permissions": {},
+      "file": "util/commands/RulesCommand.java",
+      "category": "utility",
+      "notes": "",
+      "description_ru": "Показать правила сервера",
+      "description_en": "Show server rules"
+    },
+    "seen": {
+      "permission": "neoessentials.seen",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/SeenCommand.java",
+      "category": "utility",
+      "notes": "",
+      "description_ru": "Показать, когда игрок был онлайн в последний раз",
+      "description_en": "Show when a player was last online"
+    },
+    "sell": {
+      "permission": "neoessentials.sell",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "hand": "neoessentials.sell.hand",
+        "inventory|all|invent": "neoessentials.sell.bulk"
+      },
+      "extra_permissions": {},
+      "file": "economy/worth/SellCommand.java",
+      "category": "economy",
+      "notes": "",
+      "description_ru": "Продать предметы за деньги",
+      "description_en": "Sell items for money"
+    },
+    "sethome": {
+      "permission": "neoessentials.teleport.home.set",
+      "aliases": [
+        "createhome"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "commands/teleportation/HomeCommands.java",
+      "category": "teleportation",
+      "notes": "Только для игроков.",
+      "description_ru": "Установить точку дома",
+      "description_en": "Set your home location"
+    },
+    "setjail": {
+      "permission": "neoessentials.moderation.setjail",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "moderation/commands/JailCommand.java",
+      "category": "moderation",
+      "notes": "Только для игроков.",
+      "description_ru": "Установить точку тюрьмы",
+      "description_en": "Set jail location"
+    },
+    "setnick": {
+      "permission": "neoessentials.nick.others",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/NickCommand.java",
+      "category": "utility",
+      "notes": ""
+    },
+    "setpwarp": {
+      "permission": "neoessentials.teleport.pwarp.create",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "commands/teleportation/PwarpCommands.java",
+      "category": "teleportation",
+      "notes": "",
+      "description_ru": "Создать игровой варп",
+      "description_en": "Create a player warp"
+    },
+    "setspawn": {
+      "permission": "neoessentials.teleport.spawn.set",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "commands/teleportation/SpawnCommands.java",
+      "category": "teleportation",
+      "notes": "Также требует allowSpawnSet в конфиге.",
+      "description_ru": "Установить точку спавна",
+      "description_en": "Set spawn location"
+    },
+    "settpr": {
+      "permission": "neoessentials.teleport.settpr",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "teleportation/DirectTeleport/DirectTeleportCommands.java",
+      "category": "teleportation",
+      "notes": ""
+    },
+    "setwarp": {
+      "permission": "neoessentials.teleport.warp.create",
+      "aliases": [
+        "createwarp",
+        "addwarp"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "commands/teleportation/WarpCommands.java",
+      "category": "teleportation",
+      "notes": "",
+      "description_ru": "Создать варп",
+      "description_en": "Create a warp"
+    },
+    "setworth": {
+      "permission": "neoessentials.setworth",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "economy/worth/SellCommand.java",
+      "category": "economy",
+      "notes": "",
+      "description_ru": "Установить цену продажи предмета",
+      "description_en": "Set the sell price of an item"
+    },
+    "showkit": {
+      "permission": "neoessentials.showkit",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "items/commands/MiscItemCommands.java",
+      "category": "items",
+      "notes": "",
+      "description_ru": "Просмотр содержимого набора без получения",
+      "description_en": "Preview kit contents without claiming"
+    },
+    "sign": {
+      "permission": "neoessentials.sign",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {
+        "colors": "neoessentials.sign.colors для цветных кодов (без ноды коды вырезаются)"
+      },
+      "file": "util/commands/SignCommand.java",
+      "category": "utility",
+      "notes": "",
+      "description_ru": "Редактировать текст таблички",
+      "description_en": "Edit sign text"
+    },
+    "skull": {
+      "permission": "neoessentials.skull",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/ItemCustomisationCommands.java",
+      "category": "items",
+      "notes": "",
+      "description_ru": "Получить голову игрока",
+      "description_en": "Get a player head item"
+    },
+    "smithing": {
+      "permission": "neoessentials.smithing",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/SmithingCommand.java",
+      "category": "utility",
+      "notes": "",
+      "description_ru": "Открыть переносной кузнечный стол",
+      "description_en": "Open portable smithing table"
+    },
+    "socialspy": {
+      "permission": "neoessentials.chat.socialspy",
+      "aliases": [
+        "ss",
+        "spy"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "chat/command/SocialSpyCommand.java",
+      "category": "chat",
+      "notes": "",
+      "description_ru": "Слежка за личными сообщениями",
+      "description_en": "Spy on private messages"
+    },
+    "spawn": {
+      "permission": "neoessentials.teleport.spawn",
+      "aliases": [
+        "hub"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "commands/teleportation/SpawnCommands.java",
+      "category": "teleportation",
+      "notes": "",
+      "description_ru": "Телепорт на спавн",
+      "description_en": "Teleport to spawn"
+    },
+    "spawner": {
+      "permission": "neoessentials.spawner",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {
+        "per_mob": "neoessentials.spawner.<моб> или neoessentials.spawner.*"
+      },
+      "file": "util/commands/ServerAdminCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Изменить тип спавнера",
+      "description_en": "Change a spawner type"
+    },
+    "spawninfo": {
+      "permission": "neoessentials.teleport.spawn.info",
+      "aliases": [
+        "spawni"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {
+        "admin_stats": "доп. статистика при neoessentials.teleport.spawn.set"
+      },
+      "file": "commands/teleportation/SpawnCommands.java",
+      "category": "teleportation",
+      "notes": ""
+    },
+    "spawnmob": {
+      "permission": "neoessentials.spawnmob",
+      "aliases": [
+        "mob"
+      ],
+      "op_level": null,
+      "sub_permissions": {
+        "<mob> <amount> <target>": "neoessentials.spawnmob.others"
+      },
+      "extra_permissions": {},
+      "file": "util/commands/UtilityCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Заспавнить существ",
+      "description_en": "Spawn entities"
+    },
+    "speed": {
+      "permission": "neoessentials.speed",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "<target>": "neoessentials.speed.others"
+      },
+      "extra_permissions": {},
+      "file": "util/commands/PlayerStateCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Установить скорость ходьбы или полёта",
+      "description_en": "Set walk or fly speed"
+    },
+    "staff": {
+      "permission": "neoessentials.chat.staff",
+      "aliases": [
+        "mod",
+        "admin",
+        "s"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {
+        "config_driven": "право задаётся в chat.channels.staff.permission"
+      },
+      "file": "chat/commands/ChannelCommands.java",
+      "category": "chat",
+      "notes": ""
+    },
+    "stonecutting": {
+      "permission": "neoessentials.stonecutting",
+      "aliases": [
+        "stonecutter",
+        "stonecut"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/StonecuttingCommand.java",
+      "category": "utility",
+      "notes": "",
+      "description_ru": "Открыть переносной камнерез",
+      "description_en": "Open portable stonecutter"
+    },
+    "sudo": {
+      "permission": "neoessentials.sudo",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {
+        "target_exempt": "neoessentials.sudo.exempt защищает цель"
+      },
+      "file": "util/commands/PlayerInfoCommands.java",
+      "category": "utility",
+      "notes": "Дублируется в PlayerStateCommands.",
+      "description_ru": "Заставить игрока выполнить команду",
+      "description_en": "Force a player to run a command"
+    },
+    "suicide": {
+      "permission": "neoessentials.suicide",
+      "aliases": [
+        "kill",
+        "die"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/SuicideCommand.java",
+      "category": "utility",
+      "notes": "КОЛЛИЗИЯ: /kill также регистрирует ServerAdminCommands с нодой neoessentials.kill.",
+      "description_ru": "Покончить с собой",
+      "description_en": "Kill yourself"
+    },
+    "tablist": {
+      "permission": "neoessentials.tablist.admin",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "tablist/TablistCommand.java",
+      "category": "system",
+      "notes": ""
+    },
+    "tempban": {
+      "permission": "neoessentials.moderation.tempban",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "moderation/commands/BanCommand.java",
+      "category": "moderation",
+      "notes": "",
+      "description_ru": "Временно забанить игрока",
+      "description_en": "Temporarily ban a player"
+    },
+    "tempbanip": {
+      "permission": "neoessentials.moderation.tempbanip",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "moderation/commands/BanCommand.java",
+      "category": "moderation",
+      "notes": "",
+      "description_ru": "Временно забанить IP-адрес",
+      "description_en": "Temporarily ban an IP address"
+    },
+    "test-pex-integration": {
+      "permission": null,
+      "aliases": [],
+      "op_level": 4,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "api/permissions/external/PermissionCommandInjector.java",
+      "category": "permissions",
+      "notes": ""
+    },
+    "time": {
+      "permission": "neoessentials.time",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "set/add": "neoessentials.time.set"
+      },
+      "extra_permissions": {},
+      "file": "util/commands/ServerAdminCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Узнать или установить время в мире",
+      "description_en": "Get or set world time"
+    },
+    "togglejail": {
+      "permission": "neoessentials.moderation.jail",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "moderation/commands/JailCommand.java",
+      "category": "moderation",
+      "notes": "Переиспользует ноду jail.",
+      "description_ru": "Переключить состояние тюрьмы игрока",
+      "description_en": "Toggle a player''s jail state"
+    },
+    "top": {
+      "permission": "neoessentials.teleport.top",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "teleportation/DirectTeleport/DirectTeleportCommands.java",
+      "category": "teleportation",
+      "notes": "",
+      "description_ru": "Телепорт на верхний блок",
+      "description_en": "Teleport to highest block"
+    },
+    "tp": {
+      "permission": "neoessentials.teleport.tp",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "teleportation/DirectTeleport/DirectTeleportCommands.java",
+      "category": "teleportation",
+      "notes": "Все формы (/tp цель, /tp игрок цель, /tp x y z) — одна нода.",
+      "description_ru": "Телепорт к игроку или на координаты",
+      "description_en": "Teleport to a player or location"
+    },
+    "tpa": {
+      "permission": "neoessentials.teleport.request.tpa",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "teleportation/TeleportRequests/TeleportRequestCommands.java",
+      "category": "teleportation",
+      "notes": "",
+      "description_ru": "Запросить телепорт к игроку",
+      "description_en": "Request to teleport to a player"
+    },
+    "tpaall": {
+      "permission": "neoessentials.tpaall",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "<target>": "neoessentials.tpaall.others"
+      },
+      "extra_permissions": {},
+      "file": "util/commands/WorldInteractionCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Отправить tpa-here всем онлайн-игрокам",
+      "description_en": "Send tpa-here to all online players"
+    },
+    "tpaccept": {
+      "permission": "neoessentials.teleport.request.accept",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "teleportation/TeleportRequests/TeleportRequestCommands.java",
+      "category": "teleportation",
+      "notes": "",
+      "description_ru": "Принять запрос на телепорт",
+      "description_en": "Accept a teleport request"
+    },
+    "tpahere": {
+      "permission": "neoessentials.teleport.request.tpahere",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "teleportation/TeleportRequests/TeleportRequestCommands.java",
+      "category": "teleportation",
+      "notes": "",
+      "description_ru": "Запросить телепорт игрока к вам",
+      "description_en": "Request a player to teleport to you"
+    },
+    "tpall": {
+      "permission": "neoessentials.teleport.admin.tpall",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "teleportation/DirectTeleport/DirectTeleportCommands.java",
+      "category": "teleportation",
+      "notes": "",
+      "description_ru": "Телепортировать всех игроков к вам",
+      "description_en": "Teleport all players to you"
+    },
+    "tpauto": {
+      "permission": "neoessentials.tpauto",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "<target>": "neoessentials.tpauto.others"
+      },
+      "extra_permissions": {
+        "others": "neoessentials.tpauto.others"
+      },
+      "file": "teleportation/Misc/MiscTeleportCommands.java",
+      "category": "teleportation",
+      "notes": "",
+      "description_ru": "Авто-принятие всех запросов на телепорт",
+      "description_en": "Auto-accept all teleport requests"
+    },
+    "tpcancel": {
+      "permission": "neoessentials.teleport.request.cancel",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "teleportation/TeleportRequests/TeleportRequestCommands.java",
+      "category": "teleportation",
+      "notes": ""
+    },
+    "tpdeny": {
+      "permission": "neoessentials.teleport.request.deny",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "teleportation/TeleportRequests/TeleportRequestCommands.java",
+      "category": "teleportation",
+      "notes": "",
+      "description_ru": "Отклонить запрос на телепорт",
+      "description_en": "Deny a teleport request"
+    },
+    "tphere": {
+      "permission": "neoessentials.teleport.tphere",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "teleportation/DirectTeleport/DirectTeleportCommands.java",
+      "category": "teleportation",
+      "notes": "",
+      "description_ru": "Телепортировать игрока к вам",
+      "description_en": "Teleport a player to you"
+    },
+    "tpo": {
+      "permission": "neoessentials.teleport.admin.tpo",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "teleportation/DirectTeleport/DirectTeleportCommands.java",
+      "category": "teleportation",
+      "notes": "Телепорт к последней позиции оффлайн-игрока.",
+      "alt_registrations": [
+        {
+          "file": "util/commands/ServerAdminCommands.java",
+          "permission": "neoessentials.teleport.tpo",
+          "op_level": null,
+          "sub_permissions": {},
+          "notes": "КОЛЛИЗИЯ: /tpo также в DirectTeleportCommands с нодой neoessentials.teleport.admin.tpo."
+        }
+      ],
+      "description_ru": "Принудительный телепорт (обход tptoggle)",
+      "description_en": "Teleport override (bypass tptoggle)"
+    },
+    "tpoffline": {
+      "permission": "neoessentials.teleport.tpoffline",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/ServerAdminCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Телепорт к последней позиции офлайн-игрока",
+      "description_en": "Teleport to offline player''s last position"
+    },
+    "tpohere": {
+      "permission": "neoessentials.teleport.tpohere",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/ServerAdminCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Принудительно перенести игрока сюда",
+      "description_en": "Bring player here override"
+    },
+    "tppos": {
+      "permission": "neoessentials.teleport.tppos",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "teleportation/DirectTeleport/DirectTeleportCommands.java",
+      "category": "teleportation",
+      "notes": "",
+      "description_ru": "Телепорт на координаты",
+      "description_en": "Teleport to coordinates"
+    },
+    "tpr": {
+      "permission": "neoessentials.teleport.tpr",
+      "aliases": [
+        "rtp",
+        "randomtp",
+        "randomteleport"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "teleportation/DirectTeleport/DirectTeleportCommands.java",
+      "category": "teleportation",
+      "notes": "ВНИМАНИЕ: /neoe tpr и /neoessentials tpr зарегистрированы БЕЗ проверки прав — обходят ноду tpr.",
+      "description_ru": "Случайный телепорт",
+      "description_en": "Random teleportation"
+    },
+    "tptoggle": {
+      "permission": "neoessentials.tptoggle",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "<target>": "neoessentials.tptoggle.others"
+      },
+      "extra_permissions": {},
+      "file": "util/commands/ItemCustomisationCommands.java",
+      "category": "items",
+      "notes": "",
+      "description_ru": "Переключить приём запросов на телепорт",
+      "description_en": "Toggle teleport request acceptance"
+    },
+    "tree": {
+      "permission": "neoessentials.tree",
+      "aliases": [
+        "bigtree"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/WorldInteractionCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Вырастить дерево в точке взгляда",
+      "description_en": "Grow a tree at look target"
+    },
+    "unban": {
+      "permission": "neoessentials.moderation.unban",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "moderation/commands/BanCommand.java",
+      "category": "moderation",
+      "notes": "",
+      "description_ru": "Разбанить игрока",
+      "description_en": "Unban a player"
+    },
+    "unbanip": {
+      "permission": "neoessentials.moderation.unbanip",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "moderation/commands/BanCommand.java",
+      "category": "moderation",
+      "notes": "",
+      "description_ru": "Разбанить IP-адрес",
+      "description_en": "Unban an IP address"
+    },
+    "unfreeze": {
+      "permission": "neoessentials.moderation.unfreeze",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "moderation/commands/FreezeCommand.java",
+      "category": "moderation",
+      "notes": "",
+      "description_ru": "Разморозить игрока",
+      "description_en": "Unfreeze a player"
+    },
+    "unfreezeall": {
+      "permission": "neoessentials.moderation.unfreezeall",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "moderation/commands/FreezeCommand.java",
+      "category": "moderation",
+      "notes": "",
+      "description_ru": "Разморозить всех игроков",
+      "description_en": "Unfreeze all players"
+    },
+    "unignore": {
+      "permission": "neoessentials.chat.ignore",
+      "aliases": [
+        "unblock"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "chat/command/UnignoreCommand.java",
+      "category": "chat",
+      "notes": "Переиспользует ноду ignore.",
+      "description_ru": "Перестать игнорировать игрока",
+      "description_en": "Unignore a player"
+    },
+    "unjail": {
+      "permission": "neoessentials.moderation.unjail",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "moderation/commands/JailCommand.java",
+      "category": "moderation",
+      "notes": "",
+      "description_ru": "Освободить игрока из тюрьмы",
+      "description_en": "Release a player from jail"
+    },
+    "unlimited": {
+      "permission": "neoessentials.unlimited",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "<item>/list/clear <target>": "neoessentials.unlimited.others"
+      },
+      "extra_permissions": {},
+      "file": "util/commands/UtilityCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Переключить безлимитное использование предметов",
+      "description_en": "Toggle unlimited item use"
+    },
+    "unmute": {
+      "permission": "neoessentials.chat.mute",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "chat/command/UnmuteCommand.java",
+      "category": "chat",
+      "notes": "Переиспользует ноду mute.",
+      "description_ru": "Размутить игрока",
+      "description_en": "Unmute a player"
+    },
+    "unvanish": {
+      "permission": "neoessentials.moderation.vanish",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "<player>": "neoessentials.moderation.vanish.others"
+      },
+      "extra_permissions": {},
+      "file": "moderation/commands/VanishCommand.java",
+      "category": "moderation",
+      "notes": "Та же нода, что vanish.",
+      "description_ru": "Выключить режим невидимости",
+      "description_en": "Disable vanish mode"
+    },
+    "vanish": {
+      "permission": "neoessentials.moderation.vanish",
+      "aliases": [
+        "v"
+      ],
+      "op_level": null,
+      "sub_permissions": {
+        "<player>": "neoessentials.moderation.vanish.others"
+      },
+      "extra_permissions": {
+        "others": "neoessentials.moderation.vanish.others"
+      },
+      "file": "moderation/commands/VanishCommand.java",
+      "category": "moderation",
+      "notes": "Ванишить других — отдельная нода .others.",
+      "description_ru": "Переключить режим невидимости",
+      "description_en": "Toggle vanish mode"
+    },
+    "vanishlist": {
+      "permission": "neoessentials.moderation.vanishlist",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "moderation/commands/VanishCommand.java",
+      "category": "moderation",
+      "notes": "",
+      "description_ru": "Список невидимых игроков",
+      "description_en": "List vanished players"
+    },
+    "vault": {
+      "permission": "neoessentials.vault.admin",
+      "aliases": [],
+      "op_level": 3,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "vault/command/VaultCommand.java",
+      "category": "vault",
+      "notes": "",
+      "description_ru": "Информация и управление NeoEssentials Vault API",
+      "description_en": "NeoEssentials Vault API info and management"
+    },
+    "warp": {
+      "permission": "neoessentials.teleport.warp",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "<name> <target>": "neoessentials.teleport.warp.others"
+      },
+      "extra_permissions": {
+        "per_warp": "neoessentials.warps.<имя_варпа> при включённом perWarpPermission",
+        "list_only": "neoessentials.teleport.warp.list даёт только список, не телепорт"
+      },
+      "file": "commands/teleportation/WarpCommands.java",
+      "category": "teleportation",
+      "notes": "Для телепорта нужна teleport.warp; list-нода позволяет только смотреть список.",
+      "description_ru": "Телепортироваться на варп",
+      "description_en": "Teleport to a warp"
+    },
+    "warpinfo": {
+      "permission": "neoessentials.warpinfo",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "commands/teleportation/WarpCommands.java",
+      "category": "teleportation",
+      "notes": "",
+      "description_ru": "Показать информацию о варпе",
+      "description_en": "Show info about a warp"
+    },
+    "warps": {
+      "permission": "neoessentials.teleport.warp.list",
+      "aliases": [
+        "warplist",
+        "listwarps"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "commands/teleportation/WarpCommands.java",
+      "category": "teleportation",
+      "notes": "",
+      "description_ru": "Список всех варпов",
+      "description_en": "List all warps"
+    },
+    "weather": {
+      "permission": "neoessentials.weather",
+      "aliases": [
+        "sun",
+        "storm",
+        "thunder"
+      ],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "util/commands/ServerAdminCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Установить погоду в мире",
+      "description_en": "Set world weather"
+    },
+    "whois": {
+      "permission": "neoessentials.whois",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {
+        "detailed": "neoessentials.whois.detailed открывает UUID/здоровье/локацию/IP"
+      },
+      "file": "util/commands/WhoisCommand.java",
+      "category": "utility",
+      "notes": "",
+      "description_ru": "Показать подробную информацию об игроке",
+      "description_en": "Show detailed player info"
+    },
+    "world": {
+      "permission": "neoessentials.world",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {
+        "<dim> <target>": "neoessentials.world.others"
+      },
+      "extra_permissions": {},
+      "file": "util/commands/ServerAdminCommands.java",
+      "category": "admin_utility",
+      "notes": "",
+      "description_ru": "Телепортироваться в мир/измерение",
+      "description_en": "Teleport to a world/dimension"
+    },
+    "worth": {
+      "permission": "neoessentials.worth",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "economy/worth/WorthCommand.java",
+      "category": "economy",
+      "notes": "",
+      "description_ru": "Проверить цену продажи предмета",
+      "description_en": "Check the sell value of an item"
+    }
+  },
+  "permission_index": {
+    "neoessentials.*": [
+      "help (видимость команд)"
+    ],
+    "neoessentials.admin": [
+      "help (видимость команд)"
+    ],
+    "neoessentials.admin.dashboard": [
+      "dashboard"
+    ],
+    "neoessentials.admin.reload": [
+      "neoessentials (reload)",
+      "neoessentials (config split)"
+    ],
+    "neoessentials.afk": [
+      "afk"
+    ],
+    "neoessentials.antioch": [
+      "antioch"
+    ],
+    "neoessentials.anvil": [
+      "anvil"
+    ],
+    "neoessentials.backup": [
+      "backup"
+    ],
+    "neoessentials.beezooka": [
+      "beezooka"
+    ],
+    "neoessentials.book": [
+      "book"
+    ],
+    "neoessentials.book.author": [
+      "book (author)"
+    ],
+    "neoessentials.book.title": [
+      "book (title)"
+    ],
+    "neoessentials.book.unlock": [
+      "book (unlock)"
+    ],
+    "neoessentials.bottom": [
+      "bottom"
+    ],
+    "neoessentials.break": [
+      "break"
+    ],
+    "neoessentials.break.bedrock": [
+      "break (bedrock)"
+    ],
+    "neoessentials.broadcast": [
+      "broadcast"
+    ],
+    "neoessentials.broadcastworld": [
+      "broadcastworld"
+    ],
+    "neoessentials.burn": [
+      "burn"
+    ],
+    "neoessentials.cartography": [
+      "cartography"
+    ],
+    "neoessentials.chat.ignore": [
+      "ignore",
+      "unignore"
+    ],
+    "neoessentials.chat.ignore.exempt": [
+      "ignore (target_exempt)"
+    ],
+    "neoessentials.chat.msg": [
+      "msg"
+    ],
+    "neoessentials.chat.msgtoggle": [
+      "msgtoggle"
+    ],
+    "neoessentials.chat.msgtoggle.bypass": [
+      "msg (msgtoggle_bypass)",
+      "reply (msgtoggle_bypass)"
+    ],
+    "neoessentials.chat.mute": [
+      "mute",
+      "mutelist",
+      "unmute"
+    ],
+    "neoessentials.chat.mute.exempt": [
+      "mute (target_exempt)"
+    ],
+    "neoessentials.chat.reply": [
+      "reply"
+    ],
+    "neoessentials.chat.socialspy": [
+      "socialspy"
+    ],
+    "neoessentials.chat.staff": [
+      "staff"
+    ],
+    "neoessentials.ciconfirmtoggle": [
+      "ciconfirmtoggle"
+    ],
+    "neoessentials.command.target": [
+      "powertool (target)"
+    ],
+    "neoessentials.compass": [
+      "compass"
+    ],
+    "neoessentials.compass.others": [
+      "compass (others)"
+    ],
+    "neoessentials.condense": [
+      "condense"
+    ],
+    "neoessentials.crafting": [
+      "crafting"
+    ],
+    "neoessentials.customtext": [
+      "customtext"
+    ],
+    "neoessentials.dashboard.access": [
+      "dashboardregister"
+    ],
+    "neoessentials.depth": [
+      "depth"
+    ],
+    "neoessentials.depth.others": [
+      "depth (others)"
+    ],
+    "neoessentials.economy.balance": [
+      "balance"
+    ],
+    "neoessentials.economy.balance.others": [
+      "balance (<player>)"
+    ],
+    "neoessentials.economy.baltop": [
+      "baltop"
+    ],
+    "neoessentials.economy.baltop.exempt": [
+      "baltop (exempt)"
+    ],
+    "neoessentials.economy.eco": [
+      "eco"
+    ],
+    "neoessentials.economy.pay": [
+      "pay"
+    ],
+    "neoessentials.economy.pay.offline": [
+      "pay (offline)"
+    ],
+    "neoessentials.economy.paytoggle": [
+      "paytoggle"
+    ],
+    "neoessentials.effect": [
+      "effect"
+    ],
+    "neoessentials.enderchest": [
+      "enderchest"
+    ],
+    "neoessentials.enderchest.edit": [
+      "enderchestedit"
+    ],
+    "neoessentials.exp": [
+      "exp"
+    ],
+    "neoessentials.exp.give": [
+      "exp (give)"
+    ],
+    "neoessentials.exp.give.others": [
+      "exp (give <amount> <target>)"
+    ],
+    "neoessentials.exp.set": [
+      "exp (set)"
+    ],
+    "neoessentials.exp.set.others": [
+      "exp (set <amount> <target>)"
+    ],
+    "neoessentials.ext": [
+      "ext"
+    ],
+    "neoessentials.ext.others": [
+      "ext (<target>)"
+    ],
+    "neoessentials.feed": [
+      "feed"
+    ],
+    "neoessentials.feed.others": [
+      "feed (<target>)"
+    ],
+    "neoessentials.fireball": [
+      "fireball",
+      "fireball (per_type)"
+    ],
+    "neoessentials.fireball.*": [
+      "fireball (per_type)"
+    ],
+    "neoessentials.fireball.ride": [
+      "fireball (ride)"
+    ],
+    "neoessentials.firework": [
+      "firework"
+    ],
+    "neoessentials.firework.fire": [
+      "firework (fire)"
+    ],
+    "neoessentials.fly": [
+      "fly"
+    ],
+    "neoessentials.fly.others": [
+      "fly (<target>)"
+    ],
+    "neoessentials.gamemode": [
+      "gamemode",
+      "gma",
+      "gmc",
+      "gms",
+      "gmsp"
+    ],
+    "neoessentials.gamemode.others": [
+      "gamemode (<mode> <target>)",
+      "gma (<player>)",
+      "gmc (<player>)",
+      "gms (<player>)",
+      "gmsp (<player>)"
+    ],
+    "neoessentials.gc": [
+      "gc"
+    ],
+    "neoessentials.getpos": [
+      "getpos"
+    ],
+    "neoessentials.getpos.others": [
+      "getpos (others)"
+    ],
+    "neoessentials.give": [
+      "give"
+    ],
+    "neoessentials.god": [
+      "god"
+    ],
+    "neoessentials.god.others": [
+      "god (<target>)"
+    ],
+    "neoessentials.grindstone": [
+      "grindstone"
+    ],
+    "neoessentials.hat": [
+      "hat"
+    ],
+    "neoessentials.heal": [
+      "heal"
+    ],
+    "neoessentials.heal.others": [
+      "heal (<target>)"
+    ],
+    "neoessentials.help": [
+      "help"
+    ],
+    "neoessentials.helpop": [
+      "helpop"
+    ],
+    "neoessentials.helpop.receive": [
+      "helpop (receive)"
+    ],
+    "neoessentials.ice": [
+      "ice"
+    ],
+    "neoessentials.ice.others": [
+      "ice (<target>)"
+    ],
+    "neoessentials.info": [
+      "info"
+    ],
+    "neoessentials.invsee": [
+      "invsee"
+    ],
+    "neoessentials.invsee.edit": [
+      "invseeedit"
+    ],
+    "neoessentials.item": [
+      "item"
+    ],
+    "neoessentials.item.clearinventory": [
+      "clearinventory"
+    ],
+    "neoessentials.item.dispose": [
+      "dispose"
+    ],
+    "neoessentials.item.enchant": [
+      "enchant",
+      "enchanthand"
+    ],
+    "neoessentials.item.enchant.any": [
+      "enchant (any)",
+      "enchanthand (any)"
+    ],
+    "neoessentials.item.enchant.others": [
+      "enchant (others)"
+    ],
+    "neoessentials.item.enchant.unsafe": [
+      "enchant (unsafe)",
+      "enchanthand (unsafe)"
+    ],
+    "neoessentials.item.powertool": [
+      "powertool"
+    ],
+    "neoessentials.item.repair": [
+      "repair"
+    ],
+    "neoessentials.itemdb": [
+      "itemdb"
+    ],
+    "neoessentials.itemlore": [
+      "itemlore"
+    ],
+    "neoessentials.itemname": [
+      "itemname"
+    ],
+    "neoessentials.kill": [
+      "kill"
+    ],
+    "neoessentials.kill.exempt": [
+      "kill (target_exempt)"
+    ],
+    "neoessentials.kill.force": [
+      "kill (force)"
+    ],
+    "neoessentials.kit.others": [
+      "kit (<name> <player>)"
+    ],
+    "neoessentials.kitreset": [
+      "kitreset"
+    ],
+    "neoessentials.kitreset.others": [
+      "kitreset (<kit> <player>)"
+    ],
+    "neoessentials.kits": [
+      "kit (per_kit)"
+    ],
+    "neoessentials.kits.create": [
+      "createkit"
+    ],
+    "neoessentials.kits.delete": [
+      "delkit"
+    ],
+    "neoessentials.kits.list": [
+      "listkits"
+    ],
+    "neoessentials.kits.use": [
+      "kit"
+    ],
+    "neoessentials.kittycannon": [
+      "kittycannon"
+    ],
+    "neoessentials.lightning": [
+      "lightning"
+    ],
+    "neoessentials.lightning.others": [
+      "lightning (<target>)"
+    ],
+    "neoessentials.list": [
+      "list"
+    ],
+    "neoessentials.loom": [
+      "loom"
+    ],
+    "neoessentials.mail": [
+      "mail"
+    ],
+    "neoessentials.mail.clear": [
+      "mail (clear)"
+    ],
+    "neoessentials.mail.clear.others": [
+      "mail (clear <player>)"
+    ],
+    "neoessentials.mail.clearall": [
+      "mail (clearall)"
+    ],
+    "neoessentials.mail.send": [
+      "mail (send)"
+    ],
+    "neoessentials.mail.sendall": [
+      "mail (sendall)"
+    ],
+    "neoessentials.mail.sendtemp": [
+      "mail (sendtemp)"
+    ],
+    "neoessentials.mail.sendtempall": [
+      "mail (sendtempall)"
+    ],
+    "neoessentials.me": [
+      "me"
+    ],
+    "neoessentials.moderation.ban": [
+      "ban"
+    ],
+    "neoessentials.moderation.banip": [
+      "banip"
+    ],
+    "neoessentials.moderation.banlist": [
+      "banlist",
+      "banlist (players)",
+      "banlist (ips)"
+    ],
+    "neoessentials.moderation.freeze": [
+      "freeze"
+    ],
+    "neoessentials.moderation.freezeall": [
+      "freezeall"
+    ],
+    "neoessentials.moderation.freezelist": [
+      "freezelist"
+    ],
+    "neoessentials.moderation.jail": [
+      "jail",
+      "jailfor",
+      "togglejail"
+    ],
+    "neoessentials.moderation.jailinfo": [
+      "jailinfo"
+    ],
+    "neoessentials.moderation.jaillist": [
+      "jaillist",
+      "jails"
+    ],
+    "neoessentials.moderation.kick": [
+      "kick"
+    ],
+    "neoessentials.moderation.kickall": [
+      "kickall"
+    ],
+    "neoessentials.moderation.setjail": [
+      "deljail",
+      "setjail"
+    ],
+    "neoessentials.moderation.tempban": [
+      "tempban"
+    ],
+    "neoessentials.moderation.tempbanip": [
+      "tempbanip"
+    ],
+    "neoessentials.moderation.unban": [
+      "unban"
+    ],
+    "neoessentials.moderation.unbanip": [
+      "unbanip"
+    ],
+    "neoessentials.moderation.unfreeze": [
+      "unfreeze"
+    ],
+    "neoessentials.moderation.unfreezeall": [
+      "unfreezeall"
+    ],
+    "neoessentials.moderation.unjail": [
+      "unjail"
+    ],
+    "neoessentials.moderation.vanish": [
+      "unvanish",
+      "vanish"
+    ],
+    "neoessentials.moderation.vanish.others": [
+      "unvanish (<player>)",
+      "vanish (<player>)",
+      "vanish (others)"
+    ],
+    "neoessentials.moderation.vanishlist": [
+      "vanishlist"
+    ],
+    "neoessentials.more": [
+      "more"
+    ],
+    "neoessentials.motd": [
+      "motd"
+    ],
+    "neoessentials.motd.broadcast": [
+      "motd (broadcast)"
+    ],
+    "neoessentials.motd.reload": [
+      "motd (reload)"
+    ],
+    "neoessentials.motd.set": [
+      "motd (set)",
+      "motd (clear)"
+    ],
+    "neoessentials.msgtoggle": [
+      "msgtoggle (alt:util/commands/PlayerInfoCommands.java)"
+    ],
+    "neoessentials.near": [
+      "near"
+    ],
+    "neoessentials.nick": [
+      "nick"
+    ],
+    "neoessentials.nick.color": [
+      "nick (color)"
+    ],
+    "neoessentials.nick.others": [
+      "setnick"
+    ],
+    "neoessentials.nuke": [
+      "nuke"
+    ],
+    "neoessentials.payconfirmtoggle": [
+      "payconfirmtoggle"
+    ],
+    "neoessentials.permissions.check": [
+      "permissions (check)"
+    ],
+    "neoessentials.permissions.group.clear": [
+      "permissions (group clear)"
+    ],
+    "neoessentials.permissions.group.clone": [
+      "permissions (clone group)"
+    ],
+    "neoessentials.permissions.group.create": [
+      "permissions (create group)"
+    ],
+    "neoessentials.permissions.group.delete": [
+      "permissions (delete group)"
+    ],
+    "neoessentials.permissions.group.inherit": [
+      "permissions (group inherit)"
+    ],
+    "neoessentials.permissions.group.modify": [
+      "permissions (group setprefix/setsuffix)"
+    ],
+    "neoessentials.permissions.group.permissions": [
+      "permissions (group add/remove)"
+    ],
+    "neoessentials.permissions.group.rename": [
+      "permissions (rename group)"
+    ],
+    "neoessentials.permissions.info.group": [
+      "permissions (info group)"
+    ],
+    "neoessentials.permissions.info.user": [
+      "permissions (info user)"
+    ],
+    "neoessentials.permissions.list.groups": [
+      "permissions (list groups)"
+    ],
+    "neoessentials.permissions.list.users": [
+      "permissions (list users)"
+    ],
+    "neoessentials.permissions.reload": [
+      "permissions (reload)"
+    ],
+    "neoessentials.permissions.search": [
+      "permissions (search)"
+    ],
+    "neoessentials.permissions.user.clear": [
+      "permissions (user clear)"
+    ],
+    "neoessentials.permissions.user.groups": [
+      "permissions (user setgroup)"
+    ],
+    "neoessentials.permissions.user.permissions": [
+      "permissions (user add/remove)"
+    ],
+    "neoessentials.ping": [
+      "ping"
+    ],
+    "neoessentials.ping.others": [
+      "ping (<player>)"
+    ],
+    "neoessentials.playtime": [
+      "playtime"
+    ],
+    "neoessentials.playtime.others": [
+      "playtime (<target>)"
+    ],
+    "neoessentials.potion": [
+      "potion"
+    ],
+    "neoessentials.powertoollist": [
+      "powertoollist"
+    ],
+    "neoessentials.ptime": [
+      "ptime"
+    ],
+    "neoessentials.ptime.others": [
+      "ptime (<time> <target>)"
+    ],
+    "neoessentials.pweather": [
+      "pweather"
+    ],
+    "neoessentials.pweather.others": [
+      "pweather (<w> <target>)"
+    ],
+    "neoessentials.realname": [
+      "realname"
+    ],
+    "neoessentials.recipe": [
+      "recipe"
+    ],
+    "neoessentials.remove": [
+      "remove"
+    ],
+    "neoessentials.renamehome": [
+      "renamehome"
+    ],
+    "neoessentials.renamehome.others": [
+      "renamehome (others)"
+    ],
+    "neoessentials.rest": [
+      "rest"
+    ],
+    "neoessentials.rest.others": [
+      "rest (<target>)"
+    ],
+    "neoessentials.rtoggle": [
+      "rtoggle"
+    ],
+    "neoessentials.rtoggle.others": [
+      "rtoggle (<target>)"
+    ],
+    "neoessentials.rules": [
+      "rules"
+    ],
+    "neoessentials.rules.admin": [
+      "rules (add/remove/edit/insert/clear/reload)"
+    ],
+    "neoessentials.seen": [
+      "seen"
+    ],
+    "neoessentials.sell": [
+      "sell"
+    ],
+    "neoessentials.sell.bulk": [
+      "sell (inventory|all|invent)"
+    ],
+    "neoessentials.sell.hand": [
+      "sell (hand)"
+    ],
+    "neoessentials.setworth": [
+      "setworth"
+    ],
+    "neoessentials.shop.create": [
+      "chestshop (convert)"
+    ],
+    "neoessentials.showkit": [
+      "showkit"
+    ],
+    "neoessentials.sign": [
+      "sign"
+    ],
+    "neoessentials.sign.colors": [
+      "sign (colors)"
+    ],
+    "neoessentials.skull": [
+      "skull"
+    ],
+    "neoessentials.smithing": [
+      "smithing"
+    ],
+    "neoessentials.spawner": [
+      "spawner",
+      "spawner (per_mob)"
+    ],
+    "neoessentials.spawner.*": [
+      "spawner (per_mob)"
+    ],
+    "neoessentials.spawnmob": [
+      "spawnmob"
+    ],
+    "neoessentials.spawnmob.others": [
+      "spawnmob (<mob> <amount> <target>)"
+    ],
+    "neoessentials.speed": [
+      "speed"
+    ],
+    "neoessentials.speed.others": [
+      "speed (<target>)"
+    ],
+    "neoessentials.stonecutting": [
+      "stonecutting"
+    ],
+    "neoessentials.sudo": [
+      "sudo"
+    ],
+    "neoessentials.sudo.exempt": [
+      "sudo (target_exempt)"
+    ],
+    "neoessentials.suicide": [
+      "suicide"
+    ],
+    "neoessentials.tablist.admin": [
+      "tablist"
+    ],
+    "neoessentials.teleport.admin.tpall": [
+      "tpall"
+    ],
+    "neoessentials.teleport.admin.tpo": [
+      "tpo"
+    ],
+    "neoessentials.teleport.back": [
+      "back"
+    ],
+    "neoessentials.teleport.home": [
+      "home"
+    ],
+    "neoessentials.teleport.home.delete": [
+      "delhome"
+    ],
+    "neoessentials.teleport.home.list": [
+      "homes"
+    ],
+    "neoessentials.teleport.home.set": [
+      "sethome"
+    ],
+    "neoessentials.teleport.jump": [
+      "jump"
+    ],
+    "neoessentials.teleport.jumpto": [
+      "jumpto"
+    ],
+    "neoessentials.teleport.pwarp": [
+      "pwarp"
+    ],
+    "neoessentials.teleport.pwarp.create": [
+      "setpwarp"
+    ],
+    "neoessentials.teleport.pwarp.delete": [
+      "delpwarp"
+    ],
+    "neoessentials.teleport.pwarp.list": [
+      "pwarps"
+    ],
+    "neoessentials.teleport.request.accept": [
+      "tpaccept"
+    ],
+    "neoessentials.teleport.request.cancel": [
+      "tpcancel"
+    ],
+    "neoessentials.teleport.request.deny": [
+      "tpdeny"
+    ],
+    "neoessentials.teleport.request.tpa": [
+      "tpa"
+    ],
+    "neoessentials.teleport.request.tpahere": [
+      "tpahere"
+    ],
+    "neoessentials.teleport.settpr": [
+      "settpr"
+    ],
+    "neoessentials.teleport.spawn": [
+      "spawn"
+    ],
+    "neoessentials.teleport.spawn.info": [
+      "spawninfo"
+    ],
+    "neoessentials.teleport.spawn.set": [
+      "setspawn",
+      "spawninfo (admin_stats)"
+    ],
+    "neoessentials.teleport.top": [
+      "top"
+    ],
+    "neoessentials.teleport.tp": [
+      "tp"
+    ],
+    "neoessentials.teleport.tphere": [
+      "tphere"
+    ],
+    "neoessentials.teleport.tpo": [
+      "tpo (alt:util/commands/ServerAdminCommands.java)"
+    ],
+    "neoessentials.teleport.tpoffline": [
+      "tpoffline"
+    ],
+    "neoessentials.teleport.tpohere": [
+      "tpohere"
+    ],
+    "neoessentials.teleport.tppos": [
+      "tppos"
+    ],
+    "neoessentials.teleport.tpr": [
+      "tpr"
+    ],
+    "neoessentials.teleport.warp": [
+      "warp"
+    ],
+    "neoessentials.teleport.warp.create": [
+      "setwarp"
+    ],
+    "neoessentials.teleport.warp.delete": [
+      "delwarp"
+    ],
+    "neoessentials.teleport.warp.list": [
+      "warp (list_only)",
+      "warps"
+    ],
+    "neoessentials.teleport.warp.others": [
+      "warp (<name> <target>)"
+    ],
+    "neoessentials.time": [
+      "time"
+    ],
+    "neoessentials.time.set": [
+      "day",
+      "night",
+      "time (set/add)"
+    ],
+    "neoessentials.tpaall": [
+      "tpaall"
+    ],
+    "neoessentials.tpaall.others": [
+      "tpaall (<target>)"
+    ],
+    "neoessentials.tpauto": [
+      "tpauto"
+    ],
+    "neoessentials.tpauto.others": [
+      "tpauto (<target>)",
+      "tpauto (others)"
+    ],
+    "neoessentials.tptoggle": [
+      "tptoggle"
+    ],
+    "neoessentials.tptoggle.others": [
+      "tptoggle (<target>)"
+    ],
+    "neoessentials.tree": [
+      "tree"
+    ],
+    "neoessentials.unlimited": [
+      "unlimited"
+    ],
+    "neoessentials.unlimited.others": [
+      "unlimited (<item>/list/clear <target>)"
+    ],
+    "neoessentials.use": [
+      "neoessentials"
+    ],
+    "neoessentials.vanish.see": [
+      "list (see_vanished)"
+    ],
+    "neoessentials.vault.admin": [
+      "vault"
+    ],
+    "neoessentials.warpinfo": [
+      "warpinfo"
+    ],
+    "neoessentials.warps": [
+      "warp (per_warp)"
+    ],
+    "neoessentials.weather": [
+      "weather"
+    ],
+    "neoessentials.whois": [
+      "whois"
+    ],
+    "neoessentials.whois.detailed": [
+      "whois (detailed)"
+    ],
+    "neoessentials.world": [
+      "world"
+    ],
+    "neoessentials.world.others": [
+      "world (<dim> <target>)"
+    ],
+    "neoessentials.worth": [
+      "worth"
+    ]
+  }
+}
