@@ -1139,6 +1139,18 @@ public class ConfigManager {
                 return configCache.get(configName);
             }
 
+            // Section shorthand: a name without ".json" refers to a top-level section of the
+            // main config (e.g. getConfig("chat") -> the "chat" object of config.json).
+            // Works in split mode too because getConfig(MAIN_CONFIG) merges the split files.
+            // Not cached under the short name so it stays in sync with the main config cache.
+            if (!configName.endsWith(".json")) {
+                JsonObject main = getConfig(MAIN_CONFIG);
+                if (main.has(configName) && main.get(configName).isJsonObject()) {
+                    return main.getAsJsonObject(configName);
+                }
+                return new JsonObject();
+            }
+
             // Special handling for config.json when split configs are enabled
             if (configName.equals(MAIN_CONFIG) && ConfigSplitter.isSplittingEnabled()) {
                 // Always merge from split files, never from config.json

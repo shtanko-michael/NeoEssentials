@@ -83,15 +83,25 @@ public class ConfigSplitter {
 
         LOGGER.debug("Checking split config file versions...");
 
-        // Check if config.json is newer than any split file (by last modified time)
+        // Check if config.json is newer than any split file (by last modified time).
+        // The stub written after migration is always "newer" than the split files, so a
+        // stub must never count as a re-split trigger (it also has nothing to split).
         boolean needsResplit = false;
         if (configFile.exists()) {
-            long configJsonLastModified = configFile.lastModified();
-            for (String fileName : SPLIT_CONFIG_VERSIONS.keySet()) {
-                File splitFile = ResourceUtil.getConfigFile(fileName);
-                if (!splitFile.exists() || configJsonLastModified > splitFile.lastModified()) {
-                    needsResplit = true;
-                    break;
+            boolean isStub = true;
+            try (FileReader reader = new FileReader(configFile, StandardCharsets.UTF_8)) {
+                isStub = isStubConfig(JsonParser.parseReader(reader).getAsJsonObject());
+            } catch (Exception e) {
+                LOGGER.warn("Could not inspect config.json for stub detection: {}", e.getMessage());
+            }
+            if (!isStub) {
+                long configJsonLastModified = configFile.lastModified();
+                for (String fileName : SPLIT_CONFIG_VERSIONS.keySet()) {
+                    File splitFile = ResourceUtil.getConfigFile(fileName);
+                    if (!splitFile.exists() || configJsonLastModified > splitFile.lastModified()) {
+                        needsResplit = true;
+                        break;
+                    }
                 }
             }
         }
@@ -190,6 +200,13 @@ public class ConfigSplitter {
                 config = JsonParser.parseReader(reader).getAsJsonObject();
             }
 
+            // Never migrate FROM the stub: it has no sections, and proceeding would overwrite
+            // config.json.backup (the user's real pre-split config) with the stub itself.
+            if (isStubConfig(config)) {
+                LOGGER.debug("config.json is already the split-mode stub — nothing to migrate.");
+                return true;
+            }
+
             // Create backup of original config
             File backup = new File(configFile.getParentFile(), "config.json.backup");
             java.nio.file.Files.copy(configFile.toPath(), backup.toPath(),
@@ -217,6 +234,11 @@ public class ConfigSplitter {
                 }
             }
 
+            // Preserve top-level keys that don't belong to any mapped section (e.g. "language",
+            // the "economy" section): carry them into main.json, otherwise they are lost when
+            // config.json is replaced by the stub. Keys already present in main.json are kept.
+            preserveUnmappedKeys(config);
+
             // Create marker file to indicate split configs are active
             File configDir = new File(ResourceUtil.CONFIG_DIR);
             File marker = new File(configDir, ".split_configs");
@@ -224,9 +246,12 @@ public class ConfigSplitter {
                 LOGGER.info("Created split configs marker file");
             }
 
-            // Replace config.json with a minimal stub file
-            replaceWithStubFile(configFile);
-            LOGGER.info("Replaced config.json with minimal stub file");
+            // Replace config.json with a minimal stub file, keeping the original _configVersion —
+            // a lower version would make ConfigManager merge the JAR template back into the stub
+            // on every boot and trigger an endless re-split loop that clobbers user settings.
+            int originalVersion = config.has("_configVersion") ? config.get("_configVersion").getAsInt() : 13;
+            replaceWithStubFile(configFile, originalVersion);
+            LOGGER.info("Replaced config.json with minimal stub file (version {})", originalVersion);
 
             LOGGER.info("========================================");
             LOGGER.info("Migration complete! Created {} config files", filesCreated);
@@ -239,6 +264,55 @@ public class ConfigSplitter {
         } catch (Exception e) {
             LOGGER.error("Failed to migrate to split configs: {}", e.getMessage(), e);
             return false;
+        }
+    }
+
+    /**
+     * A stub is the placeholder config.json written after migration: it carries the
+     * "_notice" marker and no real sections. Migrating/re-splitting from it is meaningless
+     * and destructive (it would clobber config.json.backup).
+     */
+    private static boolean isStubConfig(JsonObject config) {
+        if (config.has("_notice")) {
+            return true;
+        }
+        for (String sectionName : CONFIG_FILE_MAP.keySet()) {
+            if (config.has(sectionName)) {
+                return false;
+            }
+        }
+        return true; // no mapped sections at all — nothing meaningful to split
+    }
+
+    /**
+     * Carry top-level keys that are not mapped to any split file (e.g. "language", "economy")
+     * into main.json so they survive the migration to split configs. Existing values in
+     * main.json are never overwritten.
+     */
+    private static void preserveUnmappedKeys(JsonObject mainConfig) {
+        File mainFile = ResourceUtil.getConfigFile("main.json");
+        if (!mainFile.exists()) {
+            return; // nothing to carry into; sections were not extracted either
+        }
+        try (FileReader reader = new FileReader(mainFile, StandardCharsets.UTF_8)) {
+            JsonObject mainJson = JsonParser.parseReader(reader).getAsJsonObject();
+            boolean changed = false;
+            for (Map.Entry<String, com.google.gson.JsonElement> entry : mainConfig.entrySet()) {
+                String key = entry.getKey();
+                if (key.startsWith("_")) continue;                 // metadata/comments
+                if (CONFIG_FILE_MAP.containsKey(key)) continue;    // lives in its own split file
+                if (mainJson.has(key)) continue;                   // never overwrite user edits
+                mainJson.add(key, entry.getValue());
+                changed = true;
+                LOGGER.info("  ✓ Preserved unmapped top-level key '{}' in main.json", key);
+            }
+            if (changed) {
+                try (FileWriter writer = new FileWriter(mainFile, StandardCharsets.UTF_8)) {
+                    GSON.toJson(mainJson, writer);
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.error("Failed to preserve unmapped top-level keys in main.json: {}", e.getMessage());
         }
     }
 
@@ -300,18 +374,18 @@ public class ConfigSplitter {
 
                     // Handle main.json which contains multiple sections
                     if (fileName.equals("main.json")) {
-                        if (fileConfig.has("modules")) {
-                            merged.add("modules", fileConfig.get("modules"));
-                        }
-                        if (fileConfig.has("logging")) {
-                            merged.add("logging", fileConfig.get("logging"));
-                        }
-                        if (fileConfig.has("permissions")) {
-                            merged.add("permissions", fileConfig.get("permissions"));
+                        // All non-metadata keys: modules/logging/permissions plus any preserved
+                        // unmapped top-level keys (e.g. "language", "economy").
+                        for (Map.Entry<String, com.google.gson.JsonElement> e : fileConfig.entrySet()) {
+                            if (!e.getKey().startsWith("_")) {
+                                merged.add(e.getKey(), e.getValue());
+                            }
                         }
                     } else {
-                        // Single section
-                        if (fileConfig.has(sectionName)) {
+                        // Single section. Type guard: kits.json/tablist.json are standalone data
+                        // files whose section key may hold an ARRAY of definitions (not the
+                        // settings object) — injecting it would break getAsJsonObject() callers.
+                        if (fileConfig.has(sectionName) && fileConfig.get(sectionName).isJsonObject()) {
                             merged.add(sectionName, fileConfig.get(sectionName));
                         }
                     }
@@ -479,11 +553,11 @@ public class ConfigSplitter {
     /**
      * Replace config.json with a minimal stub file that redirects to split configs
      */
-    private static void replaceWithStubFile(File configFile) throws IOException {
+    private static void replaceWithStubFile(File configFile, int configVersion) throws IOException {
         JsonObject stub = new JsonObject();
 
-        // Add version info
-        stub.addProperty("_configVersion", 13);
+        // Add version info (must match the original config's version — see migrateToSplitConfigs)
+        stub.addProperty("_configVersion", configVersion);
         stub.addProperty("_configVersion_comment",
             "DO NOT MODIFY: This field is used by NeoEssentials for automatic config updates.");
 
