@@ -149,15 +149,15 @@ public class JailManager {
      * Ported from Essentials: checkJailTimeout pattern.
      */
     public boolean jailPlayer(String playerName, UUID playerId, String reason, String jailedBy, String jailName, long durationMillis) {
-        // Check if already jailed atomically using putIfAbsent
-        if (jailedPlayers.putIfAbsent(playerId, null) != null) {
+        // ConcurrentHashMap forbids null values, so no putIfAbsent placeholder here;
+        // all writers run on the server thread, a plain containsKey check is safe
+        if (jailedPlayers.containsKey(playerId)) {
             // Already jailed
             return false;
         }
 
         JailLocation jailLoc = jailLocations.get(jailName);
         if (jailLoc == null) {
-            jailedPlayers.remove(playerId, null); // Clean up
             return false; // Jail doesn't exist
         }
 
@@ -173,7 +173,6 @@ public class JailManager {
 
         if (jailCount >= permBanThreshold) {
             // Issue permanent ban
-            jailedPlayers.remove(playerId, null); // Clean up
             BanManager banManager = BanManager.getInstance();
             banManager.banPlayer(playerName, playerId, "Exceeded maximum jailings (permanent ban)", "System");
             jailCounts.put(playerId, 0); // Reset count
@@ -183,7 +182,6 @@ public class JailManager {
             return false;
         } else if (jailCount >= tempBanThreshold) {
             // Issue temp ban
-            jailedPlayers.remove(playerId, null); // Clean up
             BanManager banManager = BanManager.getInstance();
             banManager.tempBanPlayer(playerName, playerId, "Exceeded maximum jailings (temporary ban)", "System", tempBanDuration * 60 * 1000L);
             if (com.zerog.neoessentials.config.ConfigManager.getInstance().isLogJailActionsEnabled()) {
@@ -206,7 +204,6 @@ public class JailManager {
                 jail.originalLocation = player.blockPosition();
                 jail.originalDimension = player.level().dimension().location().toString();
 
-                // Replace the null placeholder with actual jail entry
                 jailedPlayers.put(playerId, jail);
                 saveJailedPlayers();
 
