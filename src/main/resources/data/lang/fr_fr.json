@@ -214,6 +214,8 @@
   "commands.neoessentials.channel.switched": "§aVous avez rejoint le canal {0}.",
   "commands.neoessentials.powertool.assign.success": "Commande d'outil de puissance assignée !",
   "commands.neoessentials.powertool.no_item": "§cVous devez tenir un objet pour utiliser cette commande !",
-  "commands.neoessentials.powertool.remove.success": "§aOutil de puissance supprimé de l'objet !"
+  "commands.neoessentials.powertool.remove.success": "§aOutil de puissance supprimé de l'objet !",
+  "_comment_kits": "=== Système de kits ===",
+  "commands.neoessentials.listkits.cooldown": "§8  └ Temps de recharge : {0}"
 }
 

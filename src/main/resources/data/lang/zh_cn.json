@@ -74,6 +74,8 @@
   "commands.neoessentials.gamemode.changed_self": "你的游戏模式已更改为 {0}。",
   "commands.neoessentials.motd.header": "§6=== 今日消息 ===",
   "commands.neoessentials.channel.switched": "§a你已切换到频道 {0}。",
-  "commands.neoessentials.baltop.entry": "§e{0}. §f{1} §7- §a{2}{3}"
+  "commands.neoessentials.baltop.entry": "§e{0}. §f{1} §7- §a{2}{3}",
+  "_comment_kits": "=== 礼包系统 ===",
+  "commands.neoessentials.listkits.cooldown": "§8  └ 冷却时间：{0}"
 }
 

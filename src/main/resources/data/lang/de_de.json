@@ -114,6 +114,8 @@
   "commands.neoessentials.channel.switched": "§aDu hast den Kanal {0} gewechselt.",
   "commands.neoessentials.powertool.assign.success": "Powertool-Befehl zugewiesen!",
   "commands.neoessentials.powertool.no_item": "§cDu musst einen Gegenstand halten, um diesen Befehl zu verwenden!",
-  "commands.neoessentials.baltop.entry": "§e{0}. §f{1} §7- §a{2}{3}"
+  "commands.neoessentials.baltop.entry": "§e{0}. §f{1} §7- §a{2}{3}",
+  "_comment_kits": "=== Kit-System ===",
+  "commands.neoessentials.listkits.cooldown": "§8  └ Abklingzeit: {0}"
 }
 

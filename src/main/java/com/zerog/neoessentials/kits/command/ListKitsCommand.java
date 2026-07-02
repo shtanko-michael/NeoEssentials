@@ -166,26 +166,26 @@ public class ListKitsCommand {
         String displayName = kit.getDisplayName();
         int itemCount = kit.getItems().size();
         String cooldown = formatCooldown(kit.getCooldownMillis());
-        String permission = kit.getPermission();
+        // String permission = kit.getPermission();
         
         // Basic kit info
         source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.listkits.kit_entry", 
             index, name, displayName, itemCount), false);
         
         // Additional details
-        if (!cooldown.equals("none")) {
-            source.sendSuccess(() -> MessageUtil.coloredText("§8  └ Cooldown: " + cooldown), false);
+        if (kit.getCooldownMillis() > 0) {
+            source.sendSuccess(() -> MessageUtil.coloredText(MessageUtil.localize("commands.neoessentials.listkits.cooldown", cooldown)), false);
         }
+
+        // if (permission != null && !permission.isEmpty()) {
+        //     source.sendSuccess(() -> MessageUtil.coloredText("§8  └ Permission: " + permission), false);
+        // }
         
-        if (permission != null && !permission.isEmpty()) {
-            source.sendSuccess(() -> MessageUtil.coloredText("§8  └ Permission: " + permission), false);
-        }
-        
-        if (kit.getDescription() != null && !kit.getDescription().isEmpty()) {
-            final String desc = kit.getDescription().length() > 60 ? 
-                kit.getDescription().substring(0, 57) + "..." : kit.getDescription();
-            source.sendSuccess(() -> MessageUtil.coloredText("§8  └ Description: " + desc), false);
-        }
+        // if (kit.getDescription() != null && !kit.getDescription().isEmpty()) {
+        //     final String desc = kit.getDescription().length() > 60 ? 
+        //         kit.getDescription().substring(0, 57) + "..." : kit.getDescription();
+        //     source.sendSuccess(() -> MessageUtil.coloredText("§8  └ Description: " + desc), false);
+        // }
     }
     
     private static String formatCooldown(long millis) {

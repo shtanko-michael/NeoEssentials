@@ -1209,6 +1209,7 @@
   "commands.neoessentials.delkit.not_found": "Kit ''{0}'' not found.",
   "commands.neoessentials.listkits.cannot_use": "§cYou cannot use that kit right now.",
   "commands.neoessentials.listkits.charge_failed": "§cFailed to charge you for the kit.",
+  "commands.neoessentials.listkits.cooldown": "§8  └ Cooldown: {0}",
   "commands.neoessentials.listkits.empty": "No kits are configured.",
   "commands.neoessentials.listkits.error": "An error occurred while listing kits.",
   "commands.neoessentials.listkits.error_using": "§cAn error occurred while giving you the kit.",

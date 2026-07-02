@@ -68,6 +68,8 @@
   "commands.neoessentials.gamemode.changed_self": "Je spelmodus is gewijzigd naar {0}.",
   "commands.neoessentials.motd.header": "§6=== Bericht van de dag ===",
   "commands.neoessentials.channel.switched": "§aJe bent overgestapt naar kanaal {0}.",
-  "commands.neoessentials.baltop.entry": "§e{0}. §f{1} §7- §a{2}{3}"
+  "commands.neoessentials.baltop.entry": "§e{0}. §f{1} §7- §a{2}{3}",
+  "_comment_kits": "=== Kitsysteem ===",
+  "commands.neoessentials.listkits.cooldown": "§8  └ Afkoeltijd: {0}"
 }
 

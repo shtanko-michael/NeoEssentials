@@ -74,6 +74,8 @@
   "commands.neoessentials.gamemode.changed_self": "Seu modo de jogo foi alterado para {0}.",
   "commands.neoessentials.motd.header": "§6=== Mensagem do Dia ===",
   "commands.neoessentials.channel.switched": "§aVocê mudou para o canal {0}.",
-  "commands.neoessentials.baltop.entry": "§e{0}. §f{1} §7- §a{2}{3}"
+  "commands.neoessentials.baltop.entry": "§e{0}. §f{1} §7- §a{2}{3}",
+  "_comment_kits": "=== Sistema de kits ===",
+  "commands.neoessentials.listkits.cooldown": "§8  └ Tempo de recarga: {0}"
 }
 

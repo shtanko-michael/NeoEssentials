@@ -110,6 +110,8 @@
   "commands.neoessentials.channel.switched": "§aHas cambiado al canal {0}.",
   "commands.neoessentials.powertool.assign.success": "¡Comando de powertool asignado!",
   "commands.neoessentials.powertool.no_item": "§c¡Debes sostener un objeto para usar este comando!",
-  "commands.neoessentials.baltop.entry": "§e{0}. §f{1} §7- §a{2}{3}"
+  "commands.neoessentials.baltop.entry": "§e{0}. §f{1} §7- §a{2}{3}",
+  "_comment_kits": "=== Sistema de kits ===",
+  "commands.neoessentials.listkits.cooldown": "§8  └ Tiempo de espera: {0}"
 }
 

@@ -68,6 +68,8 @@
   "commands.neoessentials.gamemode.changed_self": "Twój tryb gry został zmieniony na {0}.",
   "commands.neoessentials.motd.header": "§6=== Wiadomość dnia ===",
   "commands.neoessentials.channel.switched": "§aPrzełączono na kanał {0}.",
-  "commands.neoessentials.baltop.entry": "§e{0}. §f{1} §7- §a{2}{3}"
+  "commands.neoessentials.baltop.entry": "§e{0}. §f{1} §7- §a{2}{3}",
+  "_comment_kits": "=== System zestawów ===",
+  "commands.neoessentials.listkits.cooldown": "§8  └ Czas odnowienia: {0}"
 }
 

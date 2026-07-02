@@ -1179,6 +1179,7 @@
   "commands.neoessentials.delkit.not_found": "Набор «{0}» не найден.",
   "commands.neoessentials.listkits.cannot_use": "§cВы не можете сейчас использовать этот набор.",
   "commands.neoessentials.listkits.charge_failed": "§cНе удалось списать плату за набор.",
+  "commands.neoessentials.listkits.cooldown": "§8  └ Перезарядка: {0}",
   "commands.neoessentials.listkits.empty": "Наборы не настроены.",
   "commands.neoessentials.listkits.error": "Произошла ошибка при выводе списка наборов.",
   "commands.neoessentials.listkits.error_using": "§cПроизошла ошибка при выдаче вам набора.",
