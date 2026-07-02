@@ -110,7 +110,11 @@ public class MiscTeleportManager {
         TeleportLocation currentLocation = new TeleportLocation(player);
         final TeleportLocation finalTargetLocation = targetLocation;
         int delayTicks = teleportDelay * 20;
-        TeleportUtil.teleportPlayer(player, finalTargetLocation, delayTicks, true).thenAccept(result -> {
+        // findSafe=false: /back returns to the exact spot the player just occupied.
+        // The safety check treats unloaded chunks as unsafe, which broke /back after
+        // any long-range teleport (origin chunks unload once the player leaves);
+        // vanilla teleportTo loads the target chunk itself.
+        TeleportUtil.teleportPlayer(player, finalTargetLocation, delayTicks, false).thenAccept(result -> {
             if (result.isSuccess()) {
                 // Update back location to where they just came from
                 backLocations.put(playerId, currentLocation);

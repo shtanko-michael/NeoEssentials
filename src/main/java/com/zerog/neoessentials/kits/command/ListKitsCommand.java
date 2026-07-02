@@ -80,7 +80,18 @@ public class ListKitsCommand {
                 }
             }
             KitManager kitManager = KitManager.getInstance();
-            Set<String> kitNames = kitManager.getAllKitNames();
+            Set<String> kitNames;
+            // Players only see kits they have permission for (same filter as /kit tab-complete);
+            // console and override-permission staff (matching canUseKit) see the full list
+            if (source.getEntity() instanceof ServerPlayer player
+                    && !(com.zerog.neoessentials.config.ConfigManager.getInstance().isAllowKitOverrideEnabled()
+                         && PermissionAPI.hasPermission(player.getUUID(), "neoessentials.kits.override"))) {
+                kitNames = kitManager.getAvailableKits(player).stream()
+                    .map(Kit::getName)
+                    .collect(Collectors.toSet());
+            } else {
+                kitNames = kitManager.getAllKitNames();
+            }
 
             // Filter out one-time kits already used by the player if config is enabled
             boolean skipUsedOneTime = com.zerog.neoessentials.config.ConfigManager.isSkipUsedOneTimeKitsFromKitList();

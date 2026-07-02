@@ -512,23 +512,13 @@ public class KitManager {
                     }
                     if (!equipped) {
                         // If no empty slot, add to inventory as fallback
-                        if (inventory.add(armor.copy())) {
-                            itemsGiven.add(armor.copy());
-                        } else {
-                            player.drop(armor.copy(), false);
-                            itemsDropped.add(armor.copy());
-                        }
+                        giveOrDrop(player, armor, itemsGiven, itemsDropped);
                     }
                 }
             } else {
                 // Add armor items to inventory as normal
                 for (ItemStack armor : armorItems) {
-                    if (inventory.add(armor.copy())) {
-                        itemsGiven.add(armor.copy());
-                    } else {
-                        player.drop(armor.copy(), false);
-                        itemsDropped.add(armor.copy());
-                    }
+                    giveOrDrop(player, armor, itemsGiven, itemsDropped);
                 }
             }
 
@@ -542,12 +532,7 @@ public class KitManager {
                     LOGGER.warn("Denied item '{}' from kit '{}' for player '{}': {}", item.getDisplayName().getString(), kitName, player.getName().getString(), spawnResult.getErrorMessage());
                     continue;
                 }
-                if (inventory.add(item.copy())) {
-                    itemsGiven.add(item.copy());
-                } else {
-                    player.drop(item.copy(), false);
-                    itemsDropped.add(item.copy());
-                }
+                giveOrDrop(player, item, itemsGiven, itemsDropped);
             }
 
             // Update cooldown and usage tracking
@@ -573,12 +558,45 @@ public class KitManager {
             return new KitUsageResult(true, result);
 
         } catch (Exception e) {
-            LOGGER.error("Failed to give kit '{}' to player {}: {}", 
+            LOGGER.error("Failed to give kit '{}' to player {}: {}",
                         kitName, player.getName().getString(), e.getMessage(), e);
             return new KitUsageResult(false, MessageUtil.localize("commands.neoessentials.kits.reason.error"));
         }
     }
-    
+
+    /**
+     * Adds the item to the player's inventory, dropping whatever doesn't fit at the
+     * player's feet. Inventory.add mutates the passed stack to the un-absorbed remainder
+     * and returns true even on a partial fit, so the leftover must be read from the stack
+     * itself — checking only the boolean silently loses the remainder. Counts above the
+     * item's max stack size are split into max-size stacks first.
+     */
+    private void giveOrDrop(ServerPlayer player, ItemStack item,
+                            List<ItemStack> itemsGiven, List<ItemStack> itemsDropped) {
+        int maxStack = Math.max(1, item.getMaxStackSize());
+        int given = 0;
+        int dropped = 0;
+        int remaining = item.getCount();
+        while (remaining > 0) {
+            int chunk = Math.min(remaining, maxStack);
+            remaining -= chunk;
+
+            ItemStack stack = item.copyWithCount(chunk);
+            player.getInventory().add(stack);
+            given += chunk - stack.getCount();
+            if (!stack.isEmpty()) {
+                dropped += stack.getCount();
+                player.drop(stack, false);
+            }
+        }
+        if (given > 0) {
+            itemsGiven.add(item.copyWithCount(given));
+        }
+        if (dropped > 0) {
+            itemsDropped.add(item.copyWithCount(dropped));
+        }
+    }
+
     // Cooldown and Usage Tracking
 
     private long getRemainingCooldown(UUID playerId, String kitName) {

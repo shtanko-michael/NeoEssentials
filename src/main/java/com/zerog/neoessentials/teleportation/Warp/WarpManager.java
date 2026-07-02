@@ -138,15 +138,17 @@ public class WarpManager {
     }
 
     /**
-     * Returns the maximum number of player warps allowed for a player, considering permissions.
-     * If the player has the permission node neoessentials.warp.limit.<amount>, that value is used if higher than config.
+     * Returns the maximum number of player warps allowed for a player.
      *
-     * <p>Permission examples:</p>
-     * <ul>
-     *   <li>neoessentials.warp.limit.5 - Allows 5 player warps</li>
-     *   <li>neoessentials.warp.limit.10 - Allows 10 player warps</li>
-     *   <li>neoessentials.warp.limit.unlimited - Unlimited player warps</li>
-     * </ul>
+     * <p>Resolution order:</p>
+     * <ol>
+     *   <li>neoessentials.warp.limit.unlimited permission - unlimited warps</li>
+     *   <li>Permission meta key {@code neoessentials.warps} (LuckPerms:
+     *       {@code /lp user <name> meta set neoessentials.warps 10}) — used as-is when set;
+     *       a negative value means unlimited</li>
+     *   <li>Fallback: legacy permission nodes neoessentials.warp.limit.&lt;amount&gt; (1..100),
+     *       used if higher than config</li>
+     * </ol>
      *
      * @param player The player to check
      * @return Maximum number of player warps allowed (or -1 for unlimited)
@@ -156,6 +158,14 @@ public class WarpManager {
         if (com.zerog.neoessentials.api.permissions.PermissionAPI.hasPermission(
                 player.getUUID(), "neoessentials.warp.limit.unlimited")) {
             return -1; // Unlimited
+        }
+
+        // Permission meta key (LuckPerms: /lp user <name> meta set neoessentials.warps 10) —
+        // used as-is when set; a negative value means unlimited
+        Integer metaMax = com.zerog.neoessentials.api.permissions.PermissionAPI
+            .getMetaInt(player.getUUID(), "neoessentials.warps");
+        if (metaMax != null) {
+            return metaMax < 0 ? -1 : metaMax;
         }
 
         int configMax = this.maxPlayerWarps;
@@ -170,7 +180,6 @@ public class WarpManager {
             }
         }
 
-        // Return the higher value between config and permission
         // Return the higher value between permission-based and config-based limits
         return Math.max(permMax, configMax);
     }

@@ -86,6 +86,44 @@ public class LuckPermsAdapter implements ExternalPermissionAdapter {
         }
     }
 
+    /**
+     * Get the user from the LuckPerms cache, loading them if necessary (offline lookups).
+     */
+    private User getUserOrLoad(UUID uuid) {
+        User user = luckPermsApi.getUserManager().getUser(uuid);
+        if (user == null) {
+            try {
+                CompletableFuture<User> userFuture = luckPermsApi.getUserManager().loadUser(uuid);
+                user = userFuture.get(USER_LOAD_TIMEOUT, TimeUnit.SECONDS);
+            } catch (Exception e) {
+                LOGGER.debug("Could not load user {} from LuckPerms: {}", uuid, e.getMessage());
+                return null;
+            }
+        }
+        return user;
+    }
+
+    @Override
+    public Integer getMetaInt(UUID uuid, String key) {
+        if (!luckPermsLoaded || luckPermsApi == null) {
+            return null;
+        }
+        try {
+            User user = getUserOrLoad(uuid);
+            if (user == null) {
+                return null;
+            }
+            QueryOptions queryOptions = QueryOptions.defaultContextualOptions();
+            // Malformed values yield an empty Optional (transformer NumberFormatException → empty)
+            return user.getCachedData().getMetaData(queryOptions)
+                .getMetaValue(key, Integer::parseInt)
+                .orElse(null);
+        } catch (Exception e) {
+            LOGGER.error("Error reading meta '{}' for user {}: {}", key, uuid, e.getMessage(), e);
+            return null;
+        }
+    }
+
     @Override
     public String getPrefix(UUID uuid) {
         LOGGER.debug("=== LUCKPERMS PREFIX REQUEST ===");

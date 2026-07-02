@@ -105,7 +105,9 @@ public class PwarpCommands {
             player.sendSystemMessage(MessageUtil.component(MessageUtil.localize("commands.neoessentials.teleport.warp.playerwarps_list_empty")));
         } else {
             StringBuilder builder = new StringBuilder();
-            builder.append(MessageUtil.localize("commands.neoessentials.teleport.warp.playerwarps_list_header", names.size(), warpManager.getMaxPlayerWarps()));
+            int maxWarps = warpManager.getMaxPlayerWarpsForPlayer(player);
+            builder.append(MessageUtil.localize("commands.neoessentials.teleport.warp.playerwarps_list_header", names.size(),
+                maxWarps < 0 ? "∞" : maxWarps));
             names.stream().sorted().forEach(name -> builder.append("\n").append(name));
             player.sendSystemMessage(MessageUtil.component(builder.toString()));
         }

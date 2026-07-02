@@ -101,6 +101,23 @@ public class PermissionAPI {
     }
     
     /**
+     * Read an integer meta value for the player from the external permission system
+     * (e.g. LuckPerms: {@code /lp user <name> meta set <key> <value>}).
+     *
+     * @return The value, or null when no external adapter is configured, the adapter
+     *         has no meta support, or the key is not set / not an integer.
+     */
+    public static Integer getMetaInt(UUID uuid, String key) {
+        if (uuid == null || key == null || key.trim().isEmpty()) {
+            return null;
+        }
+        if (externalAdapter != null) {
+            return externalAdapter.getMetaInt(uuid, key);
+        }
+        return null;
+    }
+
+    /**
      * Checks if a player is opped by their UUID.
      */
     private static boolean isPlayerOpped(UUID uuid) {

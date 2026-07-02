@@ -29,6 +29,19 @@ public interface ExternalPermissionAdapter {
     String getSuffix(UUID uuid);
 
     /**
+     * Read an integer meta/option value for the user (e.g. LuckPerms meta,
+     * set via {@code /lp user <name> meta set <key> <value>}).
+     *
+     * @param uuid The UUID of the user.
+     * @param key The meta key (e.g. "neoessentials.homes").
+     * @return The parsed value, or null if the backend has no meta concept,
+     *         the key is not set for the user, or the value is not an integer.
+     */
+    default Integer getMetaInt(UUID uuid, String key) {
+        return null;
+    }
+
+    /**
      * Reload the external permission data (if supported).
      */
     void reload();

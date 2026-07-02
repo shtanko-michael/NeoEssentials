@@ -61,10 +61,24 @@ public class HomeManager {
     private final Map<UUID, Long> lastHomeDeleteTimestamps = new ConcurrentHashMap<>();
 
     /**
-     * Returns the maximum number of homes allowed for a player, considering permissions.
-     * If the player has the permission node neoessentials.home.<amount>, that value is used if higher than config.
+     * Returns the maximum number of homes allowed for a player.
+     *
+     * <p>Resolution order:</p>
+     * <ol>
+     *   <li>Permission meta key {@code neoessentials.homes} (LuckPerms:
+     *       {@code /lp user <name> meta set neoessentials.homes 10}) — used as-is when set,
+     *       so admins can both raise and lower the limit below config.</li>
+     *   <li>Fallback: legacy permission nodes {@code neoessentials.home.<amount>} (1..100),
+     *       used if higher than config.</li>
+     * </ol>
      */
     public int getMaxHomesForPlayer(ServerPlayer player) {
+        Integer metaMax = com.zerog.neoessentials.api.permissions.PermissionAPI
+            .getMetaInt(player.getUUID(), "neoessentials.homes");
+        if (metaMax != null) {
+            return Math.max(0, metaMax);
+        }
+
         int configMax = this.maxHomesPerPlayer;
         int permMax = -1;
         // Check for permissions neoessentials.home.<amount> from high to low (e.g., 100 down to 1)
