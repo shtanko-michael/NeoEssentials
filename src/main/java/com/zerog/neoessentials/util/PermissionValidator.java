@@ -28,24 +28,23 @@ public class PermissionValidator {
                 if (source.hasPermission(2)) {
                     return PermissionResult.success();
                 }
-                return PermissionResult.failure("This command can only be used by players or server operators");
+                return PermissionResult.failure("commands.neoessentials.permission_check.players_or_op_only");
             }
-            
+
             UUID playerUuid = player.getUUID();
-            
+
             // Validate permission
             if (!PermissionAPI.hasPermission(playerUuid, permission)) {
                 LOGGER.debug("Permission denied for player {} ({}): {}",
                     player.getGameProfile().getName(), playerUuid, permission);
-                return PermissionResult.failure(
-                    "You don't have permission to use this command.\n§7Required: §f" + permission);
+                return PermissionResult.failure("commands.neoessentials.general.no_permission");
             }
             
             return PermissionResult.success(player);
             
         } catch (Exception e) {
             LOGGER.error("Error validating permission '{}' for source: {}", permission, e.getMessage(), e);
-            return PermissionResult.failure("Internal permission error");
+            return PermissionResult.failure("commands.neoessentials.permission_check.internal_error");
         }
     }
     
@@ -59,28 +58,31 @@ public class PermissionValidator {
                 if (source.hasPermission(2)) {
                     return PermissionResult.success();
                 }
-                return PermissionResult.failure("This command can only be used by players or server operators");
+                return PermissionResult.failure("commands.neoessentials.permission_check.players_or_op_only");
             }
-            
+
             UUID playerUuid = player.getUUID();
-            
+
             // Check if player has any of the required permissions
             for (String permission : permissions) {
                 if (PermissionAPI.hasPermission(playerUuid, permission)) {
                     return PermissionResult.success(player);
                 }
             }
-            
+
             LOGGER.debug("Permission denied for player {} ({}): none of {}",
                 player.getGameProfile().getName(), playerUuid, java.util.Arrays.toString(permissions));
-            return PermissionResult.failure(
-                "You don't have permission to use this command.\n§7Required (any): §f"
-                + String.join("§7 or §f", permissions));
+            // Pre-localized here (not just a key) because the required-permission list is a
+            // runtime argument that the caller's MessageUtil.error(getErrorMessage()) can't supply.
+            String orSeparator = MessageUtil.localize("commands.neoessentials.permission_check.or_separator");
+            return PermissionResult.failure(MessageUtil.localize(
+                "commands.neoessentials.permission_check.no_permission_required_any",
+                String.join(orSeparator, permissions)));
 
         } catch (Exception e) {
             LOGGER.error("Error validating permissions {} for source: {}", 
                 java.util.Arrays.toString(permissions), e.getMessage(), e);
-            return PermissionResult.failure("Internal permission error");
+            return PermissionResult.failure("commands.neoessentials.permission_check.internal_error");
         }
     }
     
@@ -99,7 +101,7 @@ public class PermissionValidator {
             
         } catch (Exception e) {
             LOGGER.error("Error validating admin permission '{}': {}", adminPermission, e.getMessage(), e);
-            return PermissionResult.failure("Internal permission error");
+            return PermissionResult.failure("commands.neoessentials.permission_check.internal_error");
         }
     }
     
@@ -114,14 +116,15 @@ public class PermissionValidator {
             
             // Self-targeting is usually not allowed for admin commands
             if (executorUuid.equals(targetUuid)) {
-                return PermissionResult.failure("You cannot target yourself with this command");
+                return PermissionResult.failure("commands.neoessentials.permission_check.cannot_target_self");
             }
-            
-        // Check base permission
-        if (!PermissionAPI.hasPermission(executorUuid, basePermission)) {
-            return PermissionResult.failure(
-                "You don't have permission to use this command.\n§7Required: §f" + basePermission);
-        }
+
+            // Check base permission
+            if (!PermissionAPI.hasPermission(executorUuid, basePermission)) {
+                // Pre-localized: the required permission node is a runtime argument.
+                return PermissionResult.failure(MessageUtil.localize(
+                    "commands.neoessentials.permission_check.no_permission_required", basePermission));
+            }
 
             // Check if executor can target this player (prevent privilege escalation)
             String targetProtectionPerm = basePermission + ".exempt";
@@ -129,7 +132,7 @@ public class PermissionValidator {
                 // Check if executor has override permission
                 String overridePerm = basePermission + ".override";
                 if (!PermissionAPI.hasPermission(executorUuid, overridePerm)) {
-                    return PermissionResult.failure("You cannot target this player - they are protected");
+                    return PermissionResult.failure("commands.neoessentials.permission_check.target_protected");
                 }
             }
             
@@ -137,7 +140,7 @@ public class PermissionValidator {
             
         } catch (Exception e) {
             LOGGER.error("Error validating target permission: {}", e.getMessage(), e);
-            return PermissionResult.failure("Internal permission error");
+            return PermissionResult.failure("commands.neoessentials.permission_check.internal_error");
         }
     }
     

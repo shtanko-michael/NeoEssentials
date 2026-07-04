@@ -1,22 +1,27 @@
 package com.zerog.neoessentials.util.commands;
 
+import java.util.Comparator;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.zerog.neoessentials.api.permissions.PermissionAPI;
+import com.zerog.neoessentials.commands.CommandPermissionRegistry;
 import com.zerog.neoessentials.commands.CommandRegistry;
 import com.zerog.neoessentials.config.ConfigManager;
 import com.zerog.neoessentials.util.MessageUtil;
+
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * /help [page|command] — Paginated help system ported from EssentialsX Commandhelp.
@@ -92,18 +97,41 @@ public class HelpCommand {
         CommandRegistry registry = CommandRegistry.getInstance();
         List<CommandRegistry.CommandInfo> allCommands = registry.getAllCommandsSorted();
 
-        // Build list of commands accessible to this player
-        // Show all registered commands; individual commands handle their own permission checks
+        // Build the list of commands visible to this player. Visibility is resolved from
+        // the bundled command->permission reference (CommandPermissionRegistry): each command
+        // is shown only if the player holds its real permission node. This replaces the old
+        // fabricated "neoessentials.<name>" check, which hid every command using a categorized
+        // node (neoessentials.<category>.<command>). Display-only: execution is still gated by
+        // each command's own permission check.
+        CommandPermissionRegistry perms = CommandPermissionRegistry.getInstance();
         List<CommandRegistry.CommandInfo> accessible = allCommands.stream()
             .filter(cmd -> {
-                // Console can see everything; for players check admin or generic perm
+                // Console sees everything.
                 if (uuid == null) return true;
-                String perm = "neoessentials." + cmd.getName().toLowerCase();
-                // Admin can see all
-                if (PermissionAPI.hasPermission(uuid, "neoessentials.admin")) return true;
-                // Try the command-specific permission; if not explicitly denied, show it
-                return PermissionAPI.hasPermission(uuid, perm)
-                    || PermissionAPI.hasPermission(uuid, "neoessentials.*");
+                // Admins / wildcard holders see the full list regardless of per-command nodes.
+                if (PermissionAPI.hasPermission(uuid, "neoessentials.admin")
+                    || PermissionAPI.hasPermission(uuid, "neoessentials.*")) return true;
+                // Safety net: if the reference failed to load, do not blank the help list —
+                // fall back to showing every command.
+                if (!perms.isReady()) return true;
+
+                String node = perms.permissionFor(cmd.getName());
+                if (node != null) {
+                    return PermissionAPI.hasPermission(uuid, node);
+                }
+                // node == null covers two cases, both HIDDEN by decision:
+                //   1. The command IS in the reference with "permission": null — open,
+                //      config-driven, or op-only (e.g. chat channels, /permissions root).
+                //      Project decision: do not show these to regular players.
+                //   2. The command is a PHANTOM registry entry (see _phantom_registry_entries
+                //      in command_permissions.json: ac, amsg, clear, fw, killme, nickname,
+                //      pong, tpacancel, whisper) or was added after the reference snapshot.
+                //      Skipped for now; logged at debug so staleness is discoverable.
+                if (!perms.isKnown(cmd.getName())) {
+                    LOGGER.debug("/help: '{}' has no entry in command_permissions.json (phantom or stale reference)",
+                        cmd.getName());
+                }
+                return false;
             })
             .sorted(Comparator.comparing(CommandRegistry.CommandInfo::getName))
             .collect(Collectors.toList());
@@ -159,7 +187,7 @@ public class HelpCommand {
         src.sendSuccess(() -> MessageUtil.component("commands.neoessentials.help.detail_header", cmd.getName()), false);
         String desc = resolveDescription(cmd);
         src.sendSuccess(() -> MessageUtil.component("commands.neoessentials.help.detail_description", desc), false);
-        src.sendSuccess(() -> MessageUtil.component("commands.neoessentials.help.detail_permission", cmd.getName()), false);
+        // src.sendSuccess(() -> MessageUtil.component("commands.neoessentials.help.detail_permission", cmd.getName()), false);
         List<String> aliases = cmd.getAliases();
         if (aliases != null && !aliases.isEmpty()) {
             src.sendSuccess(() -> MessageUtil.component("commands.neoessentials.help.detail_aliases", String.join("§7, §e", aliases)), false);
