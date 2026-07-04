@@ -1868,5 +1868,12 @@
   "commands.neoessentials.teleport.warp.playerwarp_created": "§aИгровой варп §f{0}§a создан в §f{1}§a.",
   "commands.neoessentials.teleport.warp.playerwarp_deleted": "§aИгровой варп §f{0}§a удалён.",
   "commands.neoessentials.general.player_only": "§cТолько игроки могут использовать эту команду.",
-  "commands.neoessentials.general.no_permission": "§cУ вас нет прав на использование этой команды."
+  "commands.neoessentials.general.no_permission": "§cУ вас нет прав на использование этой команды.",
+  "commands.neoessentials.permission_check.players_or_op_only": "§cЭту команду могут использовать только игроки или операторы сервера.",
+  "commands.neoessentials.permission_check.internal_error": "§cВнутренняя ошибка проверки прав.",
+  "commands.neoessentials.permission_check.cannot_target_self": "§cВы не можете применить эту команду к самому себе.",
+  "commands.neoessentials.permission_check.target_protected": "§cВы не можете выбрать этого игрока целью — он защищён.",
+  "commands.neoessentials.permission_check.no_permission_required": "§cУ вас нет прав на использование этой команды.\n§7Требуется: §f{0}",
+  "commands.neoessentials.permission_check.no_permission_required_any": "§cУ вас нет прав на использование этой команды.\n§7Требуется (любое из): §f{0}",
+  "commands.neoessentials.permission_check.or_separator": "§7 или §f"
 }
