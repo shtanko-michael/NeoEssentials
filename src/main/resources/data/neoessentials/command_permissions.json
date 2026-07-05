@@ -1904,6 +1904,36 @@
       "description_ru": "Сбросить таймер сна (предотвратить фантомов)",
       "description_en": "Reset your sleep timer (prevent phantoms)"
     },
+    "rg": {
+      "permission": "regionguard.command",
+      "aliases": [],
+      "op_level": 2,
+      "sub_permissions": {
+        "define <id>": "regionguard.command.define",
+        "claim <id>": "regionguard.command.define",
+        "redefine <id>": "regionguard.command.redefine",
+        "remove <id>": "regionguard.command.remove",
+        "delete <id>": "regionguard.command.remove",
+        "list": "regionguard.command.list",
+        "info <id>": "regionguard.command.info",
+        "addowner <id> <player>": "regionguard.command.members",
+        "addmember <id> <player>": "regionguard.command.members",
+        "delowner <id> <player>": "regionguard.command.members",
+        "delmember <id> <player>": "regionguard.command.members",
+        "flag <id> list": "regionguard.command.flag",
+        "flag <id> <flag> <value>": "regionguard.command.flag + regionguard.command.flag.<flag>",
+        "flag <id> clear <flag> [value]": "regionguard.command.flag + regionguard.command.flag.<flag>"
+      },
+      "extra_permissions": {
+        "per_flag": "regionguard.command.flag.<flag-id> — по одной ноде на каждый флаг (напр. regionguard.command.flag.block-break, ...flag.pvp). id каноничный (алиас mobspawning → ...flag.mob-spawning). regionguard.command.flag.* покрывает все; проверяется в обработчике set/clear (не для list).",
+        "bypass_declared_unused": "regionguard.bypass.* объявлены, но НЕ подключены — обход флагов защиты решает статус владельца/участника региона, не permission-нода"
+      },
+      "file": "command/RegionCommands.java (внешний мод: regionguard)",
+      "category": "regionguard",
+      "notes": "ВНЕШНИЙ МОД RegionGuard (не NeoEssentials). Права команд резолвятся через NeoEssentials PermissionAPI (SafePermissions), но op_level 2 — это fallback для ОБОИХ: консоли И игроков (op-2 проходит всё без ноды). Модель слоёная: не-оператору нужен базовый regionguard.command + нода подкоманды. Wildcard regionguard.command.* НЕ покрывает базовый regionguard.command — выдавайте regionguard.* или regionguard.command + конкретные ноды.",
+      "description_ru": "Защита регионов (WorldGuard-подобная): /rg claim(=define)/redefine/delete(=remove)/list/info/addowner/addmember/delowner/delmember/flag",
+      "description_en": "Region protection (WorldGuard-like): /rg claim(=define)/redefine/remove(=delete)/list/info/addowner/addmember/delowner/delmember/flag"
+    },
     "rtoggle": {
       "permission": "neoessentials.rtoggle",
       "aliases": [],
@@ -3678,6 +3708,37 @@
     ],
     "neoessentials.worth": [
       "worth"
+    ],
+    "regionguard.command": [
+      "rg"
+    ],
+    "regionguard.command.define": [
+      "rg (define <id>)",
+      "rg (claim <id>)"
+    ],
+    "regionguard.command.redefine": [
+      "rg (redefine <id>)"
+    ],
+    "regionguard.command.remove": [
+      "rg (remove <id>)",
+      "rg (delete <id>)"
+    ],
+    "regionguard.command.list": [
+      "rg (list)"
+    ],
+    "regionguard.command.info": [
+      "rg (info <id>)"
+    ],
+    "regionguard.command.members": [
+      "rg (addowner/addmember/delowner/delmember)"
+    ],
+    "regionguard.command.flag": [
+      "rg (flag <id> list)",
+      "rg (flag <id> <flag>/clear — база, + regionguard.command.flag.<flag>)"
+    ],
+    "regionguard.command.flag.<flag>": [
+      "rg (flag <id> <flag> <value>)",
+      "rg (flag <id> clear <flag>) — по одной ноде на каждый флаг; regionguard.command.flag.* покрывает все"
     ]
   }
 }
