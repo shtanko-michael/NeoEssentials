@@ -317,6 +317,7 @@
   "commands.neoessentials.lightning.description": "Ударить молнией по игроку",
   "commands.neoessentials.list.description": "Список игроков онлайн",
   "commands.neoessentials.list.group_header": "§6{0}{1} §7({2}): ",
+  "commands.neoessentials.list.group_label_default": "Игроки",
   "commands.neoessentials.list.group_header_simple": "§6{0} §7({1}): ",
   "commands.neoessentials.list.group_weight": " §8[{0}]",
   "commands.neoessentials.list.hover_afk": "§eСейчас АФК",

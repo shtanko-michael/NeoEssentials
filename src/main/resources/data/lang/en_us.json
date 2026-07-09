@@ -364,6 +364,7 @@
   "commands.neoessentials.helpop.hover_reply": "§7Click to reply to {0}",
   "commands.neoessentials.list.group_weight": " §8[{0}]",
   "commands.neoessentials.list.group_header": "§6{0}{1} §7({2}): ",
+  "commands.neoessentials.list.group_label_default": "Players",
   "commands.neoessentials.list.group_header_simple": "§6{0} §7({1}): ",
   "commands.neoessentials.list.hover_player": "§6Player: §f{0}",
   "commands.neoessentials.list.hover_world": "§6World: §f{0}",

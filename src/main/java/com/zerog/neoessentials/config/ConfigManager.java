@@ -67,6 +67,39 @@ public class ConfigManager {
         }
         return "Server maintenance in progress. Please reconnect in a few minutes.";
     }
+
+    /**
+     * Returns the configured color name for list.groupColors.<groupId>, or null if unset.
+     * groupId is expected already-lowercased by the caller.
+     */
+    public static String getListGroupColorName(String groupId) {
+        JsonObject config = getInstance().getConfig(MAIN_CONFIG);
+        if (config.has("list") && config.getAsJsonObject("list").has("groupColors")) {
+            JsonObject groupColors = config.getAsJsonObject("list").getAsJsonObject("groupColors");
+            if (groupColors.has(groupId)) {
+                String val = groupColors.get(groupId).getAsString();
+                if (val != null && !val.trim().isEmpty()) return val.trim();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Returns the color name for groups not in list.groupColors (admins/service/unknown).
+     * Defaults to "red" if not set.
+     */
+    public static String getListUnknownGroupColor() {
+        JsonObject config = getInstance().getConfig(MAIN_CONFIG);
+        if (config.has("list")) {
+            JsonObject list = config.getAsJsonObject("list");
+            if (list.has("unknownGroupColor")) {
+                String val = list.get("unknownGroupColor").getAsString();
+                if (val != null && !val.trim().isEmpty()) return val.trim();
+            }
+        }
+        return "red";
+    }
+
     /**
      * Returns true if staff should be notified when a player is kicked (notifyStaffOnKick in config).
      * Defaults to true if not set.

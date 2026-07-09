@@ -7,8 +7,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.PlayerList;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.ClickEvent;
-import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.MutableComponent;
 import com.zerog.neoessentials.config.ConfigManager;
 import com.zerog.neoessentials.util.MessageUtil;
@@ -25,6 +23,17 @@ import java.util.stream.Collectors;
 public class ListCommand {
     
     private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger(ListCommand.class);
+
+    /** Built-in group -> color defaults (config can override). */
+    private static final Map<String, ChatFormatting> DEFAULT_GROUP_COLORS = Map.of(
+        "ender", ChatFormatting.DARK_PURPLE,
+        "wither", ChatFormatting.AQUA,
+        "warden", ChatFormatting.YELLOW,
+        "default", ChatFormatting.GRAY
+    );
+
+    /** Color for any group not in the map (admins/service/unknown). */
+    private static final ChatFormatting DEFAULT_UNKNOWN_COLOR = ChatFormatting.RED;
 
     /**
      * Register the /list command
@@ -80,7 +89,7 @@ public class ListCommand {
     }
 
     /**
-     * Show the online players list with advanced formatting
+     * Show the online players list, grouped by LuckPerms group with per-group colors.
      * @return 1 (success) - Minecraft command convention requires returning 1 for successful execution
      */
     @SuppressWarnings("SameReturnValue")
@@ -99,38 +108,8 @@ public class ListCommand {
                 .collect(Collectors.toList());
         }
 
-        // Send header
-        int visibleCount = onlinePlayers.size();
-        int totalCount = playerList.getPlayerCount();
-
-        source.sendSuccess(
-            () -> MessageUtil.component("commands.neoessentials.list.separator"),
-            false
-        );
-
-        if (canSeeVanished && visibleCount != totalCount) {
-            source.sendSuccess(
-                () -> MessageUtil.component("commands.neoessentials.list.header_with_visible", visibleCount, totalCount, playerList.getMaxPlayers()),
-                false
-            );
-        } else {
-            source.sendSuccess(
-                () -> MessageUtil.component("commands.neoessentials.list.header", visibleCount, playerList.getMaxPlayers()),
-                false
-            );
-        }
-
-        source.sendSuccess(
-            () -> MessageUtil.component("commands.neoessentials.list.separator"),
-            false
-        );
-
         if (onlinePlayers.isEmpty()) {
             source.sendSuccess(() -> MessageUtil.component("commands.neoessentials.list.no_players"), false);
-            source.sendSuccess(
-                () -> MessageUtil.component("commands.neoessentials.list.separator"),
-                false
-            );
             return 1;
         }
 
@@ -138,301 +117,166 @@ public class ListCommand {
         boolean useLuckPerms = ModList.get().isLoaded("luckperms") && isLuckPermsAvailable();
 
         if (useLuckPerms) {
-            // Group players by LuckPerms groups with weight sorting
-            displayLuckPermsGroupedList(source, onlinePlayers, canSeeVanished);
+            displayLuckPermsGroupedList(source, onlinePlayers);
         } else {
-            // Fallback to simple grouping
-            displaySimpleGroupedList(source, onlinePlayers, canSeeVanished);
+            displaySimpleGroupedList(source, onlinePlayers);
         }
-
-        // Send footer
-        source.sendSuccess(
-            () -> MessageUtil.component("commands.neoessentials.list.separator"),
-            false
-        );
 
         return 1;
     }
 
     /**
-     * Display players grouped by LuckPerms groups (sorted by weight)
+     * Display players grouped by LuckPerms primary group (sorted by weight desc), one line per group.
      */
-    private static void displayLuckPermsGroupedList(CommandSourceStack source, List<ServerPlayer> players, boolean canSeeVanished) {
+    private static void displayLuckPermsGroupedList(CommandSourceStack source, List<ServerPlayer> players) {
         try {
-            // Get LuckPerms API
             net.luckperms.api.LuckPerms luckPerms = net.luckperms.api.LuckPermsProvider.get();
 
-            // Create a map of group name to (weight, players list)
             Map<String, GroupInfo> groupedPlayers = new LinkedHashMap<>();
 
             for (ServerPlayer player : players) {
                 try {
                     net.luckperms.api.model.user.User lpUser = luckPerms.getUserManager().getUser(player.getUUID());
                     if (lpUser == null) {
-                        // Fallback to "Players" group if user not found
-                        groupedPlayers.computeIfAbsent("Players", k -> new GroupInfo(0)).players.add(player);
+                        groupedPlayers.computeIfAbsent("default", k -> new GroupInfo(0, defaultGroupLabel())).players.add(player);
                         continue;
                     }
 
                     String primaryGroup = lpUser.getPrimaryGroup();
                     net.luckperms.api.model.group.Group lpGroup = luckPerms.getGroupManager().getGroup(primaryGroup);
-
-                    if (lpGroup == null) {
-                        // Fallback if group not found
-                        groupedPlayers.computeIfAbsent(primaryGroup, k -> new GroupInfo(0)).players.add(player);
-                    } else {
-                        // Get the group weight (higher weight = more important)
-                        int weight = lpGroup.getWeight().orElse(0);
-                        GroupInfo groupInfo = groupedPlayers.computeIfAbsent(primaryGroup, k -> new GroupInfo(weight));
-                        groupInfo.players.add(player);
-                    }
+                    int weight = (lpGroup != null) ? lpGroup.getWeight().orElse(0) : 0;
+                    String label = computeGroupLabel(primaryGroup, lpGroup);
+                    groupedPlayers.computeIfAbsent(primaryGroup, k -> new GroupInfo(weight, label)).players.add(player);
                 } catch (Exception e) {
                     LOGGER.warn("Error getting LuckPerms group for player {}: {}", player.getName().getString(), e.getMessage());
-                    groupedPlayers.computeIfAbsent("Players", k -> new GroupInfo(0)).players.add(player);
+                    groupedPlayers.computeIfAbsent("default", k -> new GroupInfo(0, defaultGroupLabel())).players.add(player);
                 }
             }
 
-            // Sort groups by weight (highest first)
+            // Sort groups by weight (highest first); the "default" (regular players)
+            // group always sorts last regardless of its configured weight.
             List<Map.Entry<String, GroupInfo>> sortedGroups = groupedPlayers.entrySet().stream()
-                .sorted((a, b) -> Integer.compare(b.getValue().weight, a.getValue().weight))
+                .sorted((a, b) -> Integer.compare(sortWeight(b.getKey(), b.getValue()), sortWeight(a.getKey(), a.getValue())))
                 .toList();
 
-            // Display each group
             for (Map.Entry<String, GroupInfo> entry : sortedGroups) {
-                String groupName = entry.getKey();
-                GroupInfo groupInfo = entry.getValue();
-                List<ServerPlayer> groupPlayers = groupInfo.players;
-
-                // Sort players alphabetically within group
-                groupPlayers.sort(Comparator.comparing(p -> p.getName().getString().toLowerCase()));
-
-                // Group header with weight indicator
-                String weightIndicator = groupInfo.weight > 0 ? MessageUtil.localize("commands.neoessentials.list.group_weight", groupInfo.weight) : "";
-                MutableComponent groupHeader = Component.literal(MessageUtil.localize("commands.neoessentials.list.group_header", groupName, weightIndicator, groupPlayers.size()));
-                source.sendSuccess(() -> groupHeader, false);
-
-                // Build player list for this group
-                MutableComponent playerLine = Component.literal("  §f");
-                for (int i = 0; i < groupPlayers.size(); i++) {
-                    ServerPlayer player = groupPlayers.get(i);
-                    playerLine.append(createPlayerComponent(player, canSeeVanished));
-
-                    if (i < groupPlayers.size() - 1) {
-                        playerLine.append(Component.literal("§7, "));
-                    }
-                }
-
-                source.sendSuccess(() -> playerLine, false);
+                source.sendSuccess(() -> renderGroupLine(entry.getKey(), entry.getValue()), false);
             }
-
-            // Send footer with stats
-            sendListFooter(source, players, canSeeVanished);
-
         } catch (Exception e) {
             LOGGER.error("Error displaying LuckPerms grouped list: {}", e.getMessage(), e);
-            // Fallback to simple list
-            displaySimpleGroupedList(source, players, canSeeVanished);
+            displaySimpleGroupedList(source, players);
         }
     }
 
     /**
-     * Display players with simple grouping (fallback when LuckPerms is not available)
+     * Fallback (LuckPerms not available): one gray "Players: ..." line.
      */
-    private static void displaySimpleGroupedList(CommandSourceStack source, List<ServerPlayer> players, boolean canSeeVanished) {
-        // Group players by status
-        Map<String, List<ServerPlayer>> groupedPlayers = new LinkedHashMap<>();
+    private static void displaySimpleGroupedList(CommandSourceStack source, List<ServerPlayer> players) {
+        List<ServerPlayer> sorted = new ArrayList<>(players);
+        sorted.sort(Comparator.comparing(p -> p.getName().getString().toLowerCase(Locale.ROOT)));
 
-        for (ServerPlayer player : players) {
-            String group = getPlayerGroup(player);
-            groupedPlayers.computeIfAbsent(group, k -> new ArrayList<>()).add(player);
-        }
-
-        // Display each group
-        for (Map.Entry<String, List<ServerPlayer>> entry : groupedPlayers.entrySet()) {
-            String groupName = entry.getKey();
-            List<ServerPlayer> groupPlayers = entry.getValue();
-
-            // Sort players alphabetically
-            groupPlayers.sort(Comparator.comparing(p -> p.getName().getString().toLowerCase()));
-
-            // Group header
-            MutableComponent groupHeader = Component.literal(MessageUtil.localize("commands.neoessentials.list.group_header_simple", groupName, groupPlayers.size()));
-            source.sendSuccess(() -> groupHeader, false);
-
-            // Build player list
-            MutableComponent playerLine = Component.literal("  §f");
-            for (int i = 0; i < groupPlayers.size(); i++) {
-                ServerPlayer player = groupPlayers.get(i);
-                playerLine.append(createPlayerComponent(player, canSeeVanished));
-
-                if (i < groupPlayers.size() - 1) {
-                    playerLine.append(Component.literal("§7, "));
-                }
+        MutableComponent line = Component.literal(defaultGroupLabel() + ": ").withStyle(resolveGroupColor("default"));
+        for (int i = 0; i < sorted.size(); i++) {
+            if (i > 0) {
+                line.append(Component.literal(", ").withStyle(ChatFormatting.GRAY));
             }
-
-            source.sendSuccess(() -> playerLine, false);
+            line.append(Component.literal(sorted.get(i).getName().getString()).withStyle(ChatFormatting.WHITE));
         }
-
-        // Send footer with stats
-        sendListFooter(source, players, canSeeVanished);
+        source.sendSuccess(() -> line, false);
     }
 
     /**
-     * Helper class to store group weight and players
+     * Holds a group's weight, display label, and its players.
      */
     private static class GroupInfo {
-        int weight;
-        List<ServerPlayer> players = new ArrayList<>();
+        final int weight;
+        final String label;
+        final List<ServerPlayer> players = new ArrayList<>();
 
-        GroupInfo(int weight) {
+        GroupInfo(int weight, String label) {
             this.weight = weight;
+            this.label = label;
         }
     }
 
     /**
-     * Create a formatted component for a player entry
+     * Render one group's line: "<colored label>: <white, gray-comma-separated names>".
+     * Sorts the group's players alphabetically as a side effect.
      */
-    private static MutableComponent createPlayerComponent(ServerPlayer player, boolean canSeeVanished) {
-        String playerName = player.getName().getString();
-        MutableComponent component = Component.literal(playerName);
+    private static Component renderGroupLine(String groupId, GroupInfo info) {
+        List<ServerPlayer> groupPlayers = info.players;
+        groupPlayers.sort(Comparator.comparing(p -> p.getName().getString().toLowerCase(Locale.ROOT)));
 
-        // Color coding based on status
-        if (isVanished(player) && canSeeVanished) {
-            component = component.withStyle(ChatFormatting.GRAY, ChatFormatting.ITALIC);
-        } else if (isAfk(player)) {
-            component = component.withStyle(ChatFormatting.YELLOW);
-        } else {
-            component = component.withStyle(ChatFormatting.WHITE);
-        }
-
-        // Add status indicators
-        List<String> statusIndicators = new ArrayList<>();
-
-        if (isAfk(player)) {
-            statusIndicators.add("§eAFK");
-        }
-
-        if (isVanished(player) && canSeeVanished) {
-            statusIndicators.add("§7V");
-        }
-
-        // Add OP indicator
-        if (player.hasPermissions(4)) {
-            statusIndicators.add("§cOP");
-        }
-
-        // Add status indicators to name
-        if (!statusIndicators.isEmpty()) {
-            component.append(Component.literal(" §8[" + String.join("§7,", statusIndicators) + "§8]"));
-        }
-
-        // Add hover text with detailed info
-        List<Component> hoverLines = new ArrayList<>();
-        hoverLines.add(Component.literal(MessageUtil.localize("commands.neoessentials.list.hover_player", playerName)));
-        // Level objects in Minecraft don't need to be closed with try-with-resources
-        @SuppressWarnings("resource")
-        String worldName = player.level().dimension().location().getPath();
-        hoverLines.add(Component.literal(MessageUtil.localize("commands.neoessentials.list.hover_world", worldName)));
-        hoverLines.add(Component.literal(MessageUtil.localize("commands.neoessentials.list.hover_location",
-            (int)player.getX(), (int)player.getY(), (int)player.getZ())));
-
-        // Add LuckPerms group info if available
-        String groupInfo = getLuckPermsGroupInfo(player);
-        if (groupInfo != null) {
-            hoverLines.add(Component.literal(MessageUtil.localize("commands.neoessentials.list.hover_group", groupInfo)));
-        }
-
-        if (isAfk(player)) {
-            String reason = getAfkReason(player);
-            if (reason != null && !reason.isEmpty()) {
-                hoverLines.add(Component.literal(MessageUtil.localize("commands.neoessentials.list.hover_afk_reason", reason)));
-            } else {
-                hoverLines.add(Component.literal(MessageUtil.localize("commands.neoessentials.list.hover_afk")));
+        ChatFormatting color = resolveGroupColor(groupId);
+        MutableComponent line = Component.literal(info.label + ": ").withStyle(color);
+        for (int i = 0; i < groupPlayers.size(); i++) {
+            if (i > 0) {
+                line.append(Component.literal(", ").withStyle(ChatFormatting.GRAY));
             }
+            line.append(Component.literal(groupPlayers.get(i).getName().getString()).withStyle(ChatFormatting.WHITE));
         }
-
-        // Get player's ping
-        hoverLines.add(Component.literal(MessageUtil.localize("commands.neoessentials.list.hover_ping", player.connection.latency())));
-
-        hoverLines.add(Component.literal(""));
-        hoverLines.add(Component.literal(MessageUtil.localize("commands.neoessentials.list.hover_click_message")));
-
-        MutableComponent hoverText = Component.empty();
-        for (int i = 0; i < hoverLines.size(); i++) {
-            if (i > 0) hoverText.append("\n");
-            hoverText.append(hoverLines.get(i));
-        }
-
-        component = component.withStyle(style -> style
-            .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, hoverText))
-            .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/msg " + playerName + " "))
-        );
-
-        return component;
+        return line;
     }
 
     /**
-     * Send footer information
+     * Sort key for group ordering: the "default" (regular players) group always
+     * sorts last; every other group sorts by its LuckPerms weight (highest first).
      */
-    private static void sendListFooter(CommandSourceStack source, List<ServerPlayer> players, boolean canSeeVanished) {
-        // Count different statuses
-        int afkCount = 0;
-        int vanishedCount = 0;
-        int opCount = 0;
-
-        for (ServerPlayer player : players) {
-            if (isAfk(player)) afkCount++;
-            if (isVanished(player)) vanishedCount++;
-            if (player.hasPermissions(4)) opCount++;
+    private static int sortWeight(String groupId, GroupInfo info) {
+        if ("default".equalsIgnoreCase(groupId)) {
+            return Integer.MIN_VALUE;
         }
-
-        // Build status summary
-        List<String> statusSummary = new ArrayList<>();
-
-        if (afkCount > 0) {
-            statusSummary.add(MessageUtil.localize("commands.neoessentials.list.status_afk", afkCount));
-        }
-
-        if (vanishedCount > 0 && canSeeVanished) {
-            statusSummary.add(MessageUtil.localize("commands.neoessentials.list.status_vanished", vanishedCount));
-        }
-
-        if (opCount > 0) {
-            statusSummary.add(MessageUtil.localize("commands.neoessentials.list.status_op", opCount));
-        }
-
-        if (!statusSummary.isEmpty()) {
-            MutableComponent footer = Component.literal(MessageUtil.localize("commands.neoessentials.list.status_footer", String.join("§7, ", statusSummary)));
-            source.sendSuccess(() -> footer, false);
-        }
+        return info.weight;
     }
 
     /**
-     * Get LuckPerms group info for hover text
+     * Resolve a group's label color: config override -> built-in default -> unknown color.
      */
-    private static String getLuckPermsGroupInfo(ServerPlayer player) {
-        try {
-            if (ModList.get().isLoaded("luckperms") && isLuckPermsAvailable()) {
-                net.luckperms.api.LuckPerms luckPerms = net.luckperms.api.LuckPermsProvider.get();
-                net.luckperms.api.model.user.User lpUser = luckPerms.getUserManager().getUser(player.getUUID());
+    private static ChatFormatting resolveGroupColor(String groupId) {
+        String id = (groupId == null) ? "" : groupId.toLowerCase(Locale.ROOT);
 
-                if (lpUser != null) {
-                    String primaryGroup = lpUser.getPrimaryGroup();
-                    net.luckperms.api.model.group.Group lpGroup = luckPerms.getGroupManager().getGroup(primaryGroup);
-
-                    if (lpGroup != null) {
-                        int weight = lpGroup.getWeight().orElse(0);
-                        return primaryGroup + (weight > 0 ? " [" + weight + "]" : "");
-                    }
-
-                    return primaryGroup;
-                }
-            }
-        } catch (Exception e) {
-            LOGGER.debug("Error getting LuckPerms group info for player {}: {}", player.getName().getString(), e.getMessage());
+        String override = ConfigManager.getListGroupColorName(id);
+        if (override != null) {
+            ChatFormatting c = ChatFormatting.getByName(override);
+            if (c != null && c.isColor()) return c;
         }
 
-        return null;
+        ChatFormatting builtin = DEFAULT_GROUP_COLORS.get(id);
+        if (builtin != null) return builtin;
+
+        String unknownName = ConfigManager.getListUnknownGroupColor();
+        ChatFormatting unknown = ChatFormatting.getByName(unknownName);
+        return (unknown != null && unknown.isColor()) ? unknown : DEFAULT_UNKNOWN_COLOR;
+    }
+
+    /**
+     * Compute a group's display label: localized "Players" for the default group,
+     * the LuckPerms friendly name if one is set, otherwise the capitalized group id.
+     */
+    private static String computeGroupLabel(String groupId, net.luckperms.api.model.group.Group lpGroup) {
+        if ("default".equalsIgnoreCase(groupId)) {
+            return defaultGroupLabel();
+        }
+        String friendly = (lpGroup != null) ? lpGroup.getFriendlyName() : groupId;
+        if (friendly == null || friendly.isBlank() || friendly.equalsIgnoreCase(groupId)) {
+            return capitalize(groupId);
+        }
+        return stripFormattingCodes(friendly);
+    }
+
+    private static String defaultGroupLabel() {
+        return MessageUtil.localize("commands.neoessentials.list.group_label_default");
+    }
+
+    private static String capitalize(String s) {
+        if (s == null || s.isEmpty()) {
+            return (s == null) ? "" : s;
+        }
+        return Character.toUpperCase(s.charAt(0)) + s.substring(1);
+    }
+
+    private static String stripFormattingCodes(String s) {
+        return (s == null) ? "" : s.replaceAll("(?i)§[0-9A-FK-OR]", "").trim();
     }
 
     /**
@@ -445,34 +289,6 @@ public class ListCommand {
         } catch (Exception e) {
             return false;
         }
-    }
-
-    /**
-     * Get a player's display group (fallback when LuckPerms is not available)
-     */
-    private static String getPlayerGroup(ServerPlayer player) {
-        // Check for operator status
-        if (player.hasPermissions(4)) {
-            return "Operators";
-        }
-
-        // Check for vanished players
-        if (isVanished(player)) {
-            return "Staff";
-        }
-
-        // Check for common staff permissions
-        if (PermissionValidator.validatePermission(player.createCommandSourceStack(), "neoessentials.staff").hasPermission()) {
-            return "Staff";
-        }
-
-        // Check for AFK players
-        if (isAfk(player)) {
-            return "AFK Players";
-        }
-
-        // Default group
-        return "Players";
     }
 
     /**
@@ -489,40 +305,6 @@ public class ListCommand {
             return vanishManager.isPlayerVanished(player.getUUID());
         } catch (Exception e) {
             return false;
-        }
-    }
-
-    /**
-     * Check if a player is AFK
-     */
-    private static boolean isAfk(ServerPlayer player) {
-        if (!ConfigManager.isChatEnabled()) {
-            return false;
-        }
-
-        try {
-            com.zerog.neoessentials.chat.AfkManager afkManager =
-                com.zerog.neoessentials.chat.AfkManager.getInstance();
-            return afkManager.isAfk(player);
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    /**
-     * Get AFK reason for a player
-     */
-    private static String getAfkReason(ServerPlayer player) {
-        if (!ConfigManager.isChatEnabled()) {
-            return null;
-        }
-
-        try {
-            com.zerog.neoessentials.chat.AfkManager afkManager =
-                com.zerog.neoessentials.chat.AfkManager.getInstance();
-            return afkManager.getAfkReason(player.getUUID());
-        } catch (Exception e) {
-            return null;
         }
     }
 }
