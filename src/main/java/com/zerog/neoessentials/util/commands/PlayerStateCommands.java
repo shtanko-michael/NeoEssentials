@@ -279,9 +279,10 @@ public class PlayerStateCommands {
         // Essentials maps 0-10 to 0.0-1.0 (x0.1), capped at 1.0
         float mcSpeed = Math.min(speed / 10f, 1.0f);
         if (isFly) {
-            // Fly speed via FLYING_SPEED attribute (NeoForge 1.21.1)
-            var attr = target.getAttribute(Attributes.FLYING_SPEED);
-            if (attr != null) attr.setBaseValue(mcSpeed);
+            // Player creative-flight speed is driven by Abilities.flyingSpeed, NOT the
+            // FLYING_SPEED attribute (that only affects flying mobs — bees/parrots/allays).
+            // Set it and re-sync abilities to the client. (default 0.05; Essentials max 1.0)
+            target.getAbilities().setFlyingSpeed(mcSpeed);
             target.onUpdateAbilities();
         } else {
             // Walk speed via MOVEMENT_SPEED attribute
