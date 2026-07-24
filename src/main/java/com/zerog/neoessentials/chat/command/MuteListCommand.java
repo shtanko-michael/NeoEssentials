@@ -37,10 +37,19 @@ public class MuteListCommand {
                 }
                 
                 java.util.List<String> muted = new java.util.ArrayList<>(com.zerog.neoessentials.chat.MuteManager.getMutedPlayers());
-                if (muted.isEmpty()) {
+                // isMuted() lazily expires stale entries, so filter through it to get the live list
+                java.util.List<String> entries = new java.util.ArrayList<>();
+                for (String name : muted) {
+                    if (!com.zerog.neoessentials.chat.MuteManager.isMuted(name)) continue;
+                    long remaining = com.zerog.neoessentials.chat.MuteManager.getRemainingMillis(name);
+                    entries.add(remaining > 0
+                        ? MessageUtil.localize("commands.neoessentials.mutelist.entry_temp", name, com.zerog.neoessentials.moderation.BanManager.formatDuration(remaining))
+                        : MessageUtil.localize("commands.neoessentials.mutelist.entry_permanent", name));
+                }
+                if (entries.isEmpty()) {
                     source.sendSuccess(() -> MessageUtil.component("commands.neoessentials.mutelist.empty"), false);
                 } else {
-                    String mutedList = String.join(", ", muted);
+                    String mutedList = String.join(", ", entries);
                     source.sendSuccess(() -> MessageUtil.component("commands.neoessentials.mutelist.list", mutedList), false);
                 }
                 return 1;

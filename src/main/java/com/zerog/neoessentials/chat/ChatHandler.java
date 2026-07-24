@@ -2,7 +2,6 @@ package com.zerog.neoessentials.chat;
 
 import com.google.gson.JsonObject;
 import com.zerog.neoessentials.util.MessageUtil;
-import com.zerog.neoessentials.util.ChatDebugUtil;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -63,12 +62,14 @@ public class ChatHandler {
             String rawMessage = event.getRawText();
             String playerName = player.getName().getString();
 
-            // Check if player is muted
-            boolean isMuted = MuteManager.isMuted(player);
-            ChatDebugUtil.debug("ChatHandler - Checking mute for %s, result: %s", playerName, isMuted);
-            if (isMuted) {
+            // Mute enforcement lives in ChatMuteGuard (EventPriority.HIGHEST) so it applies even when
+            // a third-party chat mod cancels the event at NORMAL priority before this handler runs.
+            // If we reach this point the player is not muted (the guard cancels muted messages, and a
+            // cancelled event never reaches this NORMAL-priority listener). Kept as a defensive net in
+            // case this handler is ever invoked directly / re-posted without the guard having run.
+            if (MuteManager.isMuted(player)) {
                 event.setCanceled(true);
-                player.sendSystemMessage(MessageUtil.error("commands.neoessentials.chat.muted"));
+                player.sendSystemMessage(com.zerog.neoessentials.chat.handlers.ChatMuteGuard.muteNotice(playerName));
                 return;
             }
 

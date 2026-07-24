@@ -99,7 +99,26 @@ public class PermissionAPI {
         LOGGER.debug("═══════════════════════");
         return hasInternalPerm;
     }
-    
+
+    /**
+     * Like {@link #hasPermission(UUID, String)}, but never applies the ops-bypass shortcut.
+     * Use this for "protection"/exempt-style checks (e.g. "is this player immune to being muted"),
+     * where the checked player is a TARGET rather than the acting party — granting every operator
+     * automatic immunity as a side effect of {@code opsBypassPermissions} is not the intent of that setting.
+     */
+    public static boolean hasPermissionExplicit(UUID uuid, String permission) {
+        if (uuid == null || permission == null || permission.trim().isEmpty()) {
+            return false;
+        }
+        if (externalAdapter != null) {
+            return externalAdapter.hasPermission(uuid, permission);
+        }
+        if (manager == null) {
+            return false;
+        }
+        return manager.hasPermission(uuid, permission);
+    }
+
     /**
      * Read an integer meta value for the player from the external permission system
      * (e.g. LuckPerms: {@code /lp user <name> meta set <key> <value>}).

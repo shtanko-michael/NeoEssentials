@@ -61,8 +61,8 @@ public class UnmuteCommand {
                         return 0;
                     }
                     
-                    // Check if player is actually muted
-                    if (!com.zerog.neoessentials.chat.MuteManager.getMutedPlayers().contains(targetName.toLowerCase())) {
+                    // Check if player is actually muted (this also lazily expires a stale mute)
+                    if (!com.zerog.neoessentials.chat.MuteManager.isMuted(targetName)) {
                         source.sendFailure(MessageUtil.error("commands.neoessentials.unmute.not_muted", targetName));
                         return 0;
                     }
