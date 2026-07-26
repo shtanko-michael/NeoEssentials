@@ -210,7 +210,8 @@ public class JailManager {
                 // Teleport to jail
                 teleportToJail(player, jailLoc);
 
-                String message = MessageUtil.localize("neoessentials.moderation.jailed_message", reason, jailedBy);
+                String message = MessageUtil.localize("neoessentials.moderation.jailed_message",
+                    reason, jailedBy, getJailDurationDescription(jail));
                 player.sendSystemMessage(MessageUtil.warning(message));
 
         if (com.zerog.neoessentials.config.ConfigManager.getInstance().isLogJailActionsEnabled()) {
@@ -370,9 +371,12 @@ public class JailManager {
         boolean teleportOnLogin = com.zerog.neoessentials.config.ConfigManager.getInstance().isJailTeleportOnLoginEnabled();
         if (teleportOnLogin) {
             teleportToJail(player, jailLoc);
-            String message = MessageUtil.localize("neoessentials.moderation.jail_reminder", jail.reason);
-            player.sendSystemMessage(MessageUtil.warning(message));
         }
+        // An offline prisoner still needs the full sentence details on their next login, even
+        // when the server is configured not to teleport jailed players on login.
+        String message = MessageUtil.localize("neoessentials.moderation.jailed_message",
+            jail.reason, jail.jailedBy, getJailDurationDescription(jail));
+        player.sendSystemMessage(MessageUtil.warning(message));
     }
     
     /**
@@ -407,6 +411,12 @@ public class JailManager {
         if (minutes > 0) sb.append(minutes).append("m ");
         if (seconds > 0 || sb.length() == 0) sb.append(seconds).append("s");
         return sb.toString().trim();
+    }
+
+    private static String getJailDurationDescription(JailEntry jail) {
+        return jail.expireAt <= 0
+            ? MessageUtil.localize("commands.neoessentials.jail.duration_permanent")
+            : jail.getFormattedRemaining();
     }
 
     /**

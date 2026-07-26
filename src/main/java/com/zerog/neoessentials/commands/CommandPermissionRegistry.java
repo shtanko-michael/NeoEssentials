@@ -75,6 +75,16 @@ public final class CommandPermissionRegistry {
                         register(a.getAsString(), node);
                     }
                 }
+
+                // A command may expose several independently permission-gated syntaxes.
+                // Index them as complete display names so /help can list each one rather
+                // than collapsing a command tree (such as RegionGuard's /rg) into its root.
+                JsonElement subPermissions = cmd.get("sub_permissions");
+                if (subPermissions != null && subPermissions.isJsonObject()) {
+                    for (Map.Entry<String, JsonElement> sub : subPermissions.getAsJsonObject().entrySet()) {
+                        register(entry.getKey() + " " + sub.getKey(), basePermission(sub.getValue().getAsString()));
+                    }
+                }
             }
             ready = true;
             LOGGER.info("Loaded command permission index: {} names, {} with a permission node",
@@ -90,6 +100,16 @@ public final class CommandPermissionRegistry {
         if (node != null) {
             permissionByName.put(key, node);
         }
+    }
+
+    /**
+     * Some documentation entries describe multiple checks with " + ". For help-list
+     * visibility, the first node is the Brigadier gate for the syntax; finer-grained
+     * checks still run when the player executes the command.
+     */
+    private static String basePermission(String node) {
+        int separator = node.indexOf(" + ");
+        return separator >= 0 ? node.substring(0, separator).trim() : node;
     }
 
     /** true once the reference parsed successfully; when false, callers should not hide commands. */

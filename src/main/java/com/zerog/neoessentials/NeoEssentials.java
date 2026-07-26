@@ -4,6 +4,7 @@ import com.zerog.neoessentials.config.ConfigSplitter;
 import com.zerog.neoessentials.core.ManagerRegistry;
 import com.zerog.neoessentials.permissions.PermissionSystem;
 import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.ModList;
 import com.mojang.brigadier.CommandDispatcher;
 import net.minecraft.commands.CommandSourceStack;
 import net.neoforged.bus.api.IEventBus;
@@ -512,6 +513,13 @@ public class NeoEssentials {
     private static void registerAllCommands(CommandDispatcher<CommandSourceStack> dispatcher, CommandRegistry registry) {
         // Register the root command first (/neoe and /neoessentials)
         com.zerog.neoessentials.commands.ModRootCommand.register(dispatcher);
+
+        // RegionGuard owns the /rg Brigadier tree. Register every usable syntax here only
+        // when the optional mod is present, so /help lists the individual subcommands
+        // without advertising commands unavailable on servers without RegionGuard.
+        if (ModList.get().isLoaded("regionguard")) {
+            registerRegionGuardHelpCommands(registry);
+        }
         
         // ========== TELEPORTATION COMMANDS ==========
         // Register warp commands
@@ -912,6 +920,26 @@ public class NeoEssentials {
         registry.registerCommand("chestshop", "Sign-based chest shop system");
         registry.registerCommand("cshop", "Sign-based chest shop (alias)");
         com.zerog.neoessentials.shop.commands.ShopCommand.register(dispatcher);
+    }
+
+    private static void registerRegionGuardHelpCommands(CommandRegistry registry) {
+        registry.registerCommand("rg define <id>", "Create a region from your current selection");
+        registry.registerCommand("rg claim <id>", "Create a region from your current selection");
+        registry.registerCommand("rg redefine <id>", "Redefine a region using your current selection");
+        registry.registerCommand("rg remove <id>", "Remove a region you own");
+        registry.registerCommand("rg delete <id>", "Remove a region you own");
+        registry.registerCommand("rg list", "List regions in the current dimension");
+        registry.registerCommand("rg tp <id>", "Teleport to the center of a region");
+        registry.registerCommand("rg clearowners <id>", "Remove all owners from a region");
+        registry.registerCommand("rg clearmembers <id>", "Remove all members from a region");
+        registry.registerCommand("rg info [id]", "Show your regions or information about a region");
+        registry.registerCommand("rg addowner <id> <player>", "Add an owner to a region");
+        registry.registerCommand("rg addmember <id> <player>", "Add a member to a region");
+        registry.registerCommand("rg delowner <id> <player>", "Remove an owner from a region");
+        registry.registerCommand("rg delmember <id> <player>", "Remove a member from a region");
+        registry.registerCommand("rg flag <id> list", "Show the region's available flags");
+        registry.registerCommand("rg flag <id> <flag> <value>", "Set a region flag");
+        registry.registerCommand("rg flag <id> clear <flag> [value]", "Clear a region flag or one of its values");
     }
         /*
          * All command registration and related logic that was previously outside of methods has been moved here as a block comment.

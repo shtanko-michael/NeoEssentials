@@ -113,6 +113,18 @@ public class MuteCommand {
         final String finalReason = reason;
 
         com.zerog.neoessentials.chat.MuteManager.mute(sender, targetName, durationMillis, finalReason);
+        // The mute state is otherwise only noticed when the player next tries to chat. Notify
+        // the online target immediately with the same information the moderator supplied.
+        String notificationDuration = durationMillis > 0
+            ? BanManager.formatDuration(durationMillis)
+            : MessageUtil.localize("commands.neoessentials.mute.duration_permanent");
+        String notificationReason = finalReason.isEmpty()
+            ? MessageUtil.localize("commands.neoessentials.mute.reason_unspecified")
+            : finalReason;
+        targetPlayer.sendSystemMessage(MessageUtil.warning(
+            "commands.neoessentials.mute.target_notification",
+            sender.getName().getString(), notificationDuration, notificationReason));
+
         // Notify Discord integrations (fold duration into the relayed reason text since the
         // integration API has no separate duration field)
         try {

@@ -1915,11 +1915,14 @@
         "remove <id>": "regionguard.command.remove",
         "delete <id>": "regionguard.command.remove",
         "list": "regionguard.command.list",
-        "info <id>": "regionguard.command.info",
+        "info [id]": "regionguard.command.info",
+        "tp <id>": "regionguard.command.tp",
         "addowner <id> <player>": "regionguard.command.members",
         "addmember <id> <player>": "regionguard.command.members",
         "delowner <id> <player>": "regionguard.command.members",
         "delmember <id> <player>": "regionguard.command.members",
+        "clearowners <id>": "regionguard.command.members",
+        "clearmembers <id>": "regionguard.command.members",
         "flag <id> list": "regionguard.command.flag",
         "flag <id> <flag> <value>": "regionguard.command.flag + regionguard.command.flag.<flag>",
         "flag <id> clear <flag> [value]": "regionguard.command.flag + regionguard.command.flag.<flag>"
@@ -1931,8 +1934,8 @@
       "file": "command/RegionCommands.java (внешний мод: regionguard)",
       "category": "regionguard",
       "notes": "ВНЕШНИЙ МОД RegionGuard (не NeoEssentials). Права команд резолвятся через NeoEssentials PermissionAPI (SafePermissions), но op_level 2 — это fallback для ОБОИХ: консоли И игроков (op-2 проходит всё без ноды). Модель слоёная: не-оператору нужен базовый regionguard.command + нода подкоманды. Wildcard regionguard.command.* НЕ покрывает базовый regionguard.command — выдавайте regionguard.* или regionguard.command + конкретные ноды.",
-      "description_ru": "Защита регионов (WorldGuard-подобная): /rg claim(=define)/redefine/delete(=remove)/list/info/addowner/addmember/delowner/delmember/flag",
-      "description_en": "Region protection (WorldGuard-like): /rg claim(=define)/redefine/remove(=delete)/list/info/addowner/addmember/delowner/delmember/flag"
+      "description_ru": "Защита регионов (WorldGuard-подобная): /rg claim(=define)/redefine/delete(=remove)/list/info/tp/addowner/addmember/delowner/delmember/clearowners/clearmembers/flag",
+      "description_en": "Region protection (WorldGuard-like): /rg claim(=define)/redefine/remove(=delete)/list/info/tp/addowner/addmember/delowner/delmember/clearowners/clearmembers/flag"
     },
     "rtoggle": {
       "permission": "neoessentials.rtoggle",
@@ -3727,10 +3730,13 @@
       "rg (list)"
     ],
     "regionguard.command.info": [
-      "rg (info <id>)"
+      "rg (info [id])"
+    ],
+    "regionguard.command.tp": [
+      "rg (tp <id>)"
     ],
     "regionguard.command.members": [
-      "rg (addowner/addmember/delowner/delmember)"
+      "rg (addowner/addmember/delowner/delmember/clearowners/clearmembers)"
     ],
     "regionguard.command.flag": [
       "rg (flag <id> list)",

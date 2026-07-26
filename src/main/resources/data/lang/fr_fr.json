@@ -152,7 +152,7 @@
   "neoessentials.moderation.jail_not_found": "§cPrison ''{0}'' introuvable.",
   "neoessentials.moderation.jail_reminder": "§eVous êtes toujours en prison. Raison : {0}",
   "neoessentials.moderation.jail_success": "§a{0} a été emprisonné.",
-  "neoessentials.moderation.jailed_message": "Vous avez été emprisonné.\nRaison : {0}\nEmprisonné par : {1}",
+  "neoessentials.moderation.jailed_message": "Vous avez été emprisonné.\nRaison : {0}\nEmprisonné par : {1}\nDurée : {2}",
   "neoessentials.moderation.kick_broadcast": "§c{0} a été expulsé par {1} pour : {2}",
   "neoessentials.moderation.kick_success": "§a{0} a été expulsé.",
   "neoessentials.moderation.kickall_no_players": "§cAucun joueur en ligne à expulser.",

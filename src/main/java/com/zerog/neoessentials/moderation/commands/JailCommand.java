@@ -5,6 +5,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.zerog.neoessentials.moderation.JailManager;
+import com.zerog.neoessentials.moderation.BanManager;
 import com.zerog.neoessentials.util.MessageUtil;
 import com.zerog.neoessentials.util.PermissionValidator;
 import net.minecraft.commands.CommandSourceStack;
@@ -19,6 +20,7 @@ import com.zerog.neoessentials.util.InputValidator;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -26,6 +28,9 @@ import java.util.stream.Collectors;
  */
 public class JailCommand {
     private static final Logger LOGGER = LoggerFactory.getLogger(JailCommand.class);
+    // Same leading-duration syntax as /mute: 30m, 1h, 1d, etc.
+    private static final Pattern DURATION_TOKEN = Pattern.compile(
+        "(?i)^\\d+(s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|week|weeks)$");
     
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_JAILED_PLAYERS = (ctx, builder) -> {
         JailManager jailManager = JailManager.getInstance();
@@ -53,7 +58,7 @@ public class JailCommand {
             || !com.zerog.neoessentials.moderation.JailManager.isJailSystemEnabled()) {
             return;
         }
-        // /jail <player> <jail> [reason]
+        // /jail <player> <jail> [duration] [reason]
         dispatcher.register(Commands.literal("jail")
             .requires(source -> PermissionValidator.validatePermission(source, "neoessentials.moderation.jail").hasPermission())
             .then(Commands.argument("player", StringArgumentType.word())
@@ -61,29 +66,15 @@ public class JailCommand {
                     ctx.getSource().getServer().getPlayerNames(), builder))
                 .then(Commands.argument("jail", StringArgumentType.word())
                     .suggests(SUGGEST_JAIL_NAMES)
-                    .executes(ctx -> {
-                        String defaultReason = com.zerog.neoessentials.config.ConfigManager.getInstance()
-                            .getConfig("config.json")
-                            .has("moderation") && com.zerog.neoessentials.config.ConfigManager.getInstance()
-                            .getConfig("config.json").getAsJsonObject("moderation")
-                            .has("jailSettings") && com.zerog.neoessentials.config.ConfigManager.getInstance()
-                            .getConfig("config.json").getAsJsonObject("moderation")
-                            .getAsJsonObject("jailSettings").has("defaultJailReason")
-                            ? com.zerog.neoessentials.config.ConfigManager.getInstance()
-                                .getConfig("config.json").getAsJsonObject("moderation")
-                                .getAsJsonObject("jailSettings").get("defaultJailReason").getAsString()
-                            : "Jailed by an operator";
-                        return executeJail(ctx,
+                    .executes(ctx -> executeJail(ctx,
                             StringArgumentType.getString(ctx, "player"),
                             StringArgumentType.getString(ctx, "jail"),
-                            defaultReason, 0L);
-                    })
-                    .then(Commands.argument("reason", StringArgumentType.greedyString())
-                        .executes(ctx -> executeJail(ctx,
+                            getDefaultJailReason(), 0L))
+                    .then(Commands.argument("duration_or_reason", StringArgumentType.greedyString())
+                        .executes(ctx -> executeJailWithDurationOrReason(ctx,
                             StringArgumentType.getString(ctx, "player"),
                             StringArgumentType.getString(ctx, "jail"),
-                            StringArgumentType.getString(ctx, "reason"),
-                            0L))
+                            StringArgumentType.getString(ctx, "duration_or_reason")))
                     )
                 )
             )
@@ -184,6 +175,43 @@ public class JailCommand {
                     ctx.getSource().getServer().getPlayerNames(), builder))
                 .executes(ctx -> executeToggleJail(ctx, StringArgumentType.getString(ctx, "player"))))
         );
+    }
+
+    /**
+     * Parses the optional tail of /jail exactly as /mute does: a leading duration token is
+     * consumed and all following text remains the reason. Without a duration, the complete
+     * tail is the reason for an indefinite jail.
+     */
+    private static int executeJailWithDurationOrReason(CommandContext<CommandSourceStack> ctx,
+                                                        String playerName, String jailName, String args) {
+        String durationToken = null;
+        String reason = args;
+        int separator = args.indexOf(' ');
+        String firstWord = separator >= 0 ? args.substring(0, separator) : args;
+        if (DURATION_TOKEN.matcher(firstWord).matches()) {
+            durationToken = firstWord;
+            reason = separator >= 0 ? args.substring(separator + 1).trim() : "";
+        }
+
+        long durationMillis = durationToken != null ? BanManager.parseDuration(durationToken) : 0L;
+        if (reason.isEmpty()) {
+            reason = getDefaultJailReason();
+        }
+        return executeJail(ctx, playerName, jailName, reason, durationMillis);
+    }
+
+    private static String getDefaultJailReason() {
+        var config = com.zerog.neoessentials.config.ConfigManager.getInstance().getConfig("config.json");
+        if (config.has("moderation")) {
+            var moderation = config.getAsJsonObject("moderation");
+            if (moderation.has("jailSettings")) {
+                var jailSettings = moderation.getAsJsonObject("jailSettings");
+                if (jailSettings.has("defaultJailReason")) {
+                    return jailSettings.get("defaultJailReason").getAsString();
+                }
+            }
+        }
+        return "Jailed by an operator";
     }
 
     private static int executeToggleJail(CommandContext<CommandSourceStack> ctx, String playerName) {
