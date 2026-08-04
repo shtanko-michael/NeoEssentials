@@ -531,18 +531,21 @@ public class BanManager {
                 switch (unit) {
                     case "s":
                     case "sec":
+                    case "secs":
                     case "second":
                     case "seconds":
                         totalMillis += value * 1000;
                         break;
                     case "m":
                     case "min":
+                    case "mins":
                     case "minute":
                     case "minutes":
                         totalMillis += value * 60 * 1000;
                         break;
                     case "h":
                     case "hr":
+                    case "hrs":
                     case "hour":
                     case "hours":
                         totalMillis += value * 60 * 60 * 1000;

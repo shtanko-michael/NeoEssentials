@@ -191,8 +191,8 @@
 ### Jail
 | Command | Syntax | Permission | Default | Description |
 |---|---|---|---|---|
-| `/jail` | `/jail <player> [jail] [reason]` | `neoessentials.moderation.jail` | 🔒 | Jail a player indefinitely |
-| `/jailfor` | `/jailfor <player> <duration> [jail] [reason]` | `neoessentials.moderation.jail` | 🔒 | Jail a player for a duration |
+| `/jail` | `/jail <player> <jail> [duration] [reason]` | `neoessentials.moderation.jail` | 🔒 | Jail permanently or for a duration |
+| `/jailfor` | `/jailfor <player> <jail> <duration> [reason]` | `neoessentials.moderation.jail.timed` | 🔒 | Jail a player for a duration |
 | `/unjail` | `/unjail <player>` | `neoessentials.moderation.unjail` | 🔒 | Release a player from jail |
 | `/setjail` | `/setjail <name>` | `neoessentials.moderation.setjail` | 🔒 | Create a jail at current location |
 | `/deljail` | `/deljail <name>` | `neoessentials.moderation.deljail` | 🔒 | Delete a jail location |

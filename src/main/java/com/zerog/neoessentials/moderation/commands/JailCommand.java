@@ -82,41 +82,24 @@ public class JailCommand {
 
         // /jailfor <player> <jail> <duration> [reason]  — timed jail (Essentials: sendtemp pattern)
         dispatcher.register(Commands.literal("jailfor")
-            .requires(source -> PermissionValidator.validatePermission(source, "neoessentials.moderation.jail").hasPermission())
+            .requires(source -> PermissionValidator.validatePermission(source, "neoessentials.moderation.jail.timed").hasPermission())
             .then(Commands.argument("player", StringArgumentType.word())
                 .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(
                     ctx.getSource().getServer().getPlayerNames(), builder))
                 .then(Commands.argument("jail", StringArgumentType.word())
                     .suggests(SUGGEST_JAIL_NAMES)
                     .then(Commands.argument("duration", StringArgumentType.word())
-                        .executes(ctx -> {
-                            long dur = com.zerog.neoessentials.util.commands.MailCommand.parseDuration(
-                                StringArgumentType.getString(ctx, "duration"));
-                            if (dur < 0) {
-                                ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.jail.invalid_duration",
-                                    StringArgumentType.getString(ctx, "duration")));
-                                return 0;
-                            }
-                            String defaultReason = "Jailed by an operator";
-                            return executeJail(ctx,
+                        .executes(ctx -> executeTimedJail(ctx,
+                            StringArgumentType.getString(ctx, "player"),
+                            StringArgumentType.getString(ctx, "jail"),
+                            StringArgumentType.getString(ctx, "duration"),
+                            getDefaultJailReason()))
+                        .then(Commands.argument("reason", StringArgumentType.greedyString())
+                            .executes(ctx -> executeTimedJail(ctx,
                                 StringArgumentType.getString(ctx, "player"),
                                 StringArgumentType.getString(ctx, "jail"),
-                                defaultReason, dur);
-                        })
-                        .then(Commands.argument("reason", StringArgumentType.greedyString())
-                            .executes(ctx -> {
-                                long dur = com.zerog.neoessentials.util.commands.MailCommand.parseDuration(
-                                    StringArgumentType.getString(ctx, "duration"));
-                                if (dur < 0) {
-                                    ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.jail.invalid_duration",
-                                        StringArgumentType.getString(ctx, "duration")));
-                                    return 0;
-                                }
-                                return executeJail(ctx,
-                                    StringArgumentType.getString(ctx, "player"),
-                                    StringArgumentType.getString(ctx, "jail"),
-                                    StringArgumentType.getString(ctx, "reason"), dur);
-                            })
+                                StringArgumentType.getString(ctx, "duration"),
+                                StringArgumentType.getString(ctx, "reason")))
                         )
                     )
                 )
@@ -194,10 +177,35 @@ public class JailCommand {
         }
 
         long durationMillis = durationToken != null ? BanManager.parseDuration(durationToken) : 0L;
+        if (durationToken != null && durationMillis <= 0) {
+            ctx.getSource().sendFailure(MessageUtil.error(
+                "commands.neoessentials.jail.invalid_duration", durationToken));
+            return 0;
+        }
         if (reason.isEmpty()) {
             reason = getDefaultJailReason();
         }
         return executeJail(ctx, playerName, jailName, reason, durationMillis);
+    }
+
+    private static int executeTimedJail(CommandContext<CommandSourceStack> ctx,
+                                        String playerName, String jailName,
+                                        String durationToken, String reason) {
+        if (!DURATION_TOKEN.matcher(durationToken).matches()) {
+            ctx.getSource().sendFailure(MessageUtil.error(
+                "commands.neoessentials.jail.invalid_duration", durationToken));
+            return 0;
+        }
+
+        long durationMillis = BanManager.parseDuration(durationToken);
+        if (durationMillis <= 0) {
+            ctx.getSource().sendFailure(MessageUtil.error(
+                "commands.neoessentials.jail.invalid_duration", durationToken));
+            return 0;
+        }
+        return executeJail(ctx, playerName, jailName,
+            reason == null || reason.isBlank() ? getDefaultJailReason() : reason,
+            durationMillis);
     }
 
     private static String getDefaultJailReason() {
@@ -319,14 +327,25 @@ public class JailCommand {
             boolean success = jailManager.jailPlayer(resolvedName, playerId, reason, jailedBy, jailName, durationMillis);
 
             if (success) {
-                String confirmMessage = MessageUtil.localize("neoessentials.moderation.jail_success", resolvedName, jailName, reason);
+                String confirmMessage = durationMillis > 0
+                    ? MessageUtil.localize("neoessentials.moderation.jail_success_timed",
+                        resolvedName, jailName, BanManager.formatDuration(durationMillis), reason)
+                    : MessageUtil.localize("neoessentials.moderation.jail_success",
+                        resolvedName, jailName, reason);
                 source.sendSuccess(() -> MessageUtil.success(confirmMessage), true);
 
                 // Broadcast jail to all online staff
-                broadcastToStaff(server, MessageUtil.localize("neoessentials.moderation.jail_broadcast", 
-                    resolvedName, jailName, jailedBy, reason));
+                String broadcastMessage = durationMillis > 0
+                    ? MessageUtil.localize("neoessentials.moderation.jail_broadcast_timed",
+                        resolvedName, jailName, jailedBy, BanManager.formatDuration(durationMillis), reason)
+                    : MessageUtil.localize("neoessentials.moderation.jail_broadcast",
+                        resolvedName, jailName, jailedBy, reason);
+                broadcastToStaff(server, broadcastMessage);
 
-                LOGGER.info("Player {} jailed by {} in {} for: {}", resolvedName, jailedBy, jailName, reason);
+                LOGGER.info("Player {} jailed by {} in {} for {}. Reason: {}", resolvedName,
+                    jailedBy, jailName,
+                    durationMillis > 0 ? BanManager.formatDuration(durationMillis) : "permanent",
+                    reason);
                 return 1;
             } else {
                 source.sendFailure(MessageUtil.error("neoessentials.moderation.jail_failed", resolvedName));

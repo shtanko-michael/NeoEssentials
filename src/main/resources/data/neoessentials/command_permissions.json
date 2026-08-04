@@ -1116,14 +1116,14 @@
       "description_en": "Jail a player"
     },
     "jailfor": {
-      "permission": "neoessentials.moderation.jail",
+      "permission": "neoessentials.moderation.jail.timed",
       "aliases": [],
       "op_level": null,
       "sub_permissions": {},
       "extra_permissions": {},
       "file": "moderation/commands/JailCommand.java",
       "category": "moderation",
-      "notes": "Использует ту же ноду, что /jail (отдельной нет).",
+      "notes": "",
       "description_ru": "Посадить игрока в тюрьму на заданное время",
       "description_en": "Jail a player for a set duration"
     },

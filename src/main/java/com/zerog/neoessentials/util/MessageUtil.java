@@ -46,7 +46,7 @@ public class MessageUtil {
     
     // Language version tracking - increment when translations change
     private static final String LANG_VERSION_KEY = "_langVersion";
-    private static final int CURRENT_LANG_VERSION = 20;
+    private static final int CURRENT_LANG_VERSION = 21;
 
     /**
      * Load translations from server directory, updating from JAR if needed.
@@ -317,6 +317,10 @@ public class MessageUtil {
         
         try {
             String result = MessageFormat.format(template.replace("%s", "{0}"), args);
+            // Older generated language files may contain a literal "\\n" sequence instead of
+            // a JSON newline escape. Normalize it at render time so existing server configs gain
+            // real chat line breaks without requiring administrators to delete their lang files.
+            result = result.replace("\\n", "\n");
             if (debugMode) {
                 LOGGER.info("MessageFormat success - Key: {}, Template: '{}', Args: {}, Result: '{}'", 
                     key, template, java.util.Arrays.toString(args), result);
@@ -325,7 +329,7 @@ public class MessageUtil {
         } catch (Exception e) {
             LOGGER.error("Failed to format message - Key: {}, Template: '{}', Args: {}, Error: {}", 
                 key, template, java.util.Arrays.toString(args), e.getMessage(), e);
-            return template;
+            return template.replace("\\n", "\n");
         }
     }
 

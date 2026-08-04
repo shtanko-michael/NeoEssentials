@@ -57,7 +57,7 @@ Jail teleports the player to a set jail location and blocks movement, interactio
 
 | Command | Syntax | Permission | Description |
 |---|---|---|---|
-| `/jail` | `/jail <player> <jail> [reason]` | `neoessentials.moderation.jail` | Jail a player indefinitely |
+| `/jail` | `/jail <player> <jail> [duration] [reason]` | `neoessentials.moderation.jail` | Jail permanently or for a set duration |
 | `/jailfor` | `/jailfor <player> <jail> <duration> [reason]` | `neoessentials.moderation.jail.timed` | Jail for a set duration |
 | `/unjail` | `/unjail <player>` | `neoessentials.moderation.unjail` | Release a player from jail |
 | `/setjail` | `/setjail <name>` | `neoessentials.moderation.setjail` | Set a jail location at your position |
@@ -77,6 +77,7 @@ While jailed, the following are blocked:
 - Attacking entities (unless `neoessentials.jail.allow-attack`)
 
 Timed jails auto-release when the duration expires (checked every second and on login).
+Durations use `s`, `m`, `h`, `d`, or `w`, for example `/jail Steve spawn-jail 2h griefing`.
 
 ---
 

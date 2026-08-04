@@ -78,6 +78,10 @@ For LuckPerms users:
 
 See [Home](https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials/wiki/Home) and individual system docs above for full command lists and config options.
 
+Timed jail sentences can be set directly with `/jail <player> <jail> <duration> [reason]`,
+for example `/jail Steve spawn-jail 2h griefing`. Supported units are `s`, `m`, `h`, `d`,
+and `w`; omitting the duration creates a permanent sentence.
+
 ## 🔧 Configuration Examples
 
 All features are managed by modular JSON config files. See [Home](https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials/wiki/Home) and system docs above for details.
