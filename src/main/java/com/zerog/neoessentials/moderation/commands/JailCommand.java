@@ -81,8 +81,13 @@ public class JailCommand {
         );
 
         // /jailfor <player> <jail> <duration> [reason]  — timed jail (Essentials: sendtemp pattern)
+        // A timed jail is a /jail with a duration, so whoever may jail may also jail for a while:
+        // neoessentials.moderation.jail grants it too. The dedicated .timed node stays for setups
+        // that hand out only the timed form. (LuckPerms treats the two as unrelated nodes: granting
+        // the parent neoessentials.moderation.jail does NOT imply the .timed child.)
         dispatcher.register(Commands.literal("jailfor")
-            .requires(source -> PermissionValidator.validatePermission(source, "neoessentials.moderation.jail.timed").hasPermission())
+            .requires(source -> PermissionValidator.validateAnyPermission(source,
+                "neoessentials.moderation.jail.timed", "neoessentials.moderation.jail").hasPermission())
             .then(Commands.argument("player", StringArgumentType.word())
                 .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(
                     ctx.getSource().getServer().getPlayerNames(), builder))

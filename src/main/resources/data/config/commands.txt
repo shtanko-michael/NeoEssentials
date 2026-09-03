@@ -249,7 +249,8 @@ clearinventory (ci, clear) - Clear inventory
 - neoessentials.moderation.mute - Mute players
 - neoessentials.moderation.unmute - Unmute players
 - neoessentials.moderation.mutelist - View muted players
-- neoessentials.moderation.jail - Jail players
+- neoessentials.moderation.jail - Jail players (also grants /jailfor)
+- neoessentials.moderation.jail.timed - Timed jail only (/jailfor)
 - neoessentials.moderation.unjail - Unjail players
 - neoessentials.moderation.setjail - Set jail location
 - neoessentials.moderation.jaillist - View jailed players

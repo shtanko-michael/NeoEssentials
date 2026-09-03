@@ -647,7 +647,7 @@
   "commands.neoessentials.teleport.home.unsafe": "Дом ''{0}'' небезопасен, и поблизости не найдено безопасного места.",
   "commands.neoessentials.teleport.home.unsafe_command_blocked": "Эта команда содержит потенциально опасные операции. Чтобы использовать её, включите ''allowUnsafeCommands'' в вашей конфигурации.",
   "commands.neoessentials.teleport.home.unsafe_location": "Нельзя установить дом: место небезопасно, и поблизости не найдено безопасного места.",
-  "commands.neoessentials.teleport.home.updated": "Дом ''{0}'' обновлён на {1}.",
+  "commands.neoessentials.teleport.home.updated": "Дом «{0}» обновлён на {1}.",
   "commands.neoessentials.teleport.request.button_accept": "[Принять]",
   "commands.neoessentials.teleport.request.button_accept_hover": "Нажмите, чтобы принять запрос на телепорт",
   "commands.neoessentials.teleport.request.button_accept_hover_v2": "Принять запрос на телепорт",

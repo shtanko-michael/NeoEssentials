@@ -12,6 +12,7 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Mth;
 
 import java.util.Map;
 import java.util.UUID;
@@ -248,6 +249,18 @@ public class HomeCommands {
     }
     
     /**
+     * Coordinates of the home as it was actually stored: /sethome may move the point to a nearby
+     * safe spot, so the player's own block position is not always where the home ended up.
+     */
+    private static String homeCoordinates(HomeManager homeManager, ServerPlayer player, String homeName) {
+        var location = homeManager.getHome(player, homeName);
+        if (location == null) {
+            return player.blockPosition().toShortString();
+        }
+        return Mth.floor(location.getX()) + ", " + Mth.floor(location.getY()) + ", " + Mth.floor(location.getZ());
+    }
+
+    /**
      * Execute /sethome <name>
      */
     private static int executeSetHome(CommandContext<CommandSourceStack> context) {
@@ -282,11 +295,10 @@ public class HomeCommands {
             return 0;
         }
         pendingSetHomeConfirmations.remove(player.getUUID());
-        if (!pendingSetHomeConfirmations.containsKey(player.getUUID())) {
-            if (homeManager.setHome(player, homeName)) {
-                player.sendSystemMessage(MessageUtil.success("commands.neoessentials.teleport.home.set", homeName, player.blockPosition().toShortString()));
-                return 1;
-            }
+        if (homeManager.setHome(player, homeName)) {
+            player.sendSystemMessage(MessageUtil.success("commands.neoessentials.teleport.home.set",
+                homeName, homeCoordinates(homeManager, player, homeName)));
+            return 1;
         }
         return 0;
     }
@@ -310,7 +322,8 @@ public class HomeCommands {
         pendingSetHomeConfirmations.remove(player.getUUID());
         boolean success = homeManager.setHome(player, homeName);
         if (success) {
-            player.sendSystemMessage(MessageUtil.success("commands.neoessentials.teleport.home.overwrite_success", homeName));
+            player.sendSystemMessage(MessageUtil.success("commands.neoessentials.teleport.home.updated",
+                homeName, homeCoordinates(homeManager, player, homeName)));
             return 1;
         } else {
             player.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.home.overwrite_failed", homeName));
@@ -366,11 +379,9 @@ public class HomeCommands {
             return 0;
         }
         pendingDeleteConfirmations.remove(player.getUUID());
-        if (!pendingDeleteConfirmations.containsKey(player.getUUID())) {
-            if (homeManager.deleteHome(player, homeName)) {
-                player.sendSystemMessage(MessageUtil.success("commands.neoessentials.teleport.home.delete_success", homeName));
-                return 1;
-            }
+        if (homeManager.deleteHome(player, homeName)) {
+            player.sendSystemMessage(MessageUtil.success("commands.neoessentials.teleport.home.delete_success", homeName));
+            return 1;
         }
         return 0;
     }

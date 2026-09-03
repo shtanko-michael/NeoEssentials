@@ -24,11 +24,17 @@ public class ListCommand {
     
     private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger(ListCommand.class);
 
-    /** Built-in group -> color defaults (config can override). */
+    /**
+     * Built-in group -> color defaults, kept in sync with the chat prefixes
+     * (&5 Ender, &3 Wither, &6 Warden, &e Helper, &9 Moder). Used only when the
+     * group has no chat prefix to read the color from; config can override.
+     */
     private static final Map<String, ChatFormatting> DEFAULT_GROUP_COLORS = Map.of(
         "ender", ChatFormatting.DARK_PURPLE,
-        "wither", ChatFormatting.AQUA,
-        "warden", ChatFormatting.YELLOW,
+        "wither", ChatFormatting.DARK_AQUA,
+        "warden", ChatFormatting.GOLD,
+        "helper", ChatFormatting.YELLOW,
+        "moder", ChatFormatting.BLUE,
         "default", ChatFormatting.GRAY
     );
 
@@ -138,7 +144,7 @@ public class ListCommand {
                 try {
                     net.luckperms.api.model.user.User lpUser = luckPerms.getUserManager().getUser(player.getUUID());
                     if (lpUser == null) {
-                        groupedPlayers.computeIfAbsent("default", k -> new GroupInfo(0, defaultGroupLabel())).players.add(player);
+                        groupedPlayers.computeIfAbsent("default", k -> new GroupInfo(0, defaultGroupLabel(), null)).players.add(player);
                         continue;
                     }
 
@@ -146,10 +152,11 @@ public class ListCommand {
                     net.luckperms.api.model.group.Group lpGroup = luckPerms.getGroupManager().getGroup(primaryGroup);
                     int weight = (lpGroup != null) ? lpGroup.getWeight().orElse(0) : 0;
                     String label = computeGroupLabel(primaryGroup, lpGroup);
-                    groupedPlayers.computeIfAbsent(primaryGroup, k -> new GroupInfo(weight, label)).players.add(player);
+                    ChatFormatting prefixColor = groupPrefixColor(lpGroup);
+                    groupedPlayers.computeIfAbsent(primaryGroup, k -> new GroupInfo(weight, label, prefixColor)).players.add(player);
                 } catch (Exception e) {
                     LOGGER.warn("Error getting LuckPerms group for player {}: {}", player.getName().getString(), e.getMessage());
-                    groupedPlayers.computeIfAbsent("default", k -> new GroupInfo(0, defaultGroupLabel())).players.add(player);
+                    groupedPlayers.computeIfAbsent("default", k -> new GroupInfo(0, defaultGroupLabel(), null)).players.add(player);
                 }
             }
 
@@ -175,7 +182,7 @@ public class ListCommand {
         List<ServerPlayer> sorted = new ArrayList<>(players);
         sorted.sort(Comparator.comparing(p -> p.getName().getString().toLowerCase(Locale.ROOT)));
 
-        MutableComponent line = Component.literal(defaultGroupLabel() + ": ").withStyle(resolveGroupColor("default"));
+        MutableComponent line = Component.literal(defaultGroupLabel() + ": ").withStyle(resolveGroupColor("default", null));
         for (int i = 0; i < sorted.size(); i++) {
             if (i > 0) {
                 line.append(Component.literal(", ").withStyle(ChatFormatting.GRAY));
@@ -186,16 +193,19 @@ public class ListCommand {
     }
 
     /**
-     * Holds a group's weight, display label, and its players.
+     * Holds a group's weight, display label, the color of its chat prefix (null when the
+     * group has none), and its players.
      */
     private static class GroupInfo {
         final int weight;
         final String label;
+        final ChatFormatting prefixColor;
         final List<ServerPlayer> players = new ArrayList<>();
 
-        GroupInfo(int weight, String label) {
+        GroupInfo(int weight, String label, ChatFormatting prefixColor) {
             this.weight = weight;
             this.label = label;
+            this.prefixColor = prefixColor;
         }
     }
 
@@ -207,7 +217,7 @@ public class ListCommand {
         List<ServerPlayer> groupPlayers = info.players;
         groupPlayers.sort(Comparator.comparing(p -> p.getName().getString().toLowerCase(Locale.ROOT)));
 
-        ChatFormatting color = resolveGroupColor(groupId);
+        ChatFormatting color = resolveGroupColor(groupId, info.prefixColor);
         MutableComponent line = Component.literal(info.label + ": ").withStyle(color);
         for (int i = 0; i < groupPlayers.size(); i++) {
             if (i > 0) {
@@ -230,9 +240,10 @@ public class ListCommand {
     }
 
     /**
-     * Resolve a group's label color: config override -> built-in default -> unknown color.
+     * Resolve a group's label color: config override -> the group's own chat-prefix color
+     * (so /list matches the prefixes players see in chat) -> built-in default -> unknown color.
      */
-    private static ChatFormatting resolveGroupColor(String groupId) {
+    private static ChatFormatting resolveGroupColor(String groupId, ChatFormatting prefixColor) {
         String id = (groupId == null) ? "" : groupId.toLowerCase(Locale.ROOT);
 
         String override = ConfigManager.getListGroupColorName(id);
@@ -241,12 +252,55 @@ public class ListCommand {
             if (c != null && c.isColor()) return c;
         }
 
+        if (prefixColor != null) return prefixColor;
+
         ChatFormatting builtin = DEFAULT_GROUP_COLORS.get(id);
         if (builtin != null) return builtin;
 
         String unknownName = ConfigManager.getListUnknownGroupColor();
         ChatFormatting unknown = ChatFormatting.getByName(unknownName);
         return (unknown != null && unknown.isColor()) ? unknown : DEFAULT_UNKNOWN_COLOR;
+    }
+
+    /**
+     * The color of a LuckPerms group's chat prefix (the same meta the chat formatter renders),
+     * so a group renamed or recolored in LuckPerms needs no change here. Returns null when the
+     * group has no prefix or its prefix carries no color code.
+     */
+    private static ChatFormatting groupPrefixColor(net.luckperms.api.model.group.Group lpGroup) {
+        if (lpGroup == null) {
+            return null;
+        }
+        try {
+            String prefix = lpGroup.getCachedData()
+                .getMetaData(net.luckperms.api.query.QueryOptions.defaultContextualOptions())
+                .getPrefix();
+            return firstColorCode(prefix);
+        } catch (Exception e) {
+            LOGGER.debug("Could not read prefix for LuckPerms group {}: {}", lpGroup.getName(), e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * First color code of a formatting string, written either as '&amp;3' or '§3'.
+     * Style-only codes (bold, italic, reset, ...) are skipped.
+     */
+    private static ChatFormatting firstColorCode(String formatted) {
+        if (formatted == null || formatted.isEmpty()) {
+            return null;
+        }
+        for (int i = 0; i < formatted.length() - 1; i++) {
+            char marker = formatted.charAt(i);
+            if (marker != '&' && marker != '§') {
+                continue;
+            }
+            ChatFormatting c = ChatFormatting.getByCode(Character.toLowerCase(formatted.charAt(i + 1)));
+            if (c != null && c.isColor()) {
+                return c;
+            }
+        }
+        return null;
     }
 
     /**

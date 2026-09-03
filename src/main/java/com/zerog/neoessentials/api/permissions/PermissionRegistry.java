@@ -525,7 +525,7 @@ public class PermissionRegistry {
         register("neoessentials.moderation.unfreezeall", "Unfreeze all players", PermissionCategory.MODERATION, false);
         register("neoessentials.moderation.freezelist", "View frozen players list", PermissionCategory.MODERATION, false);
         register("neoessentials.moderation.jail", "Jail players", PermissionCategory.MODERATION, false);
-        register("neoessentials.moderation.jail.timed", "Jail players for a set duration (/jailfor)", PermissionCategory.MODERATION, false);
+        register("neoessentials.moderation.jail.timed", "Jail players for a set duration (/jailfor) - neoessentials.moderation.jail grants this too", PermissionCategory.MODERATION, false);
         register("neoessentials.moderation.unjail", "Unjail players", PermissionCategory.MODERATION, false);
         register("neoessentials.moderation.setjail", "Create jail locations", PermissionCategory.MODERATION, false);
         register("neoessentials.moderation.deljail", "Delete jail locations", PermissionCategory.MODERATION, false);

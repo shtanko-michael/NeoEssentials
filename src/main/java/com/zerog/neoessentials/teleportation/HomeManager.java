@@ -270,11 +270,9 @@ public class HomeManager {
         // Save to file (per-player storage)
         savePlayerHomes(playerId);
 
-        if (isNew) {
-            player.sendSystemMessage(MessageUtil.success("commands.neoessentials.teleport.home.set", homeName, location.getLocationString()));
-        } else {
-            player.sendSystemMessage(MessageUtil.success("commands.neoessentials.teleport.home.updated", homeName, location.getLocationString()));
-        }
+        // The success message is sent by the caller (HomeCommands): reporting it here as well
+        // produced two chat lines for a single /sethome. Failures above stay here, since only
+        // this method knows which rule rejected the home.
 
         // Log home set/update if enabled in config
         if (com.zerog.neoessentials.config.ConfigManager.getInstance().isLogHomeActionsEnabled()) {
@@ -330,7 +328,7 @@ public class HomeManager {
         // Save to file (per-player storage)
         savePlayerHomes(playerId);
 
-        player.sendSystemMessage(MessageUtil.success("commands.neoessentials.teleport.home.deleted", homeName));
+        // Success message is sent by the caller (HomeCommands) - see setHome above.
         // Log home delete if enabled in config
         if (com.zerog.neoessentials.config.ConfigManager.getInstance().isLogHomeActionsEnabled()) {
             LOGGER.info("Player {} deleted home '{}'", player.getName().getString(), homeName);
