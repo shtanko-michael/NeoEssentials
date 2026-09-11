@@ -26,8 +26,8 @@ public class ListCommand {
 
     /**
      * Built-in group -> color defaults, kept in sync with the chat prefixes
-     * (&5 Ender, &3 Wither, &6 Warden, &e Helper, &9 Moder). Used only when the
-     * group has no chat prefix to read the color from; config can override.
+     * (&5 Ender, &3 Wither, &6 Warden, &e Helper, &9 Moder). These defaults take
+     * precedence over LuckPerms prefix colors; config can override them.
      */
     private static final Map<String, ChatFormatting> DEFAULT_GROUP_COLORS = Map.of(
         "ender", ChatFormatting.DARK_PURPLE,
@@ -240,8 +240,8 @@ public class ListCommand {
     }
 
     /**
-     * Resolve a group's label color: config override -> the group's own chat-prefix color
-     * (so /list matches the prefixes players see in chat) -> built-in default -> unknown color.
+     * Resolve a group's label color: config override -> built-in server rank color ->
+     * the group's own chat-prefix color -> unknown color.
      */
     private static ChatFormatting resolveGroupColor(String groupId, ChatFormatting prefixColor) {
         String id = (groupId == null) ? "" : groupId.toLowerCase(Locale.ROOT);
@@ -252,10 +252,10 @@ public class ListCommand {
             if (c != null && c.isColor()) return c;
         }
 
-        if (prefixColor != null) return prefixColor;
-
         ChatFormatting builtin = DEFAULT_GROUP_COLORS.get(id);
         if (builtin != null) return builtin;
+
+        if (prefixColor != null) return prefixColor;
 
         String unknownName = ConfigManager.getListUnknownGroupColor();
         ChatFormatting unknown = ChatFormatting.getByName(unknownName);
