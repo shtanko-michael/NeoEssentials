@@ -74,8 +74,6 @@ public class MiscTeleportManager {
         
         deathLocations.put(playerId, deathLocation);
         
-        player.sendSystemMessage(MessageUtil.info("commands.neoessentials.teleport.misc.death_location_saved"));
-        
         LOGGER.info("Saved death location for {}: {}", 
                    player.getName().getString(), deathLocation);
     }
