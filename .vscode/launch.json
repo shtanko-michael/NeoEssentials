@@ -104,11 +104,11 @@
       "projectName": "neoessentials",
       "mainClass": "net.neoforged.devlaunch.Main",
       "args": [
-        "@C:\\Users\\user\\Documents\\GitHub\\minecraft\\game\\neoessentials\\build\\moddev\\clientRunProgramArgs.txt"
+        "@D:\\minecraft-api\\game\\neoessentials\\build\\moddev\\clientRunProgramArgs.txt"
       ],
       "vmArgs": [
-        "@C:\\Users\\user\\Documents\\GitHub\\minecraft\\game\\neoessentials\\build\\moddev\\clientRunVmArgs.txt",
-        "-Dfml.modFolders\u003dneoessentials%%C:\\Users\\user\\Documents\\GitHub\\minecraft\\game\\neoessentials\\bin\\main"
+        "@D:\\minecraft-api\\game\\neoessentials\\build\\moddev\\clientRunVmArgs.txt",
+        "-Dfml.modFolders\u003dneoessentials%%D:\\minecraft-api\\game\\neoessentials\\bin\\main"
       ],
       "cwd": "${workspaceFolder}\\run",
       "env": {},
@@ -126,11 +126,11 @@
       "projectName": "neoessentials",
       "mainClass": "net.neoforged.devlaunch.Main",
       "args": [
-        "@C:\\Users\\user\\Documents\\GitHub\\minecraft\\game\\neoessentials\\build\\moddev\\dataRunProgramArgs.txt"
+        "@D:\\minecraft-api\\game\\neoessentials\\build\\moddev\\dataRunProgramArgs.txt"
       ],
       "vmArgs": [
-        "@C:\\Users\\user\\Documents\\GitHub\\minecraft\\game\\neoessentials\\build\\moddev\\dataRunVmArgs.txt",
-        "-Dfml.modFolders\u003dneoessentials%%C:\\Users\\user\\Documents\\GitHub\\minecraft\\game\\neoessentials\\bin\\main"
+        "@D:\\minecraft-api\\game\\neoessentials\\build\\moddev\\dataRunVmArgs.txt",
+        "-Dfml.modFolders\u003dneoessentials%%D:\\minecraft-api\\game\\neoessentials\\bin\\main"
       ],
       "cwd": "${workspaceFolder}\\run",
       "env": {},
@@ -148,11 +148,11 @@
       "projectName": "neoessentials",
       "mainClass": "net.neoforged.devlaunch.Main",
       "args": [
-        "@C:\\Users\\user\\Documents\\GitHub\\minecraft\\game\\neoessentials\\build\\moddev\\serverRunProgramArgs.txt"
+        "@D:\\minecraft-api\\game\\neoessentials\\build\\moddev\\serverRunProgramArgs.txt"
       ],
       "vmArgs": [
-        "@C:\\Users\\user\\Documents\\GitHub\\minecraft\\game\\neoessentials\\build\\moddev\\serverRunVmArgs.txt",
-        "-Dfml.modFolders\u003dneoessentials%%C:\\Users\\user\\Documents\\GitHub\\minecraft\\game\\neoessentials\\bin\\main"
+        "@D:\\minecraft-api\\game\\neoessentials\\build\\moddev\\serverRunVmArgs.txt",
+        "-Dfml.modFolders\u003dneoessentials%%D:\\minecraft-api\\game\\neoessentials\\bin\\main"
       ],
       "cwd": "${workspaceFolder}\\run",
       "env": {},
