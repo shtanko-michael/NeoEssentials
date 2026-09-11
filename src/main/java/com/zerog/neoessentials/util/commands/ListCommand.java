@@ -26,7 +26,7 @@ public class ListCommand {
 
     /**
      * Built-in group -> color defaults, kept in sync with the chat prefixes
-     * (&5 Ender, &3 Wither, &6 Warden, &e Helper, &9 Moder). These defaults take
+     * (&f Default, &5 Ender, &3 Wither, &6 Warden, &e Helper, &9 Moder, &c Admin). These defaults take
      * precedence over LuckPerms prefix colors; config can override them.
      */
     private static final Map<String, ChatFormatting> DEFAULT_GROUP_COLORS = Map.of(
@@ -35,7 +35,8 @@ public class ListCommand {
         "warden", ChatFormatting.GOLD,
         "helper", ChatFormatting.YELLOW,
         "moder", ChatFormatting.BLUE,
-        "default", ChatFormatting.GRAY
+        "default", ChatFormatting.WHITE,
+        "admin", ChatFormatting.RED
     );
 
     /** Color for any group not in the map (admins/service/unknown). */
