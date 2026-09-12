@@ -13,7 +13,7 @@
       "title": "Экономика",
       "lede": "Балансы, переводы, /baltop, магазины на сундуках и NPC, Vault API.",
       "upstreamDoc": "EconomySystem.md",
-      "permissionPrefixes": ["neoessentials.economy", "neoessentials.shop", "neoessentials.sell", "neoessentials.worth", "neoessentials.setworth", "neoessentials.payconfirmtoggle"],
+      "permissionPrefixes": ["neoessentials.economy", "neoessentials.shop", "neoessentials.chestshop", "neoessentials.sell", "neoessentials.worth", "neoessentials.setworth", "neoessentials.payconfirmtoggle"],
       "configFiles": ["economy.json"]
     },
     {
@@ -61,7 +61,7 @@
       "title": "Аукцион",
       "lede": "Игроки выставляют предметы из руки, покупают через GUI и забирают непроданное из /ah expired.",
       "upstreamDoc": null,
-      "permissionPrefixes": [],
+      "permissionPrefixes": ["neoessentials.ah"],
       "configFiles": []
     },
     {
@@ -141,7 +141,7 @@
       "title": "Votifier",
       "lede": "Приём голосов с мониторингов по протоколам V1 (RSA) и V2 (NuVotifier).",
       "upstreamDoc": "votifier.md",
-      "permissionPrefixes": [],
+      "permissionPrefixes": ["neoessentials.votifier"],
       "configFiles": ["votifier.json"]
     },
     {

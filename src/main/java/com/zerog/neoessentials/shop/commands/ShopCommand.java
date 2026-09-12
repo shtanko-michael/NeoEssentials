@@ -13,6 +13,7 @@ import com.zerog.neoessentials.shop.csv.ShopCsvSerializer;
 import com.zerog.neoessentials.shop.handlers.ShopSignHandler;
 import com.zerog.neoessentials.shop.model.ShopData;
 import com.zerog.neoessentials.util.MessageUtil;
+import com.zerog.neoessentials.util.PermissionValidator;
 import com.zerog.neoessentials.util.ResourceUtil;
 import com.zerog.neoessentials.logging.LogCategory;
 import com.zerog.neoessentials.logging.NeoLog;
@@ -52,6 +53,7 @@ public class ShopCommand {
         }
 
         var node = Commands.literal("chestshop")
+            .requires(src -> PermissionValidator.allows(src, "neoessentials.chestshop"))
             .then(Commands.literal("list")
                 .executes(ctx -> executeList(ctx.getSource(), null))
                 .then(Commands.argument("player", StringArgumentType.word())

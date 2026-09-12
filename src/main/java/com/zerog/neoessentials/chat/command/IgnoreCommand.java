@@ -2,6 +2,7 @@
 package com.zerog.neoessentials.chat.command;
 import com.zerog.neoessentials.chat.ChatManager;
 import com.zerog.neoessentials.util.MessageUtil;
+import com.zerog.neoessentials.util.PermissionValidator;
 
 import com.mojang.brigadier.CommandDispatcher;
 import net.minecraft.commands.CommandSourceStack;
@@ -22,6 +23,7 @@ public class IgnoreCommand {
     
     private static void registerIgnoreCommand(CommandDispatcher<CommandSourceStack> dispatcher, String commandName) {
         dispatcher.register(Commands.literal(commandName)
+            .requires(src -> PermissionValidator.allows(src, "neoessentials.chat.ignore"))
             .then(Commands.argument("target", EntityArgument.player())
                 .executes(ctx -> {
                     CommandSourceStack source = ctx.getSource();

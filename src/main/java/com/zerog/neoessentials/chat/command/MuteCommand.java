@@ -8,6 +8,7 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
 import com.zerog.neoessentials.util.MessageUtil;
+import com.zerog.neoessentials.util.PermissionValidator;
 import com.zerog.neoessentials.moderation.BanManager;
 
 import java.util.regex.Pattern;
@@ -33,6 +34,7 @@ public class MuteCommand {
 
     private static void registerMuteCommand(CommandDispatcher<CommandSourceStack> dispatcher, String commandName) {
         dispatcher.register(Commands.literal(commandName)
+            .requires(src -> PermissionValidator.allows(src, "neoessentials.chat.mute"))
             .then(Commands.argument("target", EntityArgument.player())
                 .executes(ctx -> executeMute(ctx, ""))
                 .then(Commands.argument("duration_or_reason", StringArgumentType.greedyString())

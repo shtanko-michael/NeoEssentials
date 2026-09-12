@@ -145,9 +145,6 @@ public class HelpCommand {
                 // Admins / wildcard holders see the full list regardless of per-command nodes.
                 if (PermissionAPI.hasPermission(uuid, "neoessentials.admin")) return true;
                 if (PermissionAPI.hasPermission(uuid, "neoessentials.*")) return true;
-                // A command explicitly marked as requiring nothing (registerCommandWithPermission(...,
-                // "", ...)) is always visible — matches its actual .requires() (or lack thereof).
-                if (cmd.hasPermissionOverride() && cmd.getPermissionNodeOverride().isEmpty()) return true;
                 // Safety net: if the reference failed to load, do not blank the help list —
                 // fall back to showing every command.
                 if (!perms.isReady()) return true;
@@ -233,9 +230,7 @@ public class HelpCommand {
             "commands.neoessentials.help.detail_header", cmd.getName()), false);
         String desc = getLocalizedDescription(cmd);
         src.sendSuccess(() -> Component.literal("§7" + desc), false);
-        String permDisplay = cmd.hasPermissionOverride() && cmd.getPermissionNodeOverride().isEmpty()
-            ? "none — open to everyone"
-            : resolvePermissionNode(cmd);
+        String permDisplay = resolvePermissionNode(cmd);
         src.sendSuccess(() -> MessageUtil.component(
             "commands.neoessentials.help.detail_permission", permDisplay), false);
         List<String> aliases = cmd.getAliases();
@@ -253,7 +248,10 @@ public class HelpCommand {
      */
     private static String resolvePermissionNode(CommandRegistry.CommandInfo cmd) {
         if (cmd.hasPermissionOverride()) {
-            return cmd.getPermissionNodeOverride();
+            String override = cmd.getPermissionNodeOverride();
+            if (override != null && !override.isEmpty()) {
+                return override;
+            }
         }
         return "neoessentials." + cmd.getName().toLowerCase();
     }

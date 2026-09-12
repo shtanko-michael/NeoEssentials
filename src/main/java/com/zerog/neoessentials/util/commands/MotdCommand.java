@@ -45,6 +45,13 @@ public class MotdCommand {
 
         dispatcher.register(
             Commands.literal("motd")
+                .requires(src -> PermissionValidator.allowsAny(src,
+                    "neoessentials.motd",
+                    "neoessentials.motd.set",
+                    "neoessentials.motd.broadcast",
+                    "neoessentials.motd.reload",
+                    "neoessentials.motd.profile",
+                    "neoessentials.motd.rotation"))
                 .executes(ctx -> showMotd(ctx.getSource()))
 
                 .then(Commands.literal("set")

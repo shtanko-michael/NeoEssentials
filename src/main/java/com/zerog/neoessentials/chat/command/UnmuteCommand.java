@@ -10,6 +10,7 @@ import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.server.level.ServerPlayer;
 
 import com.zerog.neoessentials.util.MessageUtil;
+import com.zerog.neoessentials.util.PermissionValidator;
 import com.zerog.neoessentials.logging.LogCategory;
 import com.zerog.neoessentials.logging.NeoLog;
 import org.slf4j.Logger;
@@ -32,6 +33,7 @@ public class UnmuteCommand {
         }
 
         dispatcher.register(Commands.literal("unmute")
+            .requires(src -> PermissionValidator.allows(src, "neoessentials.chat.mute"))
             .then(Commands.argument("target", EntityArgument.player())
                 .executes(ctx -> {
                     CommandSourceStack source = ctx.getSource();

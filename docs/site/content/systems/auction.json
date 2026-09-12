@@ -3,7 +3,7 @@
   "commandDetails": {
     "ah": {
       "syntax": "/ah | /ah sell <price> | /ah selling | /ah expired | /ah reload | /ah help",
-      "notes": "Алиас auctionhouse регистрируется только если в commands включены и ah, и auctionhouse. Корневой /ah и sell/selling/expired требуют игрока; reload — source.hasPermission(2) (OP 2), отдельного узла neoessentials.ah нет. Цена sell — DoubleArgumentType от 0.01. Весь стек из основной руки уходит в лот одним вызовом."
+      "notes": "Алиас auctionhouse регистрируется только если в commands включены и ah, и auctionhouse. Корень требует neoessentials.ah (консоль проходит). sell дополнительно neoessentials.ah.sell и игрока; selling/expired — игрока. reload — neoessentials.ah.reload. Цена sell — DoubleArgumentType от 0.01. Весь стек из основной руки уходит в лот одним вызовом."
     }
   },
   "examples": [
@@ -31,7 +31,7 @@
       "commands": [
         "/ah reload"
       ],
-      "result": "Перечитывается только config/auctionhouse.json (не config.json и не crates.json). Нужен OP 2 или консоль. Уже выставленные лоты не обрезаются — лимит проверяется только при новом /ah sell."
+      "result": "Перечитывается только config/auctionhouse.json (не config.json и не crates.json). Нужен neoessentials.ah.reload (или OP при opsBypassPermissions). Уже выставленные лоты не обрезаются — лимит проверяется только при новом /ah sell."
     }
   ],
   "edgeCases": [
@@ -56,11 +56,5 @@
       "fix": "После смены `storage.type` не копируйте `auctionhouse.db` руками — дождитесь миграции или проверьте `neoessentials/store/`."
     }
   ],
-  "knownIssues": [
-    {
-      "title": "Корневого права neoessentials.ah нет",
-      "body": "Команда зарегистрирована с пустым permission node. Доступ к GUI — любой игрок, у которого команда вообще есть в реестре (секция `commands.ah`). Reload закрыт ванильным OP 2, не узлом NeoEssentials.",
-      "fix": "Запретить аукцион обычным игрокам можно только выключив `commands.ah` (рестарт) или закрыв команду внешним провайдером по имени, не по узлу `neoessentials.ah`."
-    }
-  ]
+  "knownIssues": []
 }

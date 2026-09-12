@@ -43,7 +43,8 @@ public class VotifierCommands {
         );
 
         dispatcher.register(Commands.literal("togglevotebroadcast")
-            .requires(src -> src.getPlayer() != null)
+            .requires(src -> src.getPlayer() != null
+                && PermissionAPI.hasPermission(src.getPlayer().getUUID(), "neoessentials.votifier.togglebroadcast"))
             .executes(ctx -> {
                 ServerPlayer player = ctx.getSource().getPlayer();
                 boolean nowOptedOut = VoteBroadcastToggle.toggle(player.getUUID());

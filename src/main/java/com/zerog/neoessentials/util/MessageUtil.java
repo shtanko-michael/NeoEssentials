@@ -48,7 +48,7 @@ public class MessageUtil {
     
     // Language version tracking - increment when translations change
     private static final String LANG_VERSION_KEY = "_langVersion";
-    private static final int CURRENT_LANG_VERSION = 26; // v26 — replace English fallbacks with real translations
+    private static final int CURRENT_LANG_VERSION = 27; // v27 — requireExplicitGrant debug chain labels
 
     /**
      * Keys with a confirmed VALUE bug (wrong/missing {n} argument, argument-order swap, etc.)
@@ -104,7 +104,10 @@ public class MessageUtil {
         "commands.neoessentials.util.home_action_confirm_hover",
         "commands.neoessentials.util.home_action_deny_hover",
         "commands.neoessentials.util.home_action_confirm_prefix",
-        "commands.neoessentials.util.home_action_confirm_suffix"
+        "commands.neoessentials.util.home_action_confirm_suffix",
+        "commands.neoessentials.permissions.debug.vanilla_fallback_grant",
+        "commands.neoessentials.permissions.debug.vanilla_fallback_no_effect",
+        "commands.neoessentials.permissions.debug.vanilla_fallback_disabled"
     );
 
     /**

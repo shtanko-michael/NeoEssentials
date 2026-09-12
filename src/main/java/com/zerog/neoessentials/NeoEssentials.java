@@ -814,8 +814,8 @@ public class NeoEssentials {
 
         // ========== ECONOMY COMMANDS ==========
         registry.registerCommandWithPermission("pay", "Send money to another player", "neoessentials.economy.pay");
-        registry.registerCommandWithPermission("balance", "Check your balance", "");
-        registry.registerCommandWithPermission("bal", "Check your balance (alias)", "");
+        registry.registerCommandWithPermission("balance", "Check your balance", "neoessentials.economy.balance");
+        registry.registerCommandWithPermission("bal", "Check your balance (alias)", "neoessentials.economy.balance");
         registry.registerCommandWithPermission("baltop", "View top balances", "neoessentials.economy.baltop");
         registry.registerCommandWithPermission("balancetop", "View top balances (alias)", "neoessentials.economy.baltop");
         registry.registerCommandWithPermission("eco", "Admin economy commands", "neoessentials.economy.eco");
@@ -833,9 +833,9 @@ public class NeoEssentials {
         registry.registerCommandWithPermission("tempbanip", "Temporarily ban an IP address", "neoessentials.moderation.tempbanip");
         registry.registerCommandWithPermission("kick", "Kick a player", "neoessentials.moderation.kick");
         registry.registerCommandWithPermission("kickall", "Kick all players", "neoessentials.moderation.kickall");
-        registry.registerCommandWithPermission("mute", "Mute a player", "");
-        registry.registerCommandWithPermission("unmute", "Unmute a player", "");
-        registry.registerCommandWithPermission("mutelist", "List muted players", "");
+        registry.registerCommandWithPermission("mute", "Mute a player", "neoessentials.chat.mute");
+        registry.registerCommandWithPermission("unmute", "Unmute a player", "neoessentials.chat.mute");
+        registry.registerCommandWithPermission("mutelist", "List muted players", "neoessentials.chat.mute");
         registry.registerCommandWithPermission("jail", "Jail a player", "neoessentials.moderation.jail");
         registry.registerCommandWithPermission("jailfor", "Jail a player for a set duration", "neoessentials.moderation.jail");
         registry.registerCommandWithPermission("unjail", "Release a player from jail", "neoessentials.moderation.unjail");
@@ -877,17 +877,17 @@ public class NeoEssentials {
         com.zerog.neoessentials.moderation.commands.ModHistoryCommand.register(dispatcher);
 
         // ========== CHAT/MESSAGING COMMANDS ==========
-        registry.registerCommandWithPermission("msg", "Send a private message", "");
-        registry.registerCommandWithPermission("message", "Send a private message (alias)", "");
-        registry.registerCommandWithPermission("tell", "Send a private message (alias)", "");
-        registry.registerCommandWithPermission("whisper", "Send a private message (alias)", "");
-        registry.registerCommandWithPermission("w", "Send a private message (alias)", "");
-        registry.registerCommandWithPermission("reply", "Reply to last private message", "");
-        registry.registerCommandWithPermission("r", "Reply to last private message (alias)", "");
-        registry.registerCommandWithPermission("ignore", "Ignore a player", "");
-        registry.registerCommandWithPermission("unignore", "Unignore a player", "");
-        registry.registerCommandWithPermission("socialspy", "Spy on private messages", "");
-        registry.registerCommandWithPermission("msgtoggle", "Toggle receiving private messages", "");
+        registry.registerCommandWithPermission("msg", "Send a private message", "neoessentials.chat.msg");
+        registry.registerCommandWithPermission("message", "Send a private message (alias)", "neoessentials.chat.msg");
+        registry.registerCommandWithPermission("tell", "Send a private message (alias)", "neoessentials.chat.msg");
+        registry.registerCommandWithPermission("whisper", "Send a private message (alias)", "neoessentials.chat.msg");
+        registry.registerCommandWithPermission("w", "Send a private message (alias)", "neoessentials.chat.msg");
+        registry.registerCommandWithPermission("reply", "Reply to last private message", "neoessentials.chat.reply");
+        registry.registerCommandWithPermission("r", "Reply to last private message (alias)", "neoessentials.chat.reply");
+        registry.registerCommandWithPermission("ignore", "Ignore a player", "neoessentials.chat.ignore");
+        registry.registerCommandWithPermission("unignore", "Unignore a player", "neoessentials.chat.unignore");
+        registry.registerCommandWithPermission("socialspy", "Spy on private messages", "neoessentials.chat.socialspy");
+        registry.registerCommandWithPermission("msgtoggle", "Toggle receiving private messages", "neoessentials.chat.msgtoggle");
         registry.registerCommand("mail", "Manage mail messages");
         com.zerog.neoessentials.chat.command.MsgCommand.register(dispatcher);
         com.zerog.neoessentials.chat.command.ReplyCommand.register(dispatcher);
@@ -898,7 +898,7 @@ public class NeoEssentials {
         com.zerog.neoessentials.chat.command.UnmuteCommand.register(dispatcher);
         com.zerog.neoessentials.chat.command.MuteListCommand.register(dispatcher);
         com.zerog.neoessentials.chat.command.MsgToggleCommand.register(dispatcher);
-        registry.registerCommandWithPermission("chatformat", "Manage per-player/per-group chat formats", "");
+        registry.registerCommandWithPermission("chatformat", "Manage per-player/per-group chat formats", "neoessentials.chat.format.set");
         com.zerog.neoessentials.chat.command.ChatFormatCommand.register(dispatcher);
 
         // Register channel commands (dynamically from config)
@@ -909,8 +909,8 @@ public class NeoEssentials {
         com.zerog.neoessentials.commands.LanguageCommand.register(dispatcher);
 
         // ========== PERMISSIONS COMMANDS ==========
-        registry.registerCommandWithPermission("permissions", "Manage permissions", "");
-        registry.registerCommandWithPermission("pex", "Manage permissions (alias)", "");
+        registry.registerCommandWithPermission("permissions", "Manage permissions", "neoessentials.permissions.admin");
+        registry.registerCommandWithPermission("pex", "Manage permissions (alias)", "neoessentials.permissions.admin");
         com.zerog.neoessentials.permissions.command.PermissionsCommand.register(dispatcher);
 
         // ========== KIT COMMANDS ==========
@@ -952,7 +952,7 @@ public class NeoEssentials {
         registry.registerCommandWithPermission("who", "List online players (alias)", "neoessentials.list");
         registry.registerCommandWithPermission("online", "List online players (alias)", "neoessentials.list");
         registry.registerCommand("mail", "Manage mail messages");
-        registry.registerCommandWithPermission("motd", "View message of the day", "");
+        registry.registerCommandWithPermission("motd", "View message of the day", "neoessentials.motd");
         registry.registerCommand("near", "Find nearby players");
         registry.registerCommand("nearby", "Find nearby players (alias)");
         registry.registerCommand("ping", "Check your ping");
@@ -1173,12 +1173,12 @@ public class NeoEssentials {
         com.zerog.neoessentials.commands.utility.DashboardCommand.register(dispatcher);
         registry.registerCommandWithPermission("dashboardregister", "Register a web dashboard account", "neoessentials.dashboard.access");
         com.zerog.neoessentials.commands.utility.DashboardRegisterCommand.register(dispatcher);
-        registry.registerCommandWithPermission("linkaccount", "Link your Minecraft account to an existing dashboard account", "");
+        registry.registerCommandWithPermission("linkaccount", "Link your Minecraft account to an existing dashboard account", "neoessentials.dashboard.linkaccount");
         com.zerog.neoessentials.commands.utility.LinkAccountCommand.register(dispatcher);
 
         // ========== CHEST SHOP COMMANDS ==========
-        registry.registerCommandWithPermission("chestshop", "Sign-based chest shop system", "");
-        registry.registerCommandWithPermission("cshop", "Sign-based chest shop (alias)", "");
+        registry.registerCommandWithPermission("chestshop", "Sign-based chest shop system", "neoessentials.chestshop");
+        registry.registerCommandWithPermission("cshop", "Sign-based chest shop (alias)", "neoessentials.chestshop");
         com.zerog.neoessentials.shop.commands.ShopCommand.register(dispatcher);
 
         // ========== NPC SHOP COMMANDS ==========
@@ -1190,7 +1190,7 @@ public class NeoEssentials {
         com.zerog.neoessentials.hologram.command.HologramCommand.register(dispatcher);
 
         // ========== AUCTION HOUSE COMMANDS ==========
-        registry.registerCommandWithPermission("ah", "Auction House — buy and sell items", "", "auctionhouse");
+        registry.registerCommandWithPermission("ah", "Auction House — buy and sell items", "neoessentials.ah", "auctionhouse");
         com.zerog.neoessentials.auctionhouse.command.AuctionHouseCommand.register(dispatcher);
 
         // ========== TABLIST COMMANDS ==========
@@ -1212,7 +1212,7 @@ public class NeoEssentials {
         // ========== VOTIFIER COMMANDS ==========
         registry.registerCommandWithPermission("vote", "Show vote site links", "neoessentials.votifier.vote");
         registry.registerCommandWithPermission("votes", "Show vote totals", "neoessentials.votifier.vote");
-        registry.registerCommandWithPermission("togglevotebroadcast", "Opt out of vote broadcasts", null);
+        registry.registerCommandWithPermission("togglevotebroadcast", "Opt out of vote broadcasts", "neoessentials.votifier.togglebroadcast");
         registry.registerCommandWithPermission("voteparty", "Show vote party progress", "neoessentials.votifier.vote");
         registry.registerCommandWithPermission("votifier", "Manage the Votifier vote listener", "neoessentials.votifier.admin");
         com.zerog.neoessentials.votifier.commands.VotifierCommands.register(dispatcher);

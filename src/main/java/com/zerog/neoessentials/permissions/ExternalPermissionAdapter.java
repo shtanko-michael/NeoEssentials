@@ -98,9 +98,11 @@ public interface ExternalPermissionAdapter {
      *
      * <p>NeoEssentials uses this to decide whether registry-level default
      * permissions (those registered with {@code defaultValue=true}) should still
-     * be honoured: they are granted when the external system merely has no opinion
+     * be honoured when {@code permissions.requireExplicitGrant} is false: they
+     * are granted when the external system merely has no opinion
      * ({@code UNDEFINED}), but suppressed when the external system has explicitly
-     * revoked the permission ({@code FALSE}).
+     * revoked the permission ({@code FALSE}). When requireExplicitGrant is true
+     * (the default), registry defaults are never applied.
      *
      * <p>The default implementation returns {@code false} so that adapters that
      * cannot distinguish UNDEFINED from FALSE remain source-compatible.

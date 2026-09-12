@@ -237,6 +237,11 @@ public class PermissionRegistry {
         register("neoessentials.admin", "Administrative access", PermissionCategory.ADMIN, false);
         register("neoessentials.dashboard.apikeys", "Create/list/revoke API keys for external dashboard integrations (/apikey)", PermissionCategory.ADMIN, false);
         register("neoessentials.dashboard.pair", "Pair/unpair this server with an external dashboard (/dashboard pair, /dashboard unpair)", PermissionCategory.ADMIN, false);
+        register("neoessentials.dashboard.linkaccount", "Link Minecraft account to an existing dashboard user (/linkaccount)", PermissionCategory.ADMIN, false);
+        register("neoessentials.dashboard.access", "Register a web dashboard account (/dashboardregister)", PermissionCategory.ADMIN, false);
+        register("neoessentials.votifier.vote", "Use /vote, /votes, and /voteparty", PermissionCategory.MISC, false);
+        register("neoessentials.votifier.admin", "Manage the Votifier listener (/votifier)", PermissionCategory.ADMIN, false);
+        register("neoessentials.votifier.togglebroadcast", "Opt out of vote broadcasts (/togglevotebroadcast)", PermissionCategory.MISC, false);
         register("neoessentials.reload", "Reload configuration", PermissionCategory.ADMIN, false);
         
         // Economy permissions
@@ -271,6 +276,10 @@ public class PermissionRegistry {
         register("neoessentials.shop.admin.csv.export",    "Export shops to CSV file",                        PermissionCategory.ECONOMY, false);
         register("neoessentials.shop.admin.csv.import",    "Import shops from CSV file",                      PermissionCategory.ECONOMY, false);
         register("neoessentials.shop.npc.manage",          "Create/remove/manage NPC shops (/npcshop)",       PermissionCategory.ECONOMY, false);
+        register("neoessentials.chestshop",                "Use /chestshop (and /cshop) command tree",        PermissionCategory.ECONOMY, false);
+        register("neoessentials.ah",                       "Open the auction house (/ah)",                   PermissionCategory.ECONOMY, false);
+        register("neoessentials.ah.sell",                  "List an item on the auction house (/ah sell)",   PermissionCategory.ECONOMY, false);
+        register("neoessentials.ah.reload",                "Reload auction house config (/ah reload)",       PermissionCategory.ECONOMY, false);
 
         // Player-state / admin tool permissions
         register("neoessentials.fly", "Toggle flight mode", PermissionCategory.PLAYER, false);

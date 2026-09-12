@@ -6,6 +6,7 @@ import com.mojang.brigadier.context.CommandContext;
 import com.zerog.neoessentials.logging.LogCategory;
 import com.zerog.neoessentials.logging.NeoLog;
 import com.zerog.neoessentials.util.MessageUtil;
+import com.zerog.neoessentials.util.PermissionValidator;
 import com.zerog.neoessentials.webdashboard.security.MinecraftAccountLinkManager;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -30,6 +31,7 @@ public class LinkAccountCommand {
             return;
         }
         dispatcher.register(Commands.literal("linkaccount")
+            .requires(src -> PermissionValidator.allows(src, "neoessentials.dashboard.linkaccount"))
             .then(Commands.argument("code", StringArgumentType.word())
                 .executes(ctx -> link(ctx, StringArgumentType.getString(ctx, "code"))))
         );

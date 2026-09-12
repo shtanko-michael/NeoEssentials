@@ -46,6 +46,7 @@ public class ChatFormatCommand {
         }
 
         dispatcher.register(Commands.literal("chatformat")
+            .requires(src -> PermissionValidator.allows(src, PERM))
             .then(Commands.literal("set")
                 .then(Commands.argument("player", EntityArgument.player())
                     .then(Commands.argument("format", StringArgumentType.greedyString())

@@ -1,7 +1,7 @@
 {
   // DO NOT MODIFY: Used by NeoEssentials for automatic config updates.
   // Changing this may cause config corruption.
-  "_configVersion": 54,
+  "_configVersion": 55,
 
   /* ================================================================
      NeoEssentials — Main Configuration  (config.json)
@@ -588,6 +588,11 @@
     // Allow server operators (OP level) to bypass permission checks
     "opsBypassPermissions": true,
     "vanillaOpFallback": true,
+    // When true, a player gets a command only if you granted its node (LuckPerms
+    // or the internal manager). PermissionRegistry defaultValue=true is NOT used
+    // as a silent grant. OP still bypasses when opsBypassPermissions is true.
+    // Set false to restore "player commands work for everyone unless denied".
+    "requireExplicitGrant": true,
     // Whether the two OP-bypass settings above also apply to GRADED economy-modifier
     // permission nodes (neoessentials.economy.sellmultiplier.*, .taxexempt, .nopaycooldown,
     // .maxbalance.*, .paylimit.*). Those nodes represent opt-in bonuses meant to be granted

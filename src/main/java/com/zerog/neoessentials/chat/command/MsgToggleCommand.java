@@ -9,6 +9,7 @@ import net.minecraft.server.level.ServerPlayer;
 import com.zerog.neoessentials.api.ChatAPI;
 import com.zerog.neoessentials.chat.ChatManager;
 import com.zerog.neoessentials.util.MessageUtil;
+import com.zerog.neoessentials.util.PermissionValidator;
 
 /**
  * Handles the /msgtoggle command for toggling private message reception.
@@ -32,6 +33,7 @@ public class MsgToggleCommand {
     
     private static void registerMsgToggleCommand(CommandDispatcher<CommandSourceStack> dispatcher, String commandName) {
         dispatcher.register(Commands.literal(commandName)
+            .requires(src -> PermissionValidator.allows(src, "neoessentials.chat.msgtoggle"))
             .executes(ctx -> {
                 CommandSourceStack source = ctx.getSource();
                 ServerPlayer sender = source.getPlayer();

@@ -61,8 +61,10 @@ public class CommandRegistry {
      * a different string (e.g. a nested node like {@code neoessentials.moderation.ban}, or a node
      * shared by several aliases), so {@code /help} displays and permission-gates the real thing
      * instead of a wrong guess.
-     * @param permissionNode the exact permission string this command's root .requires() checks,
-     *                        or null if it has none (open to everyone / OP-only via source.hasPermission(n))
+     * @param permissionNode the exact permission string this command's root .requires() checks.
+     *                        Empty or null is treated as missing; /help then uses the bundled
+     *                        reference or {@code neoessentials.<name>}. Commands are not open
+     *                        to everyone just because this string is empty.
      */
     public void registerCommandWithPermission(String name, String description, String permissionNode, String... aliases) {
         CommandInfo info = new CommandInfo(name, description, Arrays.asList(aliases), permissionNode);

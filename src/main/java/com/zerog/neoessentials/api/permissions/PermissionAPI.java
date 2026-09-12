@@ -231,19 +231,10 @@ public class PermissionAPI {
             }
 
             // ── Registry-default fallback ─────────────────────────────────────
-            // Apply NeoEssentials documented defaults unconditionally so that users
-            // are never locked out simply because LuckPerms became temporarily
-            // unhealthy or has no explicit node for a permission.
-            //
-            // • When the adapter is healthy we already know whether it explicitly denied
-            //   the node (cached in explicitDeny above) — pass that result directly to
-            //   avoid a second LuckPerms queryTristate call and the double-failure-count
-            //   bug that went with it.
-            //
-            // • When the adapter is unhealthy / unavailable (explicitDeny == null) we
-            //   cannot distinguish "denied" from "unknown", so we conservatively treat
-            //   the node as not explicitly denied and still honour the registry default.
-            //   This is the safer choice: grant defaults rather than lock everyone out.
+            // Skipped when permissions.requireExplicitGrant is true (the default):
+            // a missing LuckPerms node must not silently become a grant.
+            // When that flag is false, documented defaultValue=true nodes are
+            // granted unless the adapter explicitly denied them.
             boolean explicitlyDenied = Boolean.TRUE.equals(explicitDeny); // false when null (unknown) or false
             if (!explicitlyDenied) {
                 boolean registryDefault = checkRegistryDefaultNoAdapterCall(permission);
@@ -277,8 +268,7 @@ public class PermissionAPI {
         }
 
         // ── Registry-default fallback (internal-only path) ────────────────────
-        // No external adapter is active; check whether the permission has
-        // defaultValue=true in the registry and grant it if so.
+        // Honoured only when permissions.requireExplicitGrant is false.
         boolean registryDefault = checkRegistryDefaultNoAdapterCall(permission);
         if (registryDefault) {
             NeoLog.debug(LOGGER, LogCategory.PERMISSIONS, "Result: TRUE (registry default — internal had no entry)");
@@ -346,6 +336,11 @@ public class PermissionAPI {
      */
     private static boolean checkRegistryDefaultNoAdapterCall(String permission) {
         try {
+            if (com.zerog.neoessentials.config.ConfigManager.getInstance().isRequireExplicitGrantEnabled()) {
+                NeoLog.debug(LOGGER, LogCategory.PERMISSIONS,
+                    "Registry default skipped for '{}' (permissions.requireExplicitGrant)", permission);
+                return false;
+            }
             PermissionRegistry registry = PermissionRegistry.getInstance();
             PermissionRegistry.PermissionInfo info = registry.getPermissionInfo(permission);
             if (info == null || !info.getDefaultValue()) {

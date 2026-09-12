@@ -7,6 +7,7 @@ import net.minecraft.server.level.ServerPlayer;
 import com.zerog.neoessentials.api.ChatAPI;
 import com.zerog.neoessentials.chat.ChatManager;
 import com.zerog.neoessentials.util.MessageUtil;
+import com.zerog.neoessentials.util.PermissionValidator;
 
 /**
  * Handles the /socialspy command for toggling message spying for moderators/admins.
@@ -20,6 +21,7 @@ public class SocialSpyCommand {
     
     private static void registerSocialSpyCommand(CommandDispatcher<CommandSourceStack> dispatcher, String commandName) {
         dispatcher.register(Commands.literal(commandName)
+            .requires(src -> PermissionValidator.allows(src, "neoessentials.chat.socialspy"))
             .executes(ctx -> {
                 CommandSourceStack source = ctx.getSource();
                 

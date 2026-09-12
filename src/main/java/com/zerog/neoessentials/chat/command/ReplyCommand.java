@@ -6,6 +6,7 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.server.level.ServerPlayer;
 import com.zerog.neoessentials.util.MessageUtil;
+import com.zerog.neoessentials.util.PermissionValidator;
 import com.zerog.neoessentials.logging.LogCategory;
 import com.zerog.neoessentials.logging.NeoLog;
 import org.slf4j.Logger;
@@ -26,6 +27,7 @@ public class ReplyCommand {
     
     private static void registerCommand(CommandDispatcher<CommandSourceStack> dispatcher, String commandName) {
         dispatcher.register(Commands.literal(commandName)
+            .requires(src -> PermissionValidator.allows(src, "neoessentials.chat.reply"))
             .then(Commands.argument("message", StringArgumentType.greedyString())
                 .executes(ctx -> {
                     NeoLog.debug(LOGGER, LogCategory.CHAT, "ReplyCommand - Command executed!");

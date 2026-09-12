@@ -8,6 +8,7 @@ import com.zerog.neoessentials.auctionhouse.gui.GUIAuctionHouse;
 import com.zerog.neoessentials.auctionhouse.gui.GUIExpiredItems;
 import com.zerog.neoessentials.auctionhouse.gui.GUIPersonalAuctionHouse;
 import com.zerog.neoessentials.util.MessageUtil;
+import com.zerog.neoessentials.util.PermissionValidator;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.server.level.ServerPlayer;
@@ -30,9 +31,10 @@ public final class AuctionHouseCommand {
         }
 
         var root = Commands.literal("ah")
+                .requires(src -> PermissionValidator.allows(src, "neoessentials.ah"))
                 .executes(ctx -> executeOpen(ctx.getSource()))
                 .then(Commands.literal("sell")
-                        .requires(CommandSourceStack::isPlayer)
+                        .requires(src -> src.isPlayer() && PermissionValidator.allows(src, "neoessentials.ah.sell"))
                         .then(Commands.argument("price", DoubleArgumentType.doubleArg(0.01))
                                 .executes(ctx -> executeSell(ctx.getSource(), DoubleArgumentType.getDouble(ctx, "price")))))
                 .then(Commands.literal("selling")
@@ -42,7 +44,7 @@ public final class AuctionHouseCommand {
                         .requires(CommandSourceStack::isPlayer)
                         .executes(ctx -> executeExpired(ctx.getSource())))
                 .then(Commands.literal("reload")
-                        .requires(src -> src.hasPermission(2))
+                        .requires(src -> PermissionValidator.allows(src, "neoessentials.ah.reload"))
                         .executes(ctx -> executeReload(ctx.getSource())))
                 .then(Commands.literal("help")
                         .executes(ctx -> executeHelp(ctx.getSource())));

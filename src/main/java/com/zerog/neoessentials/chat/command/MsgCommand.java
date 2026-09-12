@@ -9,6 +9,7 @@ import net.minecraft.server.level.ServerPlayer;
 import com.zerog.neoessentials.api.ChatAPI;
 import com.zerog.neoessentials.chat.ChatManager;
 import com.zerog.neoessentials.util.MessageUtil;
+import com.zerog.neoessentials.util.PermissionValidator;
 import com.zerog.neoessentials.logging.LogCategory;
 import com.zerog.neoessentials.logging.NeoLog;
 import net.minecraft.server.MinecraftServer;
@@ -41,6 +42,7 @@ public class MsgCommand {
     
     private static void registerCommand(CommandDispatcher<CommandSourceStack> dispatcher, String commandName) {
         dispatcher.register(Commands.literal(commandName)
+            .requires(src -> PermissionValidator.allows(src, "neoessentials.chat.msg"))
             .then(Commands.argument("target", EntityArgument.player())
                 .then(Commands.argument("message", StringArgumentType.greedyString())
                     .executes(ctx -> {

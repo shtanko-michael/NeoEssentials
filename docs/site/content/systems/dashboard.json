@@ -11,7 +11,7 @@
     },
     "linkaccount": {
       "syntax": "/linkaccount <code>",
-      "notes": "Без узла права и без .requires — любой игрок. Консоль получает отказ. Код из POST /api/auth/link-minecraft/start, 8 символов из ABCDEFGHJKLMNPQRSTUVWXYZ23456789, TTL 5 минут; ввод приводится toUpperCase. Это обратное направление к /dashboardregister: привязать уже существующий dashboard-аккаунт к нику, а не создать новый."
+      "notes": "Без neoessentials.dashboard.linkaccount команда не в дереве. Консоль проходит .requires, но execute отвечает players_only. Код из POST /api/auth/link-minecraft/start, 8 символов из ABCDEFGHJKLMNPQRSTUVWXYZ23456789, TTL 5 минут; ввод приводится toUpperCase. Это обратное направление к /dashboardregister: привязать уже существующий dashboard-аккаунт к нику, а не создать новый."
     },
     "apikey": {
       "syntax": "/apikey <create <label> [role] | list | revoke <id>>",
@@ -87,7 +87,7 @@
     },
     {
       "title": "Два разных «привязать аккаунт»",
-      "body": "`/dashboardregister` создаёт **новый** dashboard user из онлайн-игрока (токен 5 мин, username 3–20, пароль ≥ 8). `/linkaccount` подтверждает владение ником для **уже существующего** dashboard user (код 8 символов, 5 мин, без пароля и без права). Повторный link, пока UUID уже привязан, отвергается — сначала unlink через API. Регистрационный токен при рестарте сервера сгорает (только RAM). Первый запуск HTTP при пустой коллекции пользователей создаёт `admin` со случайным паролем в лог (`Temporary password: …`, смена на первом входе) — это не `/dashboardregister`.",
+      "body": "`/dashboardregister` создаёт **новый** dashboard user из онлайн-игрока (токен 5 мин, username 3–20, пароль ≥ 8). `/linkaccount` подтверждает владение ником для **уже существующего** dashboard user (код 8 символов, 5 мин, без пароля; нужен `neoessentials.dashboard.linkaccount`). Повторный link, пока UUID уже привязан, отвергается — сначала unlink через API. Регистрационный токен при рестарте сервера сгорает (только RAM). Первый запуск HTTP при пустой коллекции пользователей создаёт `admin` со случайным паролем в лог (`Temporary password: …`, смена на первом входе) — это не `/dashboardregister`.",
       "fix": "Игрок без аккаунта — register. Аккаунт заведён в панели/админом — Settings → код → `/linkaccount`. Потерянный пароль admin — смотрите boot-лог или сброс через `/api/users/{id}/password`."
     },
     {

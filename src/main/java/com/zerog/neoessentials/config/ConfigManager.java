@@ -1273,6 +1273,26 @@ public class ConfigManager {
     }
 
     /**
+     * When true, {@code PermissionAPI.hasPermission} never treats
+     * {@code PermissionRegistry} {@code defaultValue=true} as a grant.
+     * A player gets a command only if LuckPerms / the internal manager (or an OP
+     * bypass) actually assigned the node. (permissions.requireExplicitGrant)
+     *
+     * <p>Defaults to {@code true}. Set false to restore the old "player commands
+     * work for everyone unless explicitly denied" behaviour.
+     */
+    public boolean isRequireExplicitGrantEnabled() {
+        JsonObject config = getConfig(MAIN_CONFIG);
+        if (config.has("permissions")) {
+            JsonObject perms = config.getAsJsonObject("permissions");
+            if (perms.has("requireExplicitGrant")) {
+                return perms.get("requireExplicitGrant").getAsBoolean();
+            }
+        }
+        return true;
+    }
+
+    /**
      * Check if permission-change audit logging is enabled (permissions.auditLogging).
      * Defaults to {@code true}.
      */
@@ -1501,7 +1521,10 @@ public class ConfigManager {
 
     // Expected versions for each config file (must match the version in JAR resources)
     private static final java.util.Map<String, Integer> EXPECTED_CONFIG_VERSIONS = new java.util.HashMap<>() {{
-        put(MAIN_CONFIG, 54);          // v54 — added chat.modMessagePrefix (empty = no [NE] tag
+        put(MAIN_CONFIG, 55);          // v55 — added permissions.requireExplicitGrant (default
+                                        //       true): skip PermissionRegistry defaultValue=true
+                                        //       as a silent grant; commands need an explicit node
+        // v54 — added chat.modMessagePrefix (empty = no [NE] tag
                                         //       on command-feedback / admin notices)
         // v53 — added per-event-type nested objects
                                         //       (join/leave/mute/afk/advancement) under

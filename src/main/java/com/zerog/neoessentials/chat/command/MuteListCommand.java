@@ -2,6 +2,7 @@
 package com.zerog.neoessentials.chat.command;
 import com.zerog.neoessentials.chat.ChatManager;
 import com.zerog.neoessentials.util.MessageUtil;
+import com.zerog.neoessentials.util.PermissionValidator;
 
 import com.mojang.brigadier.CommandDispatcher;
 import net.minecraft.commands.CommandSourceStack;
@@ -23,6 +24,7 @@ public class MuteListCommand {
         }
 
         dispatcher.register(Commands.literal("mutelist")
+            .requires(src -> PermissionValidator.allows(src, "neoessentials.chat.mute"))
             .executes(ctx -> {
                 CommandSourceStack source = ctx.getSource();
 

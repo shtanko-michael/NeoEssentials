@@ -4,6 +4,7 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.zerog.neoessentials.economy.managers.EconomyManager;
 import com.zerog.neoessentials.util.MessageUtil;
+import com.zerog.neoessentials.util.PermissionValidator;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.server.level.ServerPlayer;
 import java.math.BigDecimal;
@@ -13,6 +14,7 @@ public class BalanceCommand {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(
             net.minecraft.commands.Commands.literal("balance")
+                .requires(src -> PermissionValidator.allows(src, "neoessentials.economy.balance"))
                 .executes(ctx -> execute(ctx))
                 .then(net.minecraft.commands.Commands.argument("player", StringArgumentType.word())
                     .requires(src -> src.hasPermission(2) || com.zerog.neoessentials.api.permissions.PermissionAPI.hasPermission(src.getPlayer() != null ? src.getPlayer().getUUID() : null, "neoessentials.economy.balance.others"))
@@ -26,10 +28,12 @@ public class BalanceCommand {
         );
         dispatcher.register(
             net.minecraft.commands.Commands.literal("bal")
+                .requires(src -> PermissionValidator.allows(src, "neoessentials.economy.balance"))
                 .executes(ctx -> execute(ctx))
         );
         dispatcher.register(
             net.minecraft.commands.Commands.literal("money")
+                .requires(src -> PermissionValidator.allows(src, "neoessentials.economy.balance"))
                 .executes(ctx -> execute(ctx))
         );
     }

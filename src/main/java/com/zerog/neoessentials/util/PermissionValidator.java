@@ -19,6 +19,43 @@ public class PermissionValidator {
     private static final Logger LOGGER = LoggerFactory.getLogger(PermissionValidator.class);
     
     /**
+     * Brigadier {@code .requires()} helper: console and other non-player sources pass;
+     * players must hold {@code permission}. Prefer this over execute-time checks so the
+     * command is hidden from tab-complete until the node is granted.
+     */
+    public static boolean allows(CommandSourceStack source, String permission) {
+        if (source == null || permission == null || permission.isBlank()) {
+            return false;
+        }
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            return true;
+        }
+        return PermissionAPI.hasPermission(player.getUUID(), permission);
+    }
+
+    /**
+     * Like {@link #allows(CommandSourceStack, String)}, but passes if the player holds
+     * any of the listed nodes (used for command trees whose subcommands have distinct nodes).
+     */
+    public static boolean allowsAny(CommandSourceStack source, String... permissions) {
+        if (source == null || permissions == null || permissions.length == 0) {
+            return false;
+        }
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            return true;
+        }
+        for (String permission : permissions) {
+            if (permission != null && !permission.isBlank()
+                    && PermissionAPI.hasPermission(player.getUUID(), permission)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Validates if a command source has the required permission.
      * Includes proper error messaging and logging.
      */

@@ -30,20 +30,26 @@ Farmstead NeoEssentials работает **только на сервере** �
 
 ## Первая выдача прав
 
-По умолчанию почти всё закрыто. Базовый набор для обычного игрока и для модератора выглядит так
-(пример для LuckPerms):
+По умолчанию почти всё закрыто: `permissions.requireExplicitGrant: true` — узел работает
+только после явной выдачи (LuckPerms или внутренний менеджер). `defaultValue=true` в
+реестре сам по себе доступ не даёт. OP всё ещё проходит при `opsBypassPermissions: true`.
+
+Базовый набор для обычного игрока и для модератора выглядит так (пример для LuckPerms):
 
 ```
 /lp group default permission set neoessentials.use true
-/lp group default permission set neoessentials.teleport.home.home true
+/lp group default permission set neoessentials.teleport.home true
+/lp group default permission set neoessentials.teleport.home.set true
 /lp group default permission set neoessentials.teleport.spawn true
 /lp group default permission set neoessentials.economy.balance true
+/lp group default permission set neoessentials.ah true
+/lp group default permission set neoessentials.chat.msg true
 
-/lp group moderator permission set neoessentials.moderation.mute true
+/lp group moderator permission set neoessentials.chat.mute true
 /lp group moderator permission set neoessentials.moderation.kick true
 /lp group moderator permission set neoessentials.moderation.jail true
 
-/lp group admin permission set neoessentials.admin true
+/lp group admin permission set neoessentials.* true
 ```
 
 Полный список узлов с описаниями — на странице [Права](../permissions/index.html). Какое право

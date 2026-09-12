@@ -23,6 +23,23 @@
     ]
   },
   "commands": {
+    "ah": {
+      "permission": "neoessentials.ah",
+      "aliases": [
+        "auctionhouse"
+      ],
+      "op_level": null,
+      "sub_permissions": {
+        "sell": "neoessentials.ah.sell",
+        "reload": "neoessentials.ah.reload"
+      },
+      "extra_permissions": {},
+      "file": "auctionhouse/command/AuctionHouseCommand.java",
+      "category": "economy",
+      "notes": "Root neoessentials.ah. sell extra node. reload extra node.",
+      "description_ru": "Аукцион — купить и продать предметы",
+      "description_en": "Auction House — buy and sell items"
+    },
     "afk": {
       "permission": "neoessentials.afk",
       "aliases": [
@@ -268,7 +285,7 @@
       "description_en": "Open portable cartography table"
     },
     "chestshop": {
-      "permission": null,
+      "permission": "neoessentials.chestshop",
       "aliases": [
         "cshop"
       ],
@@ -282,7 +299,7 @@
       "extra_permissions": {},
       "file": "shop/commands/ShopCommand.java",
       "category": "shop",
-      "notes": "Базовые /chestshop, list, info — без прав.",
+      "notes": "Корень требует neoessentials.chestshop; list/info тоже. convert — shop.create. remove/reload — admin-узлы.",
       "description_ru": "Система сундук-магазинов на табличках",
       "description_en": "Sign-based chest shop system"
     },
@@ -1311,6 +1328,18 @@
       "description_ru": "Ударить молнией по игроку",
       "description_en": "Strike lightning at a player"
     },
+    "linkaccount": {
+      "permission": "neoessentials.dashboard.linkaccount",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "commands/utility/LinkAccountCommand.java",
+      "category": "dashboard",
+      "notes": "Player only. Code from dashboard Settings.",
+      "description_ru": "Привязать Minecraft-аккаунт к существующему аккаунту панели",
+      "description_en": "Link your Minecraft account to an existing dashboard account"
+    },
     "list": {
       "permission": "neoessentials.list",
       "aliases": [
@@ -1622,7 +1651,7 @@
       "description_en": "Toggle receiving payments"
     },
     "permissions": {
-      "permission": null,
+      "permission": "neoessentials.permissions.admin",
       "aliases": [
         "pex"
       ],
@@ -1650,7 +1679,7 @@
       "extra_permissions": {},
       "file": "permissions/command/PermissionsCommand.java",
       "category": "permissions",
-      "notes": "Права проверяются по-подкомандно; корень открыт.",
+      "notes": "Права проверяются по-подкомандно; каталог /help — neoessentials.permissions.admin.",
       "description_ru": "Управление правами",
       "description_en": "Manage permissions"
     },
@@ -2355,6 +2384,18 @@
       "notes": "Переиспользует ноду jail.",
       "description_ru": "Переключить состояние тюрьмы игрока",
       "description_en": "Toggle a player''s jail state"
+    },
+    "togglevotebroadcast": {
+      "permission": "neoessentials.votifier.togglebroadcast",
+      "aliases": [],
+      "op_level": null,
+      "sub_permissions": {},
+      "extra_permissions": {},
+      "file": "votifier/commands/VotifierCommands.java",
+      "category": "votifier",
+      "notes": "Player only.",
+      "description_ru": "Отписаться от оповещений о голосах",
+      "description_en": "Opt out of vote broadcasts"
     },
     "top": {
       "permission": "neoessentials.teleport.top",

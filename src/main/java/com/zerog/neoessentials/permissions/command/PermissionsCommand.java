@@ -1975,7 +1975,7 @@ public class PermissionsCommand {
      * <ul>
      *   <li>Active permission system mode (internal / external / emergency)</li>
      *   <li>Adapter health and version (when external)</li>
-     *   <li>Current config flags: opsBypassPermissions, vanillaOpFallback</li>
+     *   <li>Current config flags: opsBypassPermissions, vanillaOpFallback, requireExplicitGrant</li>
      *   <li>Player OP status (level 2+)</li>
      *   <li>Assigned group, direct user permissions</li>
      *   <li>Full group inheritance chain with each group's permissions</li>
@@ -2024,6 +2024,7 @@ public class PermissionsCommand {
 
         send(ctx, MessageUtil.localize("commands.neoessentials.permissions.debug.ops_bypass", cfg.isOpsBypassPermissionsEnabled()));
         send(ctx, MessageUtil.localize("commands.neoessentials.permissions.debug.vanilla_fallback", cfg.isVanillaOpFallbackEnabled()));
+        send(ctx, MessageUtil.localize("commands.neoessentials.permissions.debug.require_explicit_grant", cfg.isRequireExplicitGrantEnabled()));
 
         // ── OP status ────────────────────────────────────────────────────────
         boolean isOp = false;
@@ -2096,6 +2097,9 @@ public class PermissionsCommand {
                 send(ctx, MessageUtil.localize("commands.neoessentials.permissions.debug.adapter_not_configured"));
             }
             send(ctx, MessageUtil.localize("commands.neoessentials.permissions.debug.internal_manager_check"));
+            send(ctx, cfg.isRequireExplicitGrantEnabled()
+                ? MessageUtil.localize("commands.neoessentials.permissions.debug.require_explicit_grant_skip")
+                : MessageUtil.localize("commands.neoessentials.permissions.debug.require_explicit_grant_off"));
             if (cfg.isVanillaOpFallbackEnabled()) {
                 send(ctx, isOp
                     ? MessageUtil.localize("commands.neoessentials.permissions.debug.vanilla_fallback_grant")
