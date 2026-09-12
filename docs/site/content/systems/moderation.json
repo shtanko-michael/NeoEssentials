@@ -50,15 +50,15 @@
     },
     "mute": {
       "syntax": "/mute <target> [duration_or_reason]",
-      "notes": "<target> — EntityArgument.player(), только онлайн. Нет .requires() на корне: команда видна всем, neoessentials.chat.mute проверяется в теле (консоль проходит). duration_or_reason — greedy: первое слово вида 30m/1h/1d/2w снимается как срок, остальное — причина; без такого слова вся строка — причина, мут бессрочный. Цель с neoessentials.chat.mute.exempt (hasPermissionExplicit) не мьютится. Отдельный literal silence копирует это дерево, в этой странице не заявлен."
+      "notes": "<target> — EntityArgument.player(), только онлайн. Корень закрыт neoessentials.chat.mute (консоль проходит). duration_or_reason — greedy: первое слово вида 30m/1h/1d/2w снимается как срок, остальное — причина; без такого слова вся строка — причина, мут бессрочный. Цель с neoessentials.chat.mute.exempt (hasPermissionExplicit) не мьютится. Отдельный literal silence копирует это дерево, в этой странице не заявлен."
     },
     "unmute": {
       "syntax": "/unmute <target>",
-      "notes": "Снова EntityArgument.player() — снять мут с офлайн-игрока командой нельзя, хотя запись живёт в mutes. Нет корневого .requires(), в теле neoessentials.chat.mute. Регистрация пропускается, если чат или commands.unmute выключены."
+      "notes": "Снова EntityArgument.player() — снять мут с офлайн-игрока командой нельзя, хотя запись живёт в mutes. Корень закрыт neoessentials.chat.mute. Регистрация пропускается, если чат или commands.unmute выключены."
     },
     "mutelist": {
       "syntax": "/mutelist",
-      "notes": "Без аргументов. Нет корневого .requires(), в теле neoessentials.chat.mute. Лениво протухает истекшие через isMuted. Консоль допускается."
+      "notes": "Без аргументов. Корень закрыт neoessentials.chat.mute. Лениво протухает истекшие через isMuted. Консоль допускается."
     },
     "jail": {
       "syntax": "/jail <player> <jail> [duration_or_reason]",
@@ -250,9 +250,9 @@
       "fix": "Для составного срока пишите одно слово с одной единицей или несколько через запятую без пробела-разделителя аргументов. Не ждите, что `/banlist ips` мгновенно спрячет истекшее — смотрите вход или подождите интервал."
     },
     {
-      "title": "/mute, /unmute, /mutelist видны всем и бьют только по онлайну",
-      "body": "В отличие от `/ban`, на корне нет `.requires()`. Узел в реестре команд пустой (`\"\"`); `neoessentials.chat.mute` проверяется внутри. Любой игрок видит команды в автодополнении и получит отказ в теле. `<target>` — `EntityArgument.player()`, офлайн нельзя ни выдать, ни снять, хотя запись в `mutes` переживает рестарт. `/mute` регистрируется всегда (плюс literal `silence`); `/unmute` и `/mutelist` не вешаются, если чат или их флаг в `commands` выключены. Срок в первом слове greedy: regexp без `mo`/`y`, поэтому `/mute Steve 1mo` воспримет `1mo` как причину, не как месяц.",
-      "fix": "Офлайн-мут — POST `/api/moderation/mute` по имени. Чтобы команда пропала из tab-complete, закрывайте её внешним провайдером по имени, не надейтесь на корневой узел NeoEssentials."
+      "title": "/mute, /unmute, /mutelist закрыты узлом и бьют только по онлайну",
+      "body": "Корень трёх команд закрыт `neoessentials.chat.mute`: без выдачи их нет в дереве и в tab-complete (консоль проходит). `<target>` — `EntityArgument.player()`, офлайн нельзя ни выдать, ни снять, хотя запись в `mutes` переживает рестарт. `/mute` регистрируется всегда (плюс literal `silence`); `/unmute` и `/mutelist` не вешаются, если чат или их флаг в `commands` выключены. Срок в первом слове greedy: regexp без `mo`/`y`, поэтому `/mute Steve 1mo` воспримет `1mo` как причину, не как месяц.",
+      "fix": "Модераторам выдайте `neoessentials.chat.mute`. Офлайн-мут — POST `/api/moderation/mute` по имени."
     },
     {
       "title": "Ваниш в vanishes, приоритет зрителя — только сессия и без команды",

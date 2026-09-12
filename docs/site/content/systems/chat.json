@@ -22,7 +22,7 @@
   "commandDetails": {
     "msg": {
       "syntax": "/msg <target> <message>",
-      "notes": "Brigadier регистрирует то же дерево ещё как /tell, /w, /message и /pm (последнего нет в реестре команд мода). <target> — EntityArgument.player(), только онлайн. Право проверяется в executes: neoessentials.chat.msg (в реестре у команды пустой node). Консоль и выключенный modules.chatEnabled / commands.msg отвечают ошибкой, дерево при этом всё равно висит. Себе писать нельзя. Если цель игнорирует отправителя — отказ, SocialSpy не срабатывает. Если у цели включён /msgtoggle — отказ, кроме OP 4 и neoessentials.chat.msgtoggle.bypass. Заглушённый отправитель тоже режется. LastMessageManager записывает пару только у получателя. Форматы: chat.messaging.msgFormatTo / msgFormatFrom, иначе lang."
+      "notes": "Brigadier регистрирует то же дерево ещё как /tell, /w, /message и /pm (последнего нет в реестре команд мода). <target> — EntityArgument.player(), только онлайн. Корень закрыт neoessentials.chat.msg (консоль проходит). Себе писать нельзя. Если цель игнорирует отправителя — отказ, SocialSpy не срабатывает. Если у цели включён /msgtoggle — отказ, кроме OP 4 и neoessentials.chat.msgtoggle.bypass. Заглушённый отправитель тоже режется. LastMessageManager записывает пару только у получателя. Форматы: chat.messaging.msgFormatTo / msgFormatFrom, иначе lang."
     },
     "message": {
       "syntax": "/message <target> <message>",
@@ -58,7 +58,7 @@
     },
     "unignore": {
       "syntax": "/unignore <target>",
-      "notes": "То же дерево: /unblock. Право всё равно neoessentials.chat.ignore, не neoessentials.chat.unignore (тот узел в реестре есть, команда его не читает). Цель должна быть онлайн. Если ника нет в списке — ошибка."
+      "notes": "То же дерево: /unblock. Корень закрыт neoessentials.chat.unignore; execute всё ещё проверяет neoessentials.chat.ignore — нужны оба узла. Цель должна быть онлайн. Если ника нет в списке — ошибка."
     },
     "socialspy": {
       "syntax": "/socialspy",
@@ -66,7 +66,7 @@
     },
     "chatformat": {
       "syntax": "/chatformat set <player> <format> | clear <player> | check <player> | list | reload",
-      "notes": "Все ветки требуют neoessentials.chat.format.set (узла нет в PermissionRegistry). <player> — только онлайн. set/clear/check/reload пишут в коллекцию DataStore chat_formats; list печатает только тех онлайн-игроков, у кого override есть, хотя getCount() считает всех. Сообщения веток зашиты английским Component.literal, не lang. Дерево не регистрируется, если выключены chatEnabled или commands.chatformat."
+      "notes": "Корень и все ветки требуют neoessentials.chat.format.set (узла нет в PermissionRegistry — в таблице прав сайта его не будет, LuckPerms принимает строку). <player> — только онлайн. set/clear/check/reload пишут в коллекцию DataStore chat_formats; list печатает только тех онлайн-игроков, у кого override есть, хотя getCount() считает всех. Сообщения веток зашиты английским Component.literal, не lang. Дерево не регистрируется, если выключены chatEnabled или commands.chatformat."
     },
     "mail": {
       "syntax": "/mail | /mail read [page] | /mail send <player> <message> | /mail sendtemp <player> <duration> <message> | /mail sendall <message> | /mail sendtempall <duration> <message> | /mail delete <id> | /mail clear [index|player [index]] | /mail clearall",
@@ -176,12 +176,12 @@
     },
     {
       "title": "Права, которые код проверяет, а PermissionRegistry не объявляет",
-      "body": "`neoessentials.chat.namedcolors`, `neoessentials.chat.format.set`, `neoessentials.chat.ignore.exempt`, `neoessentials.chat.socialspy.exempt` используются в ChatFormatter / ChatFormatCommand / IgnoreCommand / SocialSpyManager, но `PermissionRegistry.register(...)` для них нет — в таблице прав сайта и в `/permissions search` их не будет. Выдача через LuckPerms/FTB всё равно работает: `PermissionAPI.hasPermission` смотрит строку. Без внешней выдачи сработает OP-bypass (уровень 2), дефолтной группе узлы не раздаются. Наоборот, `neoessentials.chat.unignore` в реестре есть, а `/unignore` проверяет `neoessentials.chat.ignore`.",
-      "fix": "Выдавайте namedcolors/format.set/ignore.exempt/socialspy.exempt явно строкой. Для снятия игнора достаточно `neoessentials.chat.ignore`."
+      "body": "`neoessentials.chat.namedcolors`, `neoessentials.chat.format.set`, `neoessentials.chat.ignore.exempt`, `neoessentials.chat.socialspy.exempt` используются в ChatFormatter / ChatFormatCommand / IgnoreCommand / SocialSpyManager, но `PermissionRegistry.register(...)` для них нет — в таблице прав сайта и в `/permissions search` их не будет. Выдача через LuckPerms/FTB всё равно работает: `PermissionAPI.hasPermission` смотрит строку. Без внешней выдачи сработает OP-bypass (уровень 2), дефолтной группе узлы не раздаются. `/unignore`: корень требует `neoessentials.chat.unignore`, execute — `neoessentials.chat.ignore`.",
+      "fix": "Выдавайте namedcolors/format.set/ignore.exempt/socialspy.exempt явно строкой. Для снятия игнора нужны оба: `neoessentials.chat.unignore` и `neoessentials.chat.ignore`."
     },
     {
       "title": "/msgtoggle и /socialspy без on|off, состояние не на диске",
-      "body": "Английская вики обещает `/msgtoggle [on|off]` и `/socialspy [on|off]`. В дереве только `.executes` без аргументов — каждый вызов инвертирует флаг. `MsgToggleManager` и `SocialSpyManager` держат имена в ConcurrentHashMap; рестарт сбрасывает оба. `/msgtoggle` не регистрируется, если выключены модуль чата или `commands.msgtoggle`; `/socialspy` и `/msg` регистрируются всегда и отказывают уже в executes.",
+      "body": "Английская вики обещает `/msgtoggle [on|off]` и `/socialspy [on|off]`. В дереве только `.executes` без аргументов — каждый вызов инвертирует флаг. `MsgToggleManager` и `SocialSpyManager` держат имена в ConcurrentHashMap; рестарт сбрасывает оба. Корни закрыты узлами `neoessentials.chat.msgtoggle` / `neoessentials.chat.socialspy` / `neoessentials.chat.msg`. `/msgtoggle` не регистрируется, если выключены модуль чата или `commands.msgtoggle`.",
       "fix": "Не документируйте аргументы on|off. После рестарта модераторы включают `/socialspy` снова. Обойти чужой toggle: OP 4 или `neoessentials.chat.msgtoggle.bypass`."
     },
     {
@@ -204,7 +204,7 @@
     {
       "title": "/ignore не скрывает публичный чат",
       "body": "`IgnoreManager` вызывается из `/msg`, `/reply` и онлайн-ветки `/mail send`. `ChatHandler` при `ServerChatEvent` список игнора не читает — сообщения каналов (local/global/staff/team) игрок продолжает видеть. Команды `/ignorelist` нет: `getIgnoreList()` никуда не выведен.",
-      "fix": "Для «не видеть человека в чате» ignore не подходит. Снимать игнор можно только `/unignore` по онлайн-нику; забытый ник из DataStore руками."
+      "fix": "Для «не видеть человека в чате» ignore не подходит. Снимать игнор — `/unignore` по онлайн-нику; нужны оба узла `neoessentials.chat.unignore` и `neoessentials.chat.ignore`. Забытый ник из DataStore руками."
     },
     {
       "title": "/ac — это helpop, не admin-чат",

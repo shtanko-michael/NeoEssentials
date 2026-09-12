@@ -147,7 +147,7 @@
     {
       "slug": "permissions",
       "title": "Система прав",
-      "lede": "Группы, префиксы, wildcard-узлы, внешние провайдеры LuckPerms и FTB Ranks.",
+      "lede": "Группы, префиксы, wildcard, LuckPerms/FTB. Поставка: явная выдача, registry-default не грант.",
       "upstreamDoc": "PermissionSystem.md",
       "permissionPrefixes": ["neoessentials.permissions"],
       "configFiles": ["permissions.json"]

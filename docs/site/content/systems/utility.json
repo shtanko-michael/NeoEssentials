@@ -186,7 +186,7 @@
     },
     "motd": {
       "syntax": "/motd | /motd set <message> | /motd clear | /motd reload | /motd broadcast | /motd profile list | /motd profile create <name> <message> | /motd profile delete <name> | /motd profile switch <name> | /motd profile info [name] | /motd rotation enable <intervalMinutes> | /motd rotation disable | /motd rotation next",
-      "notes": "Корневой узел без .requires — дерево видно всем; /motd проверяет neoessentials.motd внутри. set/clear — motd.set; reload — motd.reload; broadcast — motd.broadcast (шлёт только игрокам с motd); ветка profile — motd.profile; rotation — motd.rotation (интервал Integer 1–10080). set и create: greedyString, & → §, плейсхолдеры {player}/{online}/{max}/{time} и PlaceholderAPI. В каталоге permission пустой."
+      "notes": "Корень закрыт allowsAny: neoessentials.motd / motd.set / motd.broadcast / motd.reload / motd.profile / motd.rotation — достаточно одного, чтобы увидеть дерево. Голый /motd всё равно проверяет neoessentials.motd внутри. set/clear — motd.set; reload — motd.reload; broadcast — motd.broadcast (шлёт только игрокам с motd); ветка profile — motd.profile; rotation — motd.rotation (интервал Integer 1–10080). set и create: greedyString, & → §, плейсхолдеры {player}/{online}/{max}/{time} и PlaceholderAPI."
     },
     "compass": {
       "syntax": "/compass [player]",
@@ -571,7 +571,7 @@
   "edgeCases": [
     {
       "title": "OP и узлы прав — три разных проверки",
-      "body": "Большинство деревьев в PlayerState/ServerAdmin/Fun/Utility пишут `.requires(p == null || PermissionAPI.hasPermission(...))`. Консоль, командный блок и функция проходят всегда. У игрока PermissionAPI при `opsBypassPermissions: true` (значение по умолчанию в config.json) отдаёт true любому OP, даже без узла.\n\nКоманды на PermissionValidator (seen, ping, depth, anvil, crafting, rules, motd-подкоманды, suicide, list, near, whois, compass, getpos, gamemode-ярлыки) для не-игрока требуют `source.hasPermission(2)` — командный блок без OP 2 получит отказ. Игроку узел всё равно нужен, если он не OP и обход выключен.\n\nЯрлыки /gms и полный /gamemode расходятся: ярлыки — PermissionValidator, /gamemode — PermissionAPI с `p == null`.",
+      "body": "Большинство деревьев в PlayerState/ServerAdmin/Fun/Utility пишут `.requires(p == null || PermissionAPI.hasPermission(...))`. Консоль, командный блок и функция проходят всегда. У игрока PermissionAPI при `opsBypassPermissions: true` (значение по умолчанию в config.json) отдаёт true любому OP, даже без узла. При `permissions.requireExplicitGrant: true` (поставка) registry-default сам доступ не даёт — не-OP нужен явный грант.\n\nКоманды на PermissionValidator (seen, ping, depth, anvil, crafting, rules, /motd целиком, suicide, list, near, whois, compass, getpos, gamemode-ярлыки) для не-игрока требуют `source.hasPermission(2)` — командный блок без OP 2 получит отказ. Игроку узел всё равно нужен, если он не OP и обход выключен.\n\nЯрлыки /gms и полный /gamemode расходятся: ярлыки — PermissionValidator, /gamemode — PermissionAPI с `p == null`.",
       "fix": "Не-OP выдавайте узлы явно. Чтобы OP не получал /give и /nuke «просто так», поставьте `opsBypassPermissions: false` и раздайте узлы группам. Командные блоки с /sudo и /nuke ограничивайте ванильным OP и доступом к блокам."
     },
     {

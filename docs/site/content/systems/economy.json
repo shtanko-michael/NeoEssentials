@@ -7,11 +7,11 @@
     },
     "balance": {
       "syntax": "/balance [player]",
-      "notes": "Голый /balance смотрит свой счёт и в execute требует neoessentials.economy.balance; на корне .requires нет, поэтому команда видна всем, отказ приходит текстом. Ветка [player] закрыта neoessentials.economy.balance.others (или OP 2). Имя резолвится через EconomyPlayerUtil — офлайн тоже. Консоль не проходит: executeOther зовёт getPlayerOrException у отправителя. Алиас /money в том же файле — только свой баланс, как /bal."
+      "notes": "Корень /balance, /bal и /money закрыт neoessentials.economy.balance. Голый /balance смотрит свой счёт. Ветка [player] закрыта neoessentials.economy.balance.others (или OP 2). Имя резолвится через EconomyPlayerUtil — офлайн тоже. Консоль не проходит: executeOther зовёт getPlayerOrException у отправителя. Алиас /money в том же файле — только свой баланс, как /bal."
     },
     "bal": {
       "syntax": "/bal",
-      "notes": "Отдельная регистрация в BalanceCommand: только свой баланс, аргумента <player> нет. Чужой счёт — исключительно /balance <player>."
+      "notes": "Отдельная регистрация в BalanceCommand, корень тоже neoessentials.economy.balance: только свой баланс, аргумента <player> нет. Чужой счёт — исключительно /balance <player>."
     },
     "baltop": {
       "syntax": "/baltop [page]",

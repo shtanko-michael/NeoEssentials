@@ -569,13 +569,15 @@ def commands_table(cmds, curated):
 def permissions_table(nodes):
     rows = []
     for n in nodes:
-        default = ('<span class="tag tag-ok">всем</span>' if n['default']
-                   else '<span class="tag tag-warn">по выдаче</span>')
+        default = ('<span class="tag tag-ok" title="defaultValue=true в PermissionRegistry; '
+                   'при requireExplicitGrant это не грант">реестр: да</span>' if n['default']
+                   else '<span class="tag tag-warn" title="defaultValue=false — без выдачи отказано">'
+                        'реестр: нет</span>')
         rows.append('<tr data-search="%s"><td><code>%s</code></td><td>%s</td><td>%s</td></tr>'
                     % (e((n['node'] + ' ' + n['description']).lower()), e(n['node']), default,
                        e(n['description'])))
     return ('<div class="scroller"><table class="grid"><thead><tr><th>Узел</th>'
-            '<th>По умолчанию</th><th>Что даёт</th></tr></thead><tbody>%s</tbody></table></div>'
+            '<th>В реестре</th><th>Что даёт</th></tr></thead><tbody>%s</tbody></table></div>'
             % ''.join(rows))
 
 
@@ -747,7 +749,7 @@ def build(out_dir, base, wiki_out=None):
     ru = next((l for l in lang_stats if l['code'] == 'ru_ru'), None)
     stat_tiles = [
         ('Команд', len(commands), 'объявлено в реестре мода'),
-        ('Узлов прав', len(nodes), 'с описанием и значением по умолчанию'),
+        ('Узлов прав', len(nodes), 'с описанием и defaultValue в реестре'),
         ('Ключей конфига', sum(len([c for c in ent if not c['container']]) for _, ent in configs),
          'в %d файлах' % len(configs)),
         ('Языков', len(lang_stats), 'русский — %d%%' % (ru['percent'] if ru else 0)),
@@ -818,8 +820,14 @@ def build(out_dir, base, wiki_out=None):
         parts.append(permissions_table(sorted(by_cat[category], key=lambda x: x['node'])))
     for n in nodes.values():
         search.append({'t': n['node'], 'd': n['description'], 'u': 'permissions/index.html', 'k': 'право'})
+    perm_note = ('<div class="note"><p>Колонка «В реестре» — это <code>defaultValue</code> узла в '
+                 '<code>PermissionRegistry</code>. В поставке <code>permissions.requireExplicitGrant: true</code>: '
+                 'даже «реестр: да» само по себе доступ не даёт — узел нужно выдать в LuckPerms или '
+                 'внутренним менеджером. OP проходит при <code>opsBypassPermissions: true</code>.</p></div>')
     write(out_dir, 'permissions/index.html',
-          page(1, 'Права', '%d узлов из реестра прав — что даёт каждый и кому доступен по умолчанию.' % len(nodes),
+          page(1, 'Права', '%d узлов из реестра — что даёт каждый. defaultValue при requireExplicitGrant не грант.'
+               % len(nodes),
+               perm_note +
                '<div class="tablefilter"><input id="tq" type="search" placeholder="Фильтр по узлам…" '
                'autocomplete="off"></div>' + ''.join(parts), toc, active='permissions', wide=True))
 
@@ -1001,7 +1009,7 @@ def write_github_wiki(out_dir, cat):
         _wiki_link('Все команды', 'commands/',
                    'синтаксис, алиасы и узел права, который мод проверяет на самом деле.'),
         _wiki_link('Права', 'permissions/',
-                   'каждый узел из реестра и значение по умолчанию.'),
+                   'каждый узел из реестра; при requireExplicitGrant defaultValue сам не грант.'),
         _wiki_link('Конфигурация', 'config/',
                    'каждый ключ из JSON-файлов, которые мод кладёт на сервер.'),
         _wiki_link('Локализация', 'localization/',

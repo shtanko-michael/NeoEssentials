@@ -43,7 +43,10 @@ Farmstead NeoEssentials работает **только на сервере** �
 /lp group default permission set neoessentials.teleport.spawn true
 /lp group default permission set neoessentials.economy.balance true
 /lp group default permission set neoessentials.ah true
+/lp group default permission set neoessentials.ah.sell true
+/lp group default permission set neoessentials.chestshop true
 /lp group default permission set neoessentials.chat.msg true
+/lp group default permission set neoessentials.votifier.vote true
 
 /lp group moderator permission set neoessentials.chat.mute true
 /lp group moderator permission set neoessentials.moderation.kick true
