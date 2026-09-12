@@ -77,6 +77,7 @@ webdashboard-ui/dist/
 
 # Generated documentation site (built in CI, see .github/workflows/wiki.yml)
 docs/site/_site/
+docs/site/_wiki/
 docs/wiki/_site/
 docs/site/_inventory.json
 __pycache__/

@@ -40,6 +40,7 @@ LANG_DIR = os.path.join(ROOT, 'src', 'main', 'resources', 'data', 'lang')
 UPSTREAM_WIKI = os.path.join(ROOT, 'docs', 'Wiki')
 CONTENT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'content')
 ASSETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets')
+PUBLIC_SITE = 'https://shtanko-michael.github.io/NeoEssentials'
 
 WARNINGS = []
 
@@ -708,7 +709,7 @@ def wiki_page_name(sysdef):
 # Build
 # ─────────────────────────────────────────────────────────────────────────────
 
-def build(out_dir, base):
+def build(out_dir, base, wiki_out=None):
     global NAV
     cat = load_catalog()
     commands = cat['commands']
@@ -808,12 +809,13 @@ def build(out_dir, base):
         by_cat.setdefault(n['category'], []).append(n)
     parts = []
     toc = []
-    for cat in sorted(by_cat, key=lambda c: (-len(by_cat[c]), c)):
-        title = '%s (%s)' % (CATEGORY_RU.get(cat, cat), cat)
-        anchor = slugify(cat)
+    for category in sorted(by_cat, key=lambda c: (-len(by_cat[c]), c)):
+        title = '%s (%s)' % (CATEGORY_RU.get(category, category), category)
+        anchor = slugify(category)
         toc.append({'level': 2, 'text': title, 'id': anchor})
-        parts.append('<h2 id="%s">%s <span class="count">%d</span></h2>' % (anchor, e(title), len(by_cat[cat])))
-        parts.append(permissions_table(sorted(by_cat[cat], key=lambda x: x['node'])))
+        parts.append('<h2 id="%s">%s <span class="count">%d</span></h2>'
+                     % (anchor, e(title), len(by_cat[category])))
+        parts.append(permissions_table(sorted(by_cat[category], key=lambda x: x['node'])))
     for n in nodes.values():
         search.append({'t': n['node'], 'd': n['description'], 'u': 'permissions/index.html', 'k': 'право'})
     write(out_dir, 'permissions/index.html',
@@ -947,6 +949,9 @@ def build(out_dir, base):
     write(out_dir, 'search.json', json.dumps(search, ensure_ascii=False))
     write(out_dir, '.nojekyll', '')
 
+    if wiki_out:
+        write_github_wiki(wiki_out, cat)
+
     print('Wrote %d search entries to %s' % (len(search), out_dir))
     if WARNINGS:
         print('\n%d warning(s):' % len(WARNINGS))
@@ -966,13 +971,137 @@ def read_content_json(slug):
     return read_json(os.path.join(CONTENT_DIR, 'systems', slug + '.json'), {}) or {}
 
 
+def doc_url(rel=''):
+    rel = rel.lstrip('/')
+    if not rel:
+        return PUBLIC_SITE + '/'
+    return PUBLIC_SITE + '/' + rel
+
+
+def _wiki_link(title, rel, lede):
+    return '- **[%s](%s)** — %s' % (title, doc_url(rel), lede)
+
+
+def write_github_wiki(out_dir, cat):
+    """GitHub Wiki tab: a generated index that points at the canonical Pages site."""
+    systems = cat['systems']
+    n_cmd = len(cat['commands'])
+    n_nodes = len(cat['nodes'])
+    n_keys = sum(len([c for c in ent if not c['container']]) for _, ent in cat['configs'])
+    n_files = len(cat['configs'])
+    n_lang = len(cat['lang_stats'])
+
+    start = [
+        _wiki_link('Обзор', '',
+                   'что это за форк и чем справочник отличается от апстрима ZeroG.'),
+        _wiki_link('Быстрый старт', 'quickstart/',
+                   'установка, первые настройки и выдача прав.'),
+    ]
+    reference = [
+        _wiki_link('Все команды', 'commands/',
+                   'синтаксис, алиасы и узел права, который мод проверяет на самом деле.'),
+        _wiki_link('Права', 'permissions/',
+                   'каждый узел из реестра и значение по умолчанию.'),
+        _wiki_link('Конфигурация', 'config/',
+                   'каждый ключ из JSON-файлов, которые мод кладёт на сервер.'),
+        _wiki_link('Локализация', 'localization/',
+                   'покрытие встроенных языков и как задать язык сервера.'),
+    ]
+    help_items = [
+        _wiki_link('Известные проблемы', 'troubleshooting/',
+                   'симптом, причина и что с этим делать — по всем системам.'),
+    ]
+    system_items = [
+        _wiki_link(s['title'], 'systems/%s/' % s['slug'], s.get('lede') or s['title'])
+        for s in systems
+    ]
+
+    home = '\n'.join([
+        '# Farmstead NeoEssentials',
+        '',
+        'Каноническая документация — сайт с поиском и таблицами, собранными из исходников:',
+        '',
+        '**[%s](%s)**' % (PUBLIC_SITE.replace('https://', ''), doc_url()),
+        '',
+        'Эта вкладка Wiki — только оглавление. Таблицы команд, прав и конфигов сюда не копируются, '
+        'чтобы не разъехаться с кодом.',
+        '',
+        'В справочнике сейчас: **%d** команд, **%d** узлов прав, **%d** ключей конфига в %d файлах, '
+        '**%d** языков. На сайте клавиша `/` открывает поиск.'
+        % (n_cmd, n_nodes, n_keys, n_files, n_lang),
+        '',
+        '## Начало',
+        '',
+        '\n'.join(start),
+        '',
+        '## Справочник',
+        '',
+        '\n'.join(reference),
+        '',
+        '## Системы',
+        '',
+        '\n'.join(system_items),
+        '',
+        '## Помощь',
+        '',
+        '\n'.join(help_items),
+        '',
+        '---',
+        '',
+        'Форк для [%s](%s). Не путать с апстримом [%s](%s).'
+        % ('Farmstead Minecraft', 'https://farmsteadminecraft.online',
+           'ZeroG NeoEssentials', 'https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials'),
+        '',
+    ])
+
+    def side_link(title, rel):
+        return '* [%s](%s)' % (title, doc_url(rel))
+
+    sidebar_systems = '\n'.join(side_link(s['title'], 'systems/%s/' % s['slug']) for s in systems)
+    sidebar = '\n'.join([
+        '**[Farmstead NeoEssentials](%s)**' % doc_url(),
+        '',
+        'Полный справочник на сайте, не в этой вкладке.',
+        '',
+        '### Начало',
+        side_link('Обзор', ''),
+        side_link('Быстрый старт', 'quickstart/'),
+        '',
+        '### Справочник',
+        side_link('Все команды', 'commands/'),
+        side_link('Права', 'permissions/'),
+        side_link('Конфигурация', 'config/'),
+        side_link('Локализация', 'localization/'),
+        '',
+        '### Системы',
+        sidebar_systems,
+        '',
+        '### Помощь',
+        side_link('Известные проблемы', 'troubleshooting/'),
+        '',
+    ])
+
+    footer = (
+        '**Farmstead NeoEssentials** — форк для [Farmstead Minecraft](https://farmsteadminecraft.online). '
+        'Канон: [%s](%s).'
+        % (PUBLIC_SITE.replace('https://', ''), doc_url())
+    )
+
+    write(out_dir, 'Home.md', home)
+    write(out_dir, '_Sidebar.md', sidebar)
+    write(out_dir, '_Footer.md', footer + '\n')
+    print('Wrote GitHub wiki index to %s' % out_dir)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--out', default=os.path.join(os.path.dirname(os.path.abspath(__file__)), '_site'))
     ap.add_argument('--base', default='/')
+    ap.add_argument('--wiki-out', default=None,
+                    help='also write GitHub Wiki index (Home.md, _Sidebar.md) to this directory')
     ap.add_argument('--strict', action='store_true', help='exit non-zero if anything was warned about')
     a = ap.parse_args()
-    rc = build(a.out, a.base)
+    rc = build(a.out, a.base, wiki_out=a.wiki_out)
     if a.strict and WARNINGS:
         return 1
     return rc

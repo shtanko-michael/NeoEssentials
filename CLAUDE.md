@@ -38,8 +38,15 @@ python docs/site/generate.py --strict   # должен выйти с кодом 
 ```
 
 `--strict` падает, когда кураторский контент ссылается на несуществующую команду или доку —
-это и есть сигнал о расхождении. Публикация автоматическая: `.github/workflows/wiki.yml`
-пересобирает сайт на каждый push в `farmstead-monorepo-build`.
+это и есть сигнал о расхождении. Публикация сайта автоматическая: `.github/workflows/wiki.yml`
+пересобирает GitHub Pages на каждый push в `farmstead-monorepo-build`.
+
+Вкладка GitHub Wiki — только оглавление со ссылками на сайт. После изменения списка систем
+в `_meta.json` пересоберите индекс и залейте его в `NeoEssentials.wiki.git`:
+
+```bash
+python docs/site/generate.py --strict --wiki-out docs/site/_wiki
+```
 
 `docs/Wiki/` — каталог апстрима. Он встраивается в сайт как есть и **не редактируется здесь**,
 иначе следующий синк с апстримом даст конфликты. Свой текст — только в `docs/site/content/`.
