@@ -1,264 +1,309 @@
 package com.zerog.neoessentials.config;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import com.google.gson.*;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import com.zerog.neoessentials.util.ResourceUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.io.IOException;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.*;
 
 /**
- * Handles splitting large config.json into smaller, manageable files.
- * Provides backward compatibility by merging split configs into one view.
+ * Handles splitting monolithic config.json into smaller, module-specific files
+ * and merging them back for ConfigManager access.
+ *
+ * <p>File layout when split configs are enabled:
+ * <pre>
+ *   main.json         — server name, modules, logging, storage backend, permissions, kits, economy, localization
+ *   dashboard.json    — webDashboard (web dashboard/API settings)
+ *   commands.json     — commands (enable/disable toggles)
+ *   chat.json         — chat formatting, channels, anti-spam, badges
+ *   teleportation.json— home, warp, spawn, tpa settings
+ *   moderation.json   — ban, jail, freeze, kick, vanish settings
+ *   items.json        — item spawn settings
+ *   afk.json          — AFK system settings
+ *   security.json     — security and validation settings
+ *   tablist.json      — tablist display settings
+ *   templates/discord_embed.json — discordEmbedTemplate (Discord chat-embed styling)
+ * </pre>
+ *
+ * <p>{@code templates/discord_embed.json} is the one split file that lives in a subdirectory
+ * rather than directly under {@code config/neoessentials/} — {@link #writeJsonFile} creates
+ * that subdirectory on demand, since {@link #ensureConfigDir()} only guarantees the top-level
+ * config directory exists.
+ *
+ * <p>Splitting is activated by the presence of a {@code .split_configs} marker file
+ * in the {@code config/neoessentials/} directory.
  */
 public class ConfigSplitter {
     private static final Logger LOGGER = LoggerFactory.getLogger(ConfigSplitter.class);
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
 
-    // Map of config section names to their file names
-    private static final Map<String, String> CONFIG_FILE_MAP = new LinkedHashMap<>() {{
-        put("modules", "modules.json");
-        put("logging", "main.json");
-        put("permissions", "main.json");
-        put("security", "security.json");
-        put("commands", "commands.json");
-        put("webDashboard", "webdashboard.json");
-        put("items", "items.json");
-        put("afk", "afk.json");
-        put("kits", "kits.json");  // Already separate
-        put("teleportation", "teleportation.json");  // Already separate
-        put("moderation", "moderation.json");
-        put("chat", "chat.json");
-        put("tablist", "tablist.json");
+    // ── Section → File mapping (kept for backwards-compat / external callers) ──
+    @SuppressWarnings("unused")
+    public static final Map<String, String> CONFIG_FILE_MAP = new LinkedHashMap<>() {{
+        put("general",       "main.json");   // general.serverName ({server_name} placeholder)
+        put("hologram",      "main.json");   // hologram.pollIntervalTicks/animationInterval
+        put("modules",       "main.json");
+        put("logging",       "main.json");
+        put("storage",       "main.json");   // storage backend (json/yaml/sqlite/mysql) selection
+        put("permissions",   "main.json");
+        put("kits",          "main.json");   // kits SETTINGS; kits.json = kit definitions (JsonArray)
+        put("economy",       "main.json");   // economy config settings
+        put("localization",  "main.json");
+        put("webDashboard",  "dashboard.json");
+        put("security",      "security.json");
+        put("commands",      "commands.json");
+        put("items",         "items.json");
+        put("shop",          "items.json");   // shop.pricing — no dedicated split file, items.json is the closest fit
+        put("afk",           "afk.json");
+        put("teleportation", "teleportation.json");
+        put("moderation",    "moderation.json");
+        put("chat",          "chat.json");
+        put("tablist",       "tablist.json");
+        put("scoreboard",    "scoreboard.json");
+        put("leaderboard",   "leaderboard.json");
+        put("discordEmbedTemplate", "templates/discord_embed.json");
+    }};
+
+    /**
+     * File → list of config sections it must contain.
+     * This is the authoritative mapping used for generation and validation.
+     */
+    public static final Map<String, List<String>> FILE_SECTIONS_MAP = new LinkedHashMap<>() {{
+        // "list" is this fork's /list rank-colour section (ConfigManager.getListGroupColorName/
+        // getListUnknownGroupColor). It must be mapped here or split-config migration drops an
+        // admin-added block entirely — the fork used to rely on a preserveUnmappedKeys() pass
+        // that upstream's rewritten splitter no longer has.
+        put("main.json",          List.of("general", "hologram", "modules", "logging", "storage", "permissions", "kits", "economy", "localization", "list"));
+        put("dashboard.json",     Collections.singletonList("webDashboard"));
+        put("commands.json",      Collections.singletonList("commands"));
+        put("chat.json",          Collections.singletonList("chat"));
+        put("teleportation.json", Collections.singletonList("teleportation"));
+        put("moderation.json",    Collections.singletonList("moderation"));
+        put("items.json",         List.of("items", "shop"));
+        put("afk.json",           Collections.singletonList("afk"));
+        put("security.json",      Collections.singletonList("security"));
+        put("tablist.json",       Collections.singletonList("tablist"));
+        put("scoreboard.json",    Collections.singletonList("scoreboard"));
+        put("leaderboard.json",   Collections.singletonList("leaderboard"));
+        put("templates/discord_embed.json", Collections.singletonList("discordEmbedTemplate"));
+        put("templates/discord_events.json", Collections.singletonList("discordEventChannels"));
     }};
 
     // Version for each split config file
     private static final Map<String, Integer> SPLIT_CONFIG_VERSIONS = new HashMap<>() {{
-        put("main.json", 1);
-        put("commands.json", 1);
-        put("chat.json", 1);
-        put("teleportation.json", 1);
-        put("moderation.json", 1);
-        put("webdashboard.json", 1);
-        put("items.json", 1);
-        put("afk.json", 1);
-        put("security.json", 1);
-        put("modules.json", 1);
-        put("tablist.json", 1);
+        put("main.json",          6);  // v6 — added "hologram" section (refreshInterval/
+                                        //       animationInterval, /neoe reload-able hologram
+                                        //       scheduler tick rates)
+                                        // v5 — added "general" section (general.serverName, the
+                                        //       {server_name} placeholder's own config, split out
+                                        //       from the MOTD system it used to be wrongly tied to)
+                                        // v4 — added "storage" section: like webDashboard below, it
+                                        //       was never in FILE_SECTIONS_MAP at all, so splitting
+                                        //       your config silently discarded your storage backend
+                                        //       choice (sqlite/mysql/yaml) back to the "json" default —
+                                        //       reported as data/settings "reverting" after a split.
+        put("dashboard.json",     1);  // v1 — new file. "webDashboard" had the exact same bug as
+                                        //       "storage" above (missing from FILE_SECTIONS_MAP
+                                        //       entirely) — splitting silently dropped the ENTIRE
+                                        //       dashboard config section, reported as dashboard
+                                        //       settings "reverted to default" and "can't find them
+                                        //       in any config file" after splitting, since no split
+                                        //       file ever contained them.
+        // v3 — added "localization" section: it was never actually
+                                        //       part of the top-level config.json sections (it lived
+                                        //       under "chat" in the template, which nothing reads),
+                                        //       so main.json could never contain it, permanently
+                                        //       tripping the "MISSING SECTION 'localization'" check.
+                                        // v2 — replaced logging.enableDebugLogging with
+                                        //       logging.categories.<name>.{normal,debug}
+                                        //       per-subsystem toggles (see
+                                        //       ConfigManager.migrateLoggingCategories)
+        put("commands.json",      1);
+        put("chat.json",          3);  // v3 — added "webhookUrl" alongside "channelId" in every
+                                        //       chat.channels.*.discord block — read by the new
+                                        //       no-bot-required generic webhook relay adapter.
+        // v2 — chat-format/formatTemplates defaults patched to use
+                                        //       {neoessentials_displayname} instead of
+                                        //       {neoessentials_username}/{neoessentials_name} so /nick
+                                        //       actually shows up in chat (see
+                                        //       ConfigManager.patchLegacyNicknameChatDefaults)
+        put("teleportation.json", 3);  // v3 — added randomTeleportSettings.prewarmBatchSize (RTP fix)
+        put("moderation.json",    1);
+        put("items.json",         2);  // v2 — added "shop" section (shop.pricing — dynamic
+                                        //       ChestShop/NPC-shop pricing was implemented
+                                        //       and reachable in code but had no discoverable
+                                        //       config path at all; see PricingEngine)
+        put("afk.json",           2);  // v2  — invulnerableWhenAfk option
+        put("security.json",      1);
+        put("tablist.json",       1);
+        put("scoreboard.json",    1);
+        put("leaderboard.json",   1);
+        put("templates/discord_embed.json", 2);  // v2 — added per-event-type nested objects
+                                        //       (join/leave/mute/afk/advancement), each with
+                                        //       their own enabled/description/color/showTimestamp.
+        put("templates/discord_events.json", 2);  // v2 — added "webhookUrl" alongside
+                                        //       "channelId" in every entry — read by the new
+                                        //       no-bot-required generic webhook relay adapter.
+        // v1 — new file. discordEventChannels was
+                                        //       added directly to main.json's template (v51)
+                                        //       with no FILE_SECTIONS_MAP entry at all — same
+                                        //       "silently dropped on split" bug this map's other
+                                        //       comments already document for storage/
+                                        //       webDashboard — fixed before it could ship that way.
     }};
 
     /**
-     * Check if config splitting is enabled
+     * Current monolithic config version — must stay in sync with the JAR's config.json
+     * {@code _configVersion} field and {@code ConfigManager.EXPECTED_CONFIG_VERSIONS}.
      */
+    private static final int CURRENT_MAIN_VERSION = 49;
+
+    // ── Marker ────────────────────────────────────────────────────────────────
+
+    /** @return {@code true} if the {@code .split_configs} marker exists on disk. */
     public static boolean isSplittingEnabled() {
-        File configDir = new File(ResourceUtil.CONFIG_DIR);
-        File marker = new File(configDir, ".split_configs");
-        return marker.exists();
+        return new File(ResourceUtil.CONFIG_DIR, ".split_configs").exists();
     }
 
+    // ── Startup ensure ────────────────────────────────────────────────────────
+
     /**
-     * Ensure all split config files are up to date, and if config.json is newer or has new keys, re-split and update split files.
+     * Called on startup when split configs are active.
+     * Ensures every expected split file exists and contains all required sections.
+     * Missing or outdated files are regenerated/updated from the JAR default config.
      */
     public static void ensureSplitConfigsUpToDate() {
-        if (!isSplittingEnabled()) {
-            return;
-        }
-        File configFile = ResourceUtil.getConfigFile("config.json");
-        ConfigSplitter splitter = new ConfigSplitter();
-        if (!splitter.ensureUnifiedConfigExists(configFile)) {
-            LOGGER.error("config.json is missing and could not be generated. Split config update aborted.");
-            return;
-        }
+        if (!isSplittingEnabled()) return;
 
-        LOGGER.debug("Checking split config file versions...");
+        NeoLog.debug(LOGGER, LogCategory.CONFIG, "Checking split config files…");
 
-        // Check if config.json is newer than any split file (by last modified time).
-        // The stub written after migration is always "newer" than the split files, so a
-        // stub must never count as a re-split trigger (it also has nothing to split).
-        boolean needsResplit = false;
-        if (configFile.exists()) {
-            boolean isStub = true;
-            try (FileReader reader = new FileReader(configFile, StandardCharsets.UTF_8)) {
-                isStub = isStubConfig(JsonParser.parseReader(reader).getAsJsonObject());
-            } catch (Exception e) {
-                LOGGER.warn("Could not inspect config.json for stub detection: {}", e.getMessage());
-            }
-            if (!isStub) {
-                long configJsonLastModified = configFile.lastModified();
-                for (String fileName : SPLIT_CONFIG_VERSIONS.keySet()) {
-                    File splitFile = ResourceUtil.getConfigFile(fileName);
-                    if (!splitFile.exists() || configJsonLastModified > splitFile.lastModified()) {
-                        needsResplit = true;
-                        break;
-                    }
-                }
-            }
-        }
+        // Load the on-disk config.json (may be a stub) as a possible source for sections.
+        // Primary fallback is always the JAR's config.json.
+        JsonObject jarConfig   = loadJarConfig();
+        JsonObject diskConfig  = loadDiskConfig();   // may be stub / empty
 
-        if (needsResplit) {
-            LOGGER.info("config.json is newer than split configs or split file missing. Re-splitting config.json into split files...");
-            migrateToSplitConfigs();
-            // After migration, return to avoid double update
-            return;
-        }
-
-        // Normal version check/update for each split file
-        for (Map.Entry<String, Integer> entry : SPLIT_CONFIG_VERSIONS.entrySet()) {
-            String fileName = entry.getKey();
-            int expectedVersion = entry.getValue();
-
-            File splitFile = ResourceUtil.getConfigFile(fileName);
+        // Process one FILE at a time — never process individual sections.
+        // This prevents main.json being overwritten multiple times with only one section.
+        for (Map.Entry<String, List<String>> entry : FILE_SECTIONS_MAP.entrySet()) {
+            String fileName       = entry.getKey();
+            List<String> sections = entry.getValue();
+            File splitFile        = ResourceUtil.getConfigFile(fileName);
 
             if (!splitFile.exists()) {
-                // Always try to extract from config.json first
-                File unifiedConfig = ResourceUtil.getConfigFile("config.json");
-                boolean generated = false;
-                if (unifiedConfig.exists()) {
-                    try (FileReader reader = new FileReader(unifiedConfig, StandardCharsets.UTF_8)) {
-                        JsonObject config = GSON.fromJson(reader, JsonObject.class);
-                        // Find the section name for this file
-                        String sectionName = null;
-                        for (Map.Entry<String, String> mapEntry : CONFIG_FILE_MAP.entrySet()) {
-                            if (mapEntry.getValue().equals(fileName)) {
-                                sectionName = mapEntry.getKey();
-                                break;
-                            }
-                        }
-                        if (sectionName != null && config.has(sectionName)) {
-                            JsonObject section = extractSection(config, sectionName, fileName);
-                            try (FileWriter writer = new FileWriter(splitFile, StandardCharsets.UTF_8)) {
-                                GSON.toJson(section, writer);
-                                LOGGER.info("  ✓ Generated {} from unified config.json", fileName);
-                                generated = true;
-                            }
-                        } else {
-                            LOGGER.warn("Section '{}' not found in config.json for split config {}", sectionName, fileName);
-                        }
-                    } catch (Exception e) {
-                        LOGGER.error("Failed to generate split config {}: {}", fileName, e.getMessage());
-                    }
-                }
-                // If still missing, do not fallback to JAR, just warn
-                if (!splitFile.exists() && !generated) {
-                    LOGGER.warn("Split config file {} could not be generated from config.json and will remain missing.", fileName);
+                NeoLog.debug(LOGGER, LogCategory.CONFIG, "Split config '{}' not found on disk - will attempt to generate it", fileName);
+                LOGGER.warn("Split config '{}' is missing. Attempting to regenerate…", fileName);
+                boolean created = generateSplitFile(splitFile, fileName, sections, diskConfig, jarConfig);
+                if (!created) {
+                    LOGGER.error(
+                        "╔══════════════════════════════════════════════════════════╗");
+                    LOGGER.error(
+                        "║  MISSING SPLIT CONFIG: {}",  fileName);
+                    LOGGER.error(
+                        "║  This file should contain: {}",  String.join(", ", sections));
+                    LOGGER.error(
+                        "║  Run: /neoe config repair   to regenerate all missing files.");
+                    LOGGER.error(
+                        "╚══════════════════════════════════════════════════════════╝");
                 }
             } else {
-                // Check version
-                checkSplitConfigVersion(fileName, splitFile, expectedVersion);
+                // File exists — check version and merge new keys
+                checkSplitConfigVersion(fileName, splitFile, SPLIT_CONFIG_VERSIONS.getOrDefault(fileName, 1),
+                                        jarConfig);
+                // Also merge any sections that may be missing (e.g. economy added later)
+                repairMissingSectionsInFile(splitFile, fileName, sections, diskConfig, jarConfig);
             }
         }
 
-        // --- NEW: Merge new/changed keys from config.json into split files ---
-        File unifiedConfig = ResourceUtil.getConfigFile("config.json");
-        if (unifiedConfig.exists()) {
-            try (FileReader reader = new FileReader(unifiedConfig, StandardCharsets.UTF_8)) {
-                JsonObject unified = JsonParser.parseReader(reader).getAsJsonObject();
-                for (Map.Entry<String, String> entry : CONFIG_FILE_MAP.entrySet()) {
-                    String sectionName = entry.getKey();
-                    String fileName = entry.getValue();
-                    File splitFile = ResourceUtil.getConfigFile(fileName);
-                    if (!splitFile.exists()) continue;
-                    if (!unified.has(sectionName)) continue;
-                    // Merge section from unified config into split file
-                    mergeSectionIntoSplitFile(sectionName, fileName, unified.getAsJsonObject(sectionName));
-                }
-            } catch (Exception e) {
-                LOGGER.error("Failed to merge unified config into split files: {}", e.getMessage());
-            }
-        }
+        NeoLog.debug(LOGGER, LogCategory.CONFIG, "Split config check complete.");
     }
 
+    // ── Migration ─────────────────────────────────────────────────────────────
+
     /**
-     * Migrate from monolithic config.json to split configs
+     * Migrate from monolithic {@code config.json} to split configs.
+     * Creates one split file per entry in {@link #FILE_SECTIONS_MAP}.
+     *
+     * @return {@code true} on success
      */
     public static boolean migrateToSplitConfigs() {
+        NeoLog.debug(LOGGER, LogCategory.CONFIG, "migrateToSplitConfigs() invoked - switching from monolithic config.json to split config mode");
         try {
             File configFile = ResourceUtil.getConfigFile("config.json");
-            if (!configFile.exists()) {
-                LOGGER.warn("config.json not found, cannot migrate to split configs");
-                return false;
-            }
-
-            LOGGER.info("========================================");
-            LOGGER.info("Migrating to split configuration files...");
-            LOGGER.info("========================================");
-
-            // Read the monolithic config
-            JsonObject config;
-            try (FileReader reader = new FileReader(configFile, StandardCharsets.UTF_8)) {
-                config = JsonParser.parseReader(reader).getAsJsonObject();
-            }
-
-            // Never migrate FROM the stub: it has no sections, and proceeding would overwrite
-            // config.json.backup (the user's real pre-split config) with the stub itself.
-            if (isStubConfig(config)) {
-                LOGGER.debug("config.json is already the split-mode stub — nothing to migrate.");
-                return true;
-            }
-
-            // Create backup of original config
-            File backup = new File(configFile.getParentFile(), "config.json.backup");
-            java.nio.file.Files.copy(configFile.toPath(), backup.toPath(),
-                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-            LOGGER.info("Created backup: config.json.backup");
-
-            // Extract each section into its own file
-            int filesCreated = 0;
-            for (Map.Entry<String, String> entry : CONFIG_FILE_MAP.entrySet()) {
-                String sectionName = entry.getKey();
-                String fileName = entry.getValue();
-
-                if (config.has(sectionName)) {
-                    JsonObject section = extractSection(config, sectionName, fileName);
-                    File targetFile = ResourceUtil.getConfigFile(fileName);
-
-                    // Don't overwrite existing split configs
-                    if (!targetFile.exists() || sectionName.equals("modules") || sectionName.equals("logging") || sectionName.equals("permissions")) {
-                        try (FileWriter writer = new FileWriter(targetFile, StandardCharsets.UTF_8)) {
-                            GSON.toJson(section, writer);
-                            filesCreated++;
-                            LOGGER.info("  ✓ Created {}", fileName);
-                        }
-                    }
+            JsonObject source;
+            if (configFile.exists()) {
+                source = readJsonFile(configFile);
+                if (source == null) {
+                    LOGGER.error("config.json is not valid JSON — cannot migrate.");
+                    return false;
                 }
+            } else {
+                // Fall back to the JAR default
+                source = loadJarConfig();
+                if (source == null) {
+                    LOGGER.error("config.json not found and JAR default unavailable — cannot migrate.");
+                    return false;
+                }
+                LOGGER.warn("config.json not found on disk. Migrating from JAR default instead.");
             }
 
-            // Preserve top-level keys that don't belong to any mapped section (e.g. "language",
-            // the "economy" section): carry them into main.json, otherwise they are lost when
-            // config.json is replaced by the stub. Keys already present in main.json are kept.
-            preserveUnmappedKeys(config);
+            NeoLog.info(LOGGER, LogCategory.CONFIG, "════════════════════════════════════════");
+            NeoLog.info(LOGGER, LogCategory.CONFIG, "Migrating to split configuration files…");
+            NeoLog.info(LOGGER, LogCategory.CONFIG, "════════════════════════════════════════");
 
-            // Create marker file to indicate split configs are active
-            File configDir = new File(ResourceUtil.CONFIG_DIR);
-            File marker = new File(configDir, ".split_configs");
-            if (marker.createNewFile()) {
-                LOGGER.info("Created split configs marker file");
+            // Backup original
+            if (configFile.exists()) {
+                File backup = new File(configFile.getParentFile(), "config.json.backup");
+                Files.copy(configFile.toPath(), backup.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                NeoLog.info(LOGGER, LogCategory.CONFIG, "Created backup: config.json.backup");
             }
 
-            // Replace config.json with a minimal stub file, keeping the original _configVersion —
-            // a lower version would make ConfigManager merge the JAR template back into the stub
-            // on every boot and trigger an endless re-split loop that clobbers user settings.
-            int originalVersion = config.has("_configVersion") ? config.get("_configVersion").getAsInt() : 13;
-            replaceWithStubFile(configFile, originalVersion);
-            LOGGER.info("Replaced config.json with minimal stub file (version {})", originalVersion);
+            ensureConfigDir();
+            int created = 0;
+            for (Map.Entry<String, List<String>> entry : FILE_SECTIONS_MAP.entrySet()) {
+                String fileName       = entry.getKey();
+                List<String> sections = entry.getValue();
+                File targetFile       = ResourceUtil.getConfigFile(fileName);
 
-            LOGGER.info("========================================");
-            LOGGER.info("Migration complete! Created {} config files", filesCreated);
-            LOGGER.info("Original config backed up to: config.json.backup");
-            LOGGER.info("You can now edit smaller, focused config files!");
-            LOGGER.info("========================================");
+                // Skip if already exists (avoid overwriting user edits during partial migration)
+                if (targetFile.exists()) {
+                    NeoLog.debug(LOGGER, LogCategory.CONFIG, "  Skipping {} — already exists", fileName);
+                    continue;
+                }
 
+                JsonObject fileContent = buildFileContent(fileName, sections, source);
+                if (fileContent.entrySet().stream().allMatch(e -> e.getKey().startsWith("_"))) {
+                    LOGGER.warn("  No sections found for {} — skipping", fileName);
+                    continue;
+                }
+                writeJsonFile(targetFile, fileContent);
+                NeoLog.info(LOGGER, LogCategory.CONFIG, "  ✓ Created {}", fileName);
+                created++;
+            }
+
+            // Create marker
+            File marker = new File(ResourceUtil.CONFIG_DIR, ".split_configs");
+            if (!marker.exists() && !marker.createNewFile()) {
+                LOGGER.warn("Could not create .split_configs marker file — split mode may not persist.");
+            }
+
+            // Replace config.json with stub
+            replaceWithStubFile(configFile);
+
+            // Clear the ConfigManager cache so the newly created split files are picked
+            // up on next access instead of the now-stale monolithic config.json entry.
+            ConfigManager.getInstance().clearCache();
+
+            NeoLog.info(LOGGER, LogCategory.CONFIG, "════════════════════════════════════════");
+            NeoLog.info(LOGGER, LogCategory.CONFIG, "Migration complete! {} file(s) created.", created);
+            NeoLog.info(LOGGER, LogCategory.CONFIG, "Original config backed up to: config.json.backup");
+            NeoLog.info(LOGGER, LogCategory.CONFIG, "════════════════════════════════════════");
             return true;
 
         } catch (Exception e) {
@@ -267,130 +312,208 @@ public class ConfigSplitter {
         }
     }
 
+    // ── Fresh install ─────────────────────────────────────────────────────────
+
+    /** @return {@code true} if no config.json and no split configs exist. */
+    @SuppressWarnings("unused")
+    public static boolean isFreshInstall() {
+        return !ResourceUtil.getConfigFile("config.json").exists() && !isSplittingEnabled();
+    }
+
     /**
-     * A stub is the placeholder config.json written after migration: it carries the
-     * "_notice" marker and no real sections. Migrating/re-splitting from it is meaningless
-     * and destructive (it would clobber config.json.backup).
+     * For fresh installs: create all split files from the JAR's default config.json.
+     * Activates split configs mode automatically.
+     *
+     * @return {@code true} on success
      */
-    private static boolean isStubConfig(JsonObject config) {
-        if (config.has("_notice")) {
-            return true;
-        }
-        for (String sectionName : CONFIG_FILE_MAP.keySet()) {
-            if (config.has(sectionName)) {
+    @SuppressWarnings("unused")
+    public static boolean autoSplitForFreshInstall() {
+        if (ResourceUtil.getConfigFile("config.json").exists()) return false; // not a fresh install
+
+        NeoLog.info(LOGGER, LogCategory.CONFIG, "════════════════════════════════════════");
+        NeoLog.info(LOGGER, LogCategory.CONFIG, "Fresh NeoEssentials install detected.");
+        NeoLog.info(LOGGER, LogCategory.CONFIG, "Creating split configuration files…");
+        NeoLog.info(LOGGER, LogCategory.CONFIG, "════════════════════════════════════════");
+
+        return createSplitConfigsFromJar();
+    }
+
+    /**
+     * Create all split config files from the JAR's bundled {@code config.json}.
+     * This is the correct path for fresh installs — never reads a non-existent on-disk file.
+     */
+    private static boolean createSplitConfigsFromJar() {
+        try {
+            JsonObject jarConfig = loadJarConfig();
+            if (jarConfig == null) {
+                LOGGER.error("Cannot find config.json inside the mod JAR — cannot create split configs.");
                 return false;
             }
+
+            ensureConfigDir();
+            int created = 0;
+            for (Map.Entry<String, List<String>> entry : FILE_SECTIONS_MAP.entrySet()) {
+                String fileName       = entry.getKey();
+                List<String> sections = entry.getValue();
+                File targetFile       = ResourceUtil.getConfigFile(fileName);
+
+                if (targetFile.exists()) continue;
+
+                JsonObject fileContent = buildFileContent(fileName, sections, jarConfig);
+                writeJsonFile(targetFile, fileContent);
+                NeoLog.info(LOGGER, LogCategory.CONFIG, "  ✓ Created {}", fileName);
+                created++;
+            }
+
+            // Create marker
+            File marker = new File(ResourceUtil.CONFIG_DIR, ".split_configs");
+            if (!marker.exists() && !marker.createNewFile()) {
+                LOGGER.warn("Could not create .split_configs marker file — split mode may not persist.");
+            }
+
+            NeoLog.info(LOGGER, LogCategory.CONFIG, "════════════════════════════════════════");
+            NeoLog.info(LOGGER, LogCategory.CONFIG, "Split configs created ({} files). Configuration is ready.", created);
+            NeoLog.info(LOGGER, LogCategory.CONFIG, "════════════════════════════════════════");
+            return created > 0;
+
+        } catch (Exception e) {
+            LOGGER.error("Failed to create split configs from JAR: {}", e.getMessage(), e);
+            return false;
         }
-        return true; // no mapped sections at all — nothing meaningful to split
     }
 
+    // ── Validation ────────────────────────────────────────────────────────────
+
     /**
-     * Carry top-level keys that are not mapped to any split file (e.g. "language", "economy")
-     * into main.json so they survive the migration to split configs. Existing values in
-     * main.json are never overwritten.
+     * Validate all split config files.
+     * Returns a list of human-readable problem strings.
+     * An empty list means everything is OK.
      */
-    private static void preserveUnmappedKeys(JsonObject mainConfig) {
-        File mainFile = ResourceUtil.getConfigFile("main.json");
-        if (!mainFile.exists()) {
-            return; // nothing to carry into; sections were not extracted either
+    public static List<String> validateSplitConfigs() {
+        List<String> problems = new ArrayList<>();
+
+        if (!isSplittingEnabled()) {
+            problems.add("Split configs are NOT enabled (.split_configs marker missing). " +
+                         "Run /neoe config split to migrate.");
+            return problems;
         }
-        try (FileReader reader = new FileReader(mainFile, StandardCharsets.UTF_8)) {
-            JsonObject mainJson = JsonParser.parseReader(reader).getAsJsonObject();
-            boolean changed = false;
-            for (Map.Entry<String, com.google.gson.JsonElement> entry : mainConfig.entrySet()) {
-                String key = entry.getKey();
-                if (key.startsWith("_")) continue;                 // metadata/comments
-                if (CONFIG_FILE_MAP.containsKey(key)) continue;    // lives in its own split file
-                if (mainJson.has(key)) continue;                   // never overwrite user edits
-                mainJson.add(key, entry.getValue());
-                changed = true;
-                LOGGER.info("  ✓ Preserved unmapped top-level key '{}' in main.json", key);
+
+        for (Map.Entry<String, List<String>> entry : FILE_SECTIONS_MAP.entrySet()) {
+            String fileName       = entry.getKey();
+            List<String> sections = entry.getValue();
+            File f                = ResourceUtil.getConfigFile(fileName);
+
+            if (!f.exists()) {
+                problems.add("MISSING FILE: " + fileName +
+                             "  →  should contain: " + String.join(", ", sections) +
+                             "  →  fix with: /neoe config repair");
+                continue;
             }
-            if (changed) {
-                try (FileWriter writer = new FileWriter(mainFile, StandardCharsets.UTF_8)) {
-                    GSON.toJson(mainJson, writer);
+
+            JsonObject obj = readJsonFile(f);
+            if (obj == null) {
+                problems.add("PARSE ERROR: " + fileName + " is not valid JSON — " +
+                             "restore from backup or run /neoe config repair");
+                continue;
+            }
+
+            for (String section : sections) {
+                if (!obj.has(section)) {
+                    problems.add("MISSING SECTION '" + section + "' in " + fileName +
+                                 "  →  fix with: /neoe config repair");
                 }
             }
-        } catch (Exception e) {
-            LOGGER.error("Failed to preserve unmapped top-level keys in main.json: {}", e.getMessage());
         }
+
+        return problems;
     }
 
     /**
-     * Extract a section from the main config and add version info
+     * Attempt to repair split configs:
+     * - Regenerate any missing files from the JAR default
+     * - Add any missing sections to existing files
+     *
+     * @return number of files created or repaired (0 = nothing needed fixing)
      */
-    private static JsonObject extractSection(JsonObject mainConfig, String sectionName, String targetFile) {
-        JsonObject result = new JsonObject();
-
-        // Add version info
-        Integer version = SPLIT_CONFIG_VERSIONS.get(targetFile);
-        if (version != null) {
-            result.addProperty("_configVersion", version);
-            result.addProperty("_configVersion_comment",
-                "DO NOT MODIFY: This field is used by NeoEssentials for automatic config updates.");
+    public static int repairSplitConfigs() {
+        if (!isSplittingEnabled()) {
+            LOGGER.warn("Split configs are not enabled — nothing to repair.");
+            return 0;
         }
 
-        // Handle special case: main.json contains multiple sections
-        if (targetFile.equals("main.json")) {
-            if (mainConfig.has("modules")) {
-                result.add("modules", mainConfig.get("modules"));
-            }
-            if (mainConfig.has("logging")) {
-                result.add("logging", mainConfig.get("logging"));
-            }
-            if (mainConfig.has("permissions")) {
-                result.add("permissions", mainConfig.get("permissions"));
-            }
-        } else {
-            // Single section per file
-            if (mainConfig.has(sectionName)) {
-                result.add(sectionName, mainConfig.get(sectionName));
+        JsonObject jarConfig  = loadJarConfig();
+        JsonObject diskConfig = loadDiskConfig();
+        if (jarConfig == null) {
+            LOGGER.error("Cannot load JAR config.json — repair aborted.");
+            return 0;
+        }
+
+        int repaired = 0;
+        for (Map.Entry<String, List<String>> entry : FILE_SECTIONS_MAP.entrySet()) {
+            String fileName       = entry.getKey();
+            List<String> sections = entry.getValue();
+            File splitFile        = ResourceUtil.getConfigFile(fileName);
+
+            if (!splitFile.exists()) {
+                if (generateSplitFile(splitFile, fileName, sections, diskConfig, jarConfig)) {
+                    NeoLog.info(LOGGER, LogCategory.CONFIG, "  ✓ Repaired (created) {}", fileName);
+                    repaired++;
+                }
+            } else {
+                // Check for missing sections
+                boolean changed = repairMissingSectionsInFile(splitFile, fileName, sections, diskConfig, jarConfig);
+                if (changed) {
+                    NeoLog.info(LOGGER, LogCategory.CONFIG, "  ✓ Repaired (added missing sections to) {}", fileName);
+                    repaired++;
+                }
             }
         }
 
-        return result;
+        return repaired;
     }
 
+    // ── Merge for ConfigManager ───────────────────────────────────────────────
+
     /**
-     * Merge split configs back into a single view for backward compatibility
+     * Merge all split config files into one virtual JsonObject for ConfigManager.
      */
     public static JsonObject mergeSplitConfigs() {
+        // NOTE: must use plain LOGGER here, not NeoLog — this method is called from
+        // ConfigManager.getConfig(MAIN_CONFIG) BEFORE that call caches its result, and
+        // NeoLog's category gating (isCategoryDebugEnabled -> getLoggingCategoryEntry)
+        // calls getConfig(MAIN_CONFIG) again regardless of category, causing infinite
+        // recursion / StackOverflowError on every startup in split-config mode.
+        LOGGER.debug("Merging {} split config file(s) into a virtual config view", FILE_SECTIONS_MAP.size());
         JsonObject merged = new JsonObject();
-
-        // Add overall version
-        merged.addProperty("_configVersion", 13);
+        merged.addProperty("_configVersion", CURRENT_MAIN_VERSION);
         merged.addProperty("_configVersion_comment",
-            "NOTE: This is a virtual merged view. Edit individual config files instead.");
+            "NOTE: This is a virtual merged view. Edit individual split config files instead.");
 
-        // Load and merge each split config
-        for (Map.Entry<String, String> entry : CONFIG_FILE_MAP.entrySet()) {
-            String sectionName = entry.getKey();
-            String fileName = entry.getValue();
+        for (Map.Entry<String, List<String>> entry : FILE_SECTIONS_MAP.entrySet()) {
+            String fileName       = entry.getKey();
+            List<String> sections = entry.getValue();
+            File configFile       = ResourceUtil.getConfigFile(fileName);
 
-            File configFile = ResourceUtil.getConfigFile(fileName);
-            if (configFile.exists()) {
-                try (FileReader reader = new FileReader(configFile, StandardCharsets.UTF_8)) {
-                    JsonObject fileConfig = JsonParser.parseReader(reader).getAsJsonObject();
+            if (!configFile.exists()) {
+                LOGGER.warn("Split config '{}' not found during merge — some settings may use defaults.", fileName);
+                continue;
+            }
 
-                    // Handle main.json which contains multiple sections
-                    if (fileName.equals("main.json")) {
-                        // All non-metadata keys: modules/logging/permissions plus any preserved
-                        // unmapped top-level keys (e.g. "language", "economy").
-                        for (Map.Entry<String, com.google.gson.JsonElement> e : fileConfig.entrySet()) {
-                            if (!e.getKey().startsWith("_")) {
-                                merged.add(e.getKey(), e.getValue());
-                            }
-                        }
-                    } else {
-                        // Single section. Type guard: kits.json/tablist.json are standalone data
-                        // files whose section key may hold an ARRAY of definitions (not the
-                        // settings object) — injecting it would break getAsJsonObject() callers.
-                        if (fileConfig.has(sectionName) && fileConfig.get(sectionName).isJsonObject()) {
-                            merged.add(sectionName, fileConfig.get(sectionName));
-                        }
+            JsonObject fileObj = readJsonFile(configFile);
+            if (fileObj == null) {
+                LOGGER.error("Failed to parse split config '{}' — skipping.", fileName);
+                continue;
+            }
+
+            for (String section : sections) {
+                if (fileObj.has(section) && !merged.has(section)) {
+                    // Only merge JsonObject sections (never let a JsonArray sneak in as a section)
+                    if (fileObj.get(section).isJsonObject()) {
+                        merged.add(section, fileObj.get(section));
+                    } else if (!section.equals("kits")) {
+                        // Allow non-object for non-kits sections (shouldn't happen normally)
+                        merged.add(section, fileObj.get(section));
                     }
-                } catch (Exception e) {
-                    LOGGER.error("Failed to load split config {}: {}", fileName, e.getMessage());
                 }
             }
         }
@@ -399,386 +522,386 @@ public class ConfigSplitter {
     }
 
     /**
-     * Check if this is a fresh server installation (no configs exist yet)
+     * Persists a merged/virtual config view (as produced by {@link #mergeSplitConfigs()},
+     * then possibly mutated by a caller) back out to the individual split files, one section
+     * at a time. Used by {@link ConfigManager#saveConfig} when split configs are active, since
+     * writes must land in {@code main.json}/{@code chat.json}/etc. rather than a nonexistent
+     * monolithic {@code config.json}.
      */
-    @SuppressWarnings("unused") // Called from ConfigManager
-    public static boolean isFreshInstall() {
-        File configFile = ResourceUtil.getConfigFile("config.json");
-        File configDir = new File(ResourceUtil.CONFIG_DIR);
+    public static void saveMergedConfigToSplitFiles(JsonObject merged) {
+        // NOTE: plain LOGGER, not NeoLog — same recursion risk as mergeSplitConfigs() above.
+        LOGGER.debug("Persisting merged config view back out across {} split file(s)", FILE_SECTIONS_MAP.size());
+        for (Map.Entry<String, List<String>> entry : FILE_SECTIONS_MAP.entrySet()) {
+            String fileName = entry.getKey();
+            List<String> sections = entry.getValue();
+            File configFile = ResourceUtil.getConfigFile(fileName);
 
-        // Fresh install if config directory doesn't exist or is empty
-        if (!configDir.exists() || !configFile.exists()) {
-            return true;
-        }
+            JsonObject fileObj = configFile.exists() ? readJsonFile(configFile) : null;
+            if (fileObj == null) fileObj = new JsonObject();
 
-        // Also check if no split configs exist
-        return !isSplittingEnabled();
-    }
-
-    /**
-     * Auto-split configs for fresh installations
-     * This is called automatically for new servers
-     */
-    @SuppressWarnings("unused") // Called from ConfigManager
-    public static boolean autoSplitForFreshInstall() {
-        File configFile = ResourceUtil.getConfigFile("config.json");
-
-        // If config.json doesn't exist yet, this is truly fresh
-        if (!configFile.exists()) {
-            LOGGER.info("========================================");
-            LOGGER.info("Fresh NeoEssentials installation detected!");
-            LOGGER.info("Automatically creating split configuration files...");
-            LOGGER.info("========================================");
-
-            // Create split configs directly from JAR resources
-            return createSplitConfigsFromJar();
-        }
-
-        return false;
-    }
-
-    /**
-     * Create split configs directly from JAR resources (for fresh installs)
-     */
-    private static boolean createSplitConfigsFromJar() {
-        try {
-            // Create each split config file from JAR
-            Map<String, String> splitFiles = new LinkedHashMap<>() {{
-                put("main.json", "main.json");
-                put("commands.json", "commands.json");
-                put("chat.json", "chat.json");
-                put("security.json", "security.json");
-                put("items.json", "items.json");
-                put("afk.json", "afk.json");
-                put("moderation.json", "moderation.json");
-                put("teleportation.json", "teleportation.json");
-                put("webdashboard.json", "webdashboard.json");
-            }};
-
-            int successCount = 0;
-            for (Map.Entry<String, String> entry : splitFiles.entrySet()) {
-                String fileName = entry.getValue();
-                File targetFile = ResourceUtil.getConfigFile(fileName);
-
-                // Try to load from JAR resources (if they exist)
-                try (InputStream in = ResourceUtil.getJarConfigResource(fileName)) {
-                    if (in != null) {
-                        // Ensure parent directories exist
-                        File parentDir = targetFile.getParentFile();
-                        if (parentDir != null && !parentDir.exists()) {
-                            if (!parentDir.mkdirs()) {
-                                LOGGER.warn("Could not create parent directory for {}", fileName);
-                            }
-                        }
-
-                        try (FileOutputStream out = new FileOutputStream(targetFile)) {
-                            byte[] buffer = new byte[8192];
-                            int len;
-                            while ((len = in.read(buffer)) > 0) {
-                                out.write(buffer, 0, len);
-                            }
-                        }
-                        successCount++;
-                        LOGGER.info("  ✓ Created {}", fileName);
-                    }
-                } catch (Exception e) {
-                    LOGGER.debug("Could not load {} from JAR, will be created later", fileName);
+            boolean changed = false;
+            for (String section : sections) {
+                if (merged.has(section)) {
+                    fileObj.add(section, merged.get(section));
+                    changed = true;
                 }
             }
+            if (!changed) continue;
 
-            // Create marker file
-            File configDir = new File(ResourceUtil.CONFIG_DIR);
-            File marker = new File(configDir, ".split_configs");
-            if (marker.createNewFile()) {
-                LOGGER.info("✓ Enabled split configs mode");
+            try {
+                writeJsonFile(configFile, fileObj);
+            } catch (IOException e) {
+                LOGGER.error("Failed to write split config file '{}': {}", fileName, e.getMessage());
             }
+        }
+    }
 
-            LOGGER.info("========================================");
-            LOGGER.info("Split configuration files created successfully! ({} files)", successCount);
-            LOGGER.info("Your server is configured with easier-to-manage config files.");
-            LOGGER.info("========================================");
+    // ── Startup prompt ────────────────────────────────────────────────────────
 
+    public static void checkAndPromptMigration() {
+        if (isSplittingEnabled()) {
+            NeoLog.debug(LOGGER, LogCategory.CONFIG, "Split config mode already active - skipping monolithic-config migration prompt");
+            return;
+        }
+
+        File configFile = ResourceUtil.getConfigFile("config.json");
+        if (configFile.exists()) {
+            NeoLog.info(LOGGER, LogCategory.CONFIG, "════════════════════════════════════════════════════════");
+            NeoLog.info(LOGGER, LogCategory.CONFIG, "NOTICE: Monolithic config.json detected.");
+            NeoLog.info(LOGGER, LogCategory.CONFIG, "NeoEssentials supports split configuration files for easier management.");
+            NeoLog.info(LOGGER, LogCategory.CONFIG, "Run:  /neoe config split  to migrate to split files.");
+            NeoLog.info(LOGGER, LogCategory.CONFIG, "Run:  /neoe config status  to see the current config state.");
+            NeoLog.info(LOGGER, LogCategory.CONFIG, "════════════════════════════════════════════════════════");
+            com.zerog.neoessentials.util.AdminNotices.queue(
+                "config_split",
+                "commands.neoessentials.admin_notice.config_split.title",
+                "commands.neoessentials.admin_notice.config_split.large_config",
+                "commands.neoessentials.admin_notice.config_split.benefit",
+                "commands.neoessentials.admin_notice.config_split.benefit_easy",
+                "commands.neoessentials.admin_notice.config_split.benefit_safe",
+                "commands.neoessentials.admin_notice.config_split.benefit_organized",
+                "commands.neoessentials.admin_notice.config_split.benefit_backup",
+                "commands.neoessentials.admin_notice.config_split.run_command"
+            );
+        }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /**
+     * Build a single split file's JsonObject containing the given sections from {@code source}.
+     * Sections missing from {@code source} are silently omitted (not all installs have all sections).
+     */
+    private static JsonObject buildFileContent(String fileName, List<String> sections, JsonObject source) {
+        JsonObject result = new JsonObject();
+        Integer version = SPLIT_CONFIG_VERSIONS.get(fileName);
+        if (version != null) {
+            result.addProperty("_configVersion", version);
+            // Note: _configVersion_comment is intentionally omitted — it is treated as a
+            // legacy key by the upgrade system and would be stripped on next version bump.
+        }
+        for (String section : sections) {
+            if (source != null && source.has(section)) {
+                result.add(section, source.get(section));
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Generate a missing split file. Tries disk config first, then JAR default.
+     * @return {@code true} if the file was created successfully.
+     */
+    private static boolean generateSplitFile(File targetFile, String fileName, List<String> sections,
+                                             JsonObject diskConfig, JsonObject jarConfig) {
+        // Try to get sections from disk config first, fall back to JAR
+        JsonObject source = (diskConfig != null && !diskConfig.entrySet().isEmpty()) ? diskConfig : jarConfig;
+        if (source == null) {
+            LOGGER.error("No config source available to generate '{}'", fileName);
+            return false;
+        }
+
+        JsonObject content = buildFileContent(fileName, sections, source);
+        // Check we got at least one real section
+        boolean hasSections = content.entrySet().stream().anyMatch(e -> !e.getKey().startsWith("_"));
+        if (!hasSections) {
+            LOGGER.warn("No sections available for '{}' from source config — file not created.", fileName);
+            return false;
+        }
+
+        try {
+            ensureConfigDir();
+            writeJsonFile(targetFile, content);
             return true;
         } catch (Exception e) {
-            LOGGER.error("Failed to create split configs: {}", e.getMessage(), e);
+            LOGGER.error("Failed to write '{}': {}", fileName, e.getMessage());
             return false;
         }
     }
 
     /**
-     * Check if migration is needed and prompt admin
-     * Now only shows for existing servers with monolithic config
+     * Check if existing sections in a split file are missing and add them from source configs.
+     * @return {@code true} if any changes were made.
      */
-    public static void checkAndPromptMigration() {
-        // Don't prompt if already using split configs
-        if (isSplittingEnabled()) {
-            return;
-        }
+    private static boolean repairMissingSectionsInFile(File splitFile, String fileName, List<String> sections,
+                                                       JsonObject diskConfig, JsonObject jarConfig) {
+        JsonObject onDisk = readJsonFile(splitFile);
+        if (onDisk == null) return false;
 
-        File configFile = ResourceUtil.getConfigFile("config.json");
-
-        // Only prompt if we have an existing monolithic config
-        if (configFile.exists()) {
-            LOGGER.info("========================================");
-            LOGGER.info("NOTICE: Large config.json detected!");
-            LOGGER.info("NeoEssentials now supports split configuration files for easier editing.");
-            LOGGER.info("To enable, run: /neoessentials config split");
-            LOGGER.info("This will split config.json into smaller, focused files.");
-            LOGGER.info("========================================");
-
-            // Set flag to notify online admins
-            shouldNotifyAdmins = true;
-        }
-    }
-
-    // Flag to track if we should notify admins about config splitting
-    private static boolean shouldNotifyAdmins = false;
-
-    /**
-     * Check if admins should be notified about config splitting
-     */
-    @SuppressWarnings("unused") // Called from NeoEssentials
-    public static boolean shouldNotifyAdmins() {
-        return shouldNotifyAdmins;
-    }
-
-    /**
-     * Mark that admins have been notified
-     */
-    @SuppressWarnings("unused") // Called from NeoEssentials
-    public static void markAdminsNotified() {
-        shouldNotifyAdmins = false;
-    }
-
-    /**
-     * Replace config.json with a minimal stub file that redirects to split configs
-     */
-    private static void replaceWithStubFile(File configFile, int configVersion) throws IOException {
-        JsonObject stub = new JsonObject();
-
-        // Add version info (must match the original config's version — see migrateToSplitConfigs)
-        stub.addProperty("_configVersion", configVersion);
-        stub.addProperty("_configVersion_comment",
-            "DO NOT MODIFY: This field is used by NeoEssentials for automatic config updates.");
-
-        // Add informational comment
-        stub.addProperty("_notice",
-            "This server is using SPLIT CONFIGURATION FILES for easier management.");
-        stub.addProperty("_notice_info",
-            "Configuration has been split into smaller, focused files in the config/neoessentials/ directory.");
-
-        // Create a helpful guide object
-        JsonObject guide = new JsonObject();
-        guide.addProperty("main.json", "Core settings: modules, logging, permissions");
-        guide.addProperty("commands.json", "Command settings and toggles");
-        guide.addProperty("chat.json", "Chat formatting, channels, badges, anti-spam");
-        guide.addProperty("teleportation.json", "Teleport settings, homes, warps, spawn");
-        guide.addProperty("moderation.json", "Ban, kick, mute, freeze, jail settings");
-        guide.addProperty("webdashboard.json", "Web dashboard configuration");
-        guide.addProperty("items.json", "Item management and repair settings");
-        guide.addProperty("afk.json", "AFK system configuration");
-        guide.addProperty("security.json", "Security and validation settings");
-        guide.addProperty("kits.json", "Kit definitions (separate file)");
-        stub.add("_split_config_files", guide);
-
-        // Add restoration instructions
-        stub.addProperty("_restore_instructions",
-            "To restore the monolithic config.json, delete the .split_configs marker file and restore from config.json.backup");
-
-        // Write the stub file
-        try (FileWriter writer = new FileWriter(configFile, StandardCharsets.UTF_8)) {
-            GSON.toJson(stub, writer);
-        }
-    }
-
-    /**
-     * Merge a section from the unified config into the split config file, preserving user customizations.
-     * Only adds new keys or updates values that are not present in the split file.
-     */
-    private static void mergeSectionIntoSplitFile(String sectionName, String fileName, JsonObject unifiedSection) {
-        File splitFile = ResourceUtil.getConfigFile(fileName);
-        try (FileReader reader = new FileReader(splitFile, StandardCharsets.UTF_8)) {
-            JsonObject splitConfig = JsonParser.parseReader(reader).getAsJsonObject();
-            boolean changed = false;
-            // For main.json, handle multiple sections
-            if (fileName.equals("main.json")) {
-                if (!splitConfig.has(sectionName)) {
-                    splitConfig.add(sectionName, unifiedSection);
-                    changed = true;
-                } else {
-                    JsonObject splitSection = splitConfig.getAsJsonObject(sectionName);
-                    changed |= mergeJsonObjects(splitSection, unifiedSection);
-                }
-            } else {
-                // Single section per file
-                if (!splitConfig.has(sectionName)) {
-                    splitConfig.add(sectionName, unifiedSection);
-                    changed = true;
-                } else {
-                    JsonObject splitSection = splitConfig.getAsJsonObject(sectionName);
-                    changed |= mergeJsonObjects(splitSection, unifiedSection);
-                }
-            }
-            if (changed) {
-                try (FileWriter writer = new FileWriter(splitFile, StandardCharsets.UTF_8)) {
-                    GSON.toJson(splitConfig, writer);
-                }
-                LOGGER.info("Updated split config {} with new keys from unified config", fileName);
-            }
-        } catch (Exception e) {
-            LOGGER.error("Failed to merge section {} into split file {}: {}", sectionName, fileName, e.getMessage());
-        }
-    }
-
-    /**
-     * Recursively merge keys from source into target JsonObject. Only adds new keys or updates values that are not present in target.
-     * Returns true if any changes were made.
-     */
-    private static boolean mergeJsonObjects(JsonObject target, JsonObject source) {
         boolean changed = false;
-        for (Map.Entry<String, com.google.gson.JsonElement> entry : source.entrySet()) {
-            String key = entry.getKey();
-            com.google.gson.JsonElement value = entry.getValue();
-            if (!target.has(key)) {
-                target.add(key, value);
+        JsonObject source = (diskConfig != null && !diskConfig.entrySet().isEmpty()) ? diskConfig : jarConfig;
+
+        for (String section : sections) {
+            if (!onDisk.has(section) && source != null && source.has(section)) {
+                onDisk.add(section, source.get(section));
+                NeoLog.info(LOGGER, LogCategory.CONFIG, "  Added missing section '{}' to {}", section, fileName);
                 changed = true;
-            } else if (value.isJsonObject() && target.get(key).isJsonObject()) {
-                changed |= mergeJsonObjects(target.getAsJsonObject(key), value.getAsJsonObject());
+            }
+        }
+
+        if (changed) {
+            try {
+                writeJsonFile(splitFile, onDisk);
+            } catch (Exception e) {
+                LOGGER.error("Failed to write repaired '{}': {}", fileName, e.getMessage());
+                return false;
             }
         }
         return changed;
     }
 
     /**
-     * Check if a split config file needs updating.
+     * Check / upgrade a split config file's version.
+     * Only adds NEW keys from the JAR template — never overwrites user values.
+     * Also strips leftover legacy {@code _comment} / {@code _doc_*} keys on upgrade.
+     */
+    private static void checkSplitConfigVersion(String fileName, File configFile,
+                                                int expectedVersion, JsonObject jarConfig) {
+        JsonObject onDisk = readJsonFile(configFile);
+        if (onDisk == null) return;
+
+        int current = onDisk.has("_configVersion") ? onDisk.get("_configVersion").getAsInt() : 0;
+        if (current >= expectedVersion) {
+            NeoLog.debug(LOGGER, LogCategory.CONFIG, "Split config {} is up to date (v{})", fileName, current);
+            return;
+        }
+        NeoLog.debug(LOGGER, LogCategory.CONFIG, "Split config {} is outdated: on-disk v{} < expected v{} - migration/merge required", fileName, current, expectedVersion);
+
+        LOGGER.warn("Split config '{}' is outdated (v{} < v{}). Merging new keys…",
+                    fileName, current, expectedVersion);
+
+        // Backup
+        try {
+            String ts = new java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new java.util.Date());
+            // Use configFile.getName(), not fileName — for "templates/discord_embed.json",
+            // fileName still carries the "templates/" prefix, which combined with
+            // configFile.getParentFile() (already .../templates/) built a nonexistent
+            // .../templates/templates/... path and silently failed every backup for that file.
+            String backupName = configFile.getName().replace(".json",
+                    String.format("_v%d_backup_%s.json", current, ts));
+            Files.copy(configFile.toPath(), new File(configFile.getParentFile(), backupName).toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        } catch (Exception e) {
+            LOGGER.warn("Could not create backup for {}: {}", fileName, e.getMessage());
+        }
+
+        // Migrate logging.enableDebugLogging -> logging.categories.* BEFORE the section merge
+        // below, which would otherwise fill logging.categories with plain defaults first and
+        // make the migration think it already ran.
+        if ("main.json".equals(fileName) && ConfigManager.migrateLoggingCategories(onDisk)) {
+            NeoLog.info(LOGGER, LogCategory.CONFIG, "Split config 'main.json': migrated logging.enableDebugLogging into per-category logging.categories.*.");
+        }
+
+        // Get the JAR sections for this file
+        List<String> sections = FILE_SECTIONS_MAP.getOrDefault(fileName, Collections.emptyList());
+        for (String section : sections) {
+            if (jarConfig != null && jarConfig.has(section)) {
+                if (onDisk.has(section) && onDisk.get(section).isJsonObject() &&
+                        jarConfig.get(section).isJsonObject()) {
+                    mergeJsonObjects(onDisk.getAsJsonObject(section),
+                                     jarConfig.getAsJsonObject(section));
+                } else if (!onDisk.has(section)) {
+                    onDisk.add(section, jarConfig.get(section));
+                }
+            }
+        }
+
+        // Strip legacy _comment / _doc_* / _step* keys left over from older file formats
+        stripLegacyCommentKeys(onDisk);
+
+        // Value-level fix for chat-format/formatTemplates defaults that mergeJsonObjects() above
+        // can never touch (the keys already exist on disk from whenever the file was generated —
+        // merges only add missing keys, they never overwrite an existing value).
+        if ("chat.json".equals(fileName) && ConfigManager.patchLegacyNicknameChatDefaults(onDisk)) {
+            NeoLog.info(LOGGER, LogCategory.CONFIG, "Split config 'chat.json': upgraded untouched chat-format defaults to show nicknames.");
+        }
+
+        onDisk.addProperty("_configVersion", expectedVersion);
+        try {
+            writeJsonFile(configFile, onDisk);
+            NeoLog.info(LOGGER, LogCategory.CONFIG, "Updated split config '{}' to v{}", fileName, expectedVersion);
+        } catch (Exception e) {
+            LOGGER.error("Failed to write updated '{}': {}", fileName, e.getMessage());
+        }
+    }
+
+    /**
+     * Recursively remove legacy "comment" keys from a {@link JsonObject}.
+     * Removes keys that end with {@code _comment}, end with {@code -description},
+     * or start with {@code _} but are NOT {@code _configVersion}.
      *
-     * Uses the same merge-not-replace strategy as ConfigManager.checkAndUpdateConfigVersion:
-     * adds only NEW keys from the JAR template, never overwrites user-set values.
-     * Still bumps _configVersion on disk after the merge.
+     * @return {@code true} if at least one key was removed
      */
-    private static void checkSplitConfigVersion(String fileName, File configFile, int expectedVersion) {
-        try (FileReader reader = new FileReader(configFile, StandardCharsets.UTF_8)) {
-            JsonObject onDisk = JsonParser.parseReader(reader).getAsJsonObject();
-
-            int currentVersion = 0;
-            if (onDisk.has("_configVersion")) {
-                currentVersion = onDisk.get("_configVersion").getAsInt();
+    private static boolean stripLegacyCommentKeys(JsonObject obj) {
+        boolean changed = false;
+        List<String> toRemove = new ArrayList<>();
+        for (Map.Entry<String, JsonElement> entry : obj.entrySet()) {
+            String key = entry.getKey();
+            if (isLegacyCommentKey(key)) {
+                toRemove.add(key);
+            } else if (entry.getValue().isJsonObject()) {
+                changed |= stripLegacyCommentKeys(entry.getValue().getAsJsonObject());
             }
+        }
+        for (String key : toRemove) {
+            obj.remove(key);
+            changed = true;
+            NeoLog.debug(LOGGER, LogCategory.CONFIG, "  - Removed legacy comment key '{}' from split config", key);
+        }
+        return changed;
+    }
 
-            if (currentVersion < expectedVersion) {
-                LOGGER.warn("Split config {} is outdated (version {} < {}). Merging new keys from JAR template (user values preserved)...",
-                    fileName, currentVersion, expectedVersion);
+    private static boolean isLegacyCommentKey(String key) {
+        if ("_configVersion".equals(key)) return false; // always preserve version field
+        return key.endsWith("_comment") || key.endsWith("-description") || key.startsWith("_");
+    }
 
-                // Load JAR template
-                JsonObject jarTemplate = null;
-                try (InputStream in = ResourceUtil.getJarConfigResource(fileName)) {
-                    if (in != null) {
-                        jarTemplate = JsonParser.parseReader(
-                            new java.io.InputStreamReader(in, StandardCharsets.UTF_8)).getAsJsonObject();
-                    }
-                } catch (Exception e) {
-                    LOGGER.error("Could not load JAR template for {}: {}", fileName, e.getMessage());
-                }
-
-                if (jarTemplate == null) {
-                    LOGGER.warn("JAR template not found for {}. Skipping update.", fileName);
-                    return;
-                }
-
-                // Backup before modifying
-                String timestamp = new java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new java.util.Date());
-                String backupName = fileName.replace(".json",
-                    String.format("_v%d_backup_%s.json", currentVersion, timestamp));
-                File backupFile = new File(configFile.getParentFile(), backupName);
-                java.nio.file.Files.copy(configFile.toPath(), backupFile.toPath(),
-                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                LOGGER.info("Created backup: {}", backupName);
-
-                // Deep-merge new keys from JAR into user's file, never overwrite existing values
-                mergeJsonObjects(onDisk, jarTemplate);
-
-                // Bump version
-                onDisk.addProperty("_configVersion", expectedVersion);
-
-                // Write back
-                try (java.io.FileWriter writer = new java.io.FileWriter(configFile, StandardCharsets.UTF_8)) {
-                    GSON.toJson(onDisk, writer);
-                }
-
-                LOGGER.info("Merged split config {} to version {}", fileName, expectedVersion);
-
-            } else if (currentVersion > expectedVersion) {
-                LOGGER.warn("Split config {} has newer version ({}) than expected ({})",
-                    fileName, currentVersion, expectedVersion);
-            } else {
-                LOGGER.debug("Split config {} is up to date (version {})", fileName, currentVersion);
+    /**
+     * Merge {@code source} keys into {@code target} — only adds MISSING keys, never overwrites.
+     * @return {@code true} if any keys were added.
+     */
+    private static boolean mergeJsonObjects(JsonObject target, JsonObject source) {
+        boolean changed = false;
+        for (Map.Entry<String, JsonElement> entry : source.entrySet()) {
+            String key = entry.getKey();
+            JsonElement val = entry.getValue();
+            if (!target.has(key)) {
+                target.add(key, val);
+                changed = true;
+            } else if (val.isJsonObject() && target.get(key).isJsonObject()) {
+                changed |= mergeJsonObjects(target.getAsJsonObject(key), val.getAsJsonObject());
             }
+        }
+        return changed;
+    }
+
+
+    // ── Stub file ─────────────────────────────────────────────────────────────
+
+    private static void replaceWithStubFile(File configFile) throws IOException {
+        JsonObject stub = new JsonObject();
+        stub.addProperty("_configVersion", CURRENT_MAIN_VERSION);
+        stub.addProperty("_configVersion_comment",
+            "DO NOT MODIFY: Used by NeoEssentials for automatic config updates.");
+        stub.addProperty("_notice",
+            "This server is using SPLIT CONFIGURATION FILES.");
+        stub.addProperty("_notice_info",
+            "Edit the smaller files in config/neoessentials/ instead of this file.");
+
+        JsonObject guide = new JsonObject();
+        for (Map.Entry<String, List<String>> e : FILE_SECTIONS_MAP.entrySet()) {
+            guide.addProperty(e.getKey(), String.join(", ", e.getValue()));
+        }
+        stub.add("_split_config_files", guide);
+        stub.addProperty("_restore_instructions",
+            "To restore: delete .split_configs marker and restore from config.json.backup");
+
+        writeJsonFile(configFile, stub);
+    }
+
+    // ── I/O utilities ─────────────────────────────────────────────────────────
+
+    /**
+     * Parse a JSON reader in lenient mode so that {@code //} and {@code /* *\/} comments
+     * (present in config.json since v22) are accepted without errors.
+     */
+    private static JsonObject parseLenient(java.io.Reader reader) {
+        com.google.gson.stream.JsonReader jr = new com.google.gson.stream.JsonReader(reader);
+        jr.setLenient(true);
+        return JsonParser.parseReader(jr).getAsJsonObject();
+    }
+
+    /** Load the bundled {@code config.json} from the mod JAR. Returns {@code null} on failure. */
+    private static JsonObject loadJarConfig() {
+        try (InputStream in = ResourceUtil.getJarConfigResource("config.json")) {
+            if (in == null) {
+                LOGGER.error("config.json not found in JAR at {}", ResourceUtil.JAR_CONFIG_PATH);
+                return null;
+            }
+            // Lenient reader required: config.json uses // comment syntax since v22.
+            return parseLenient(new InputStreamReader(in, StandardCharsets.UTF_8));
         } catch (Exception e) {
-            LOGGER.error("Failed to check version for split config {}: {}", fileName, e.getMessage());
+            LOGGER.error("Failed to parse JAR config.json: {}", e.getMessage());
+            return null;
         }
     }
 
     /**
-     * Copy a default split config from JAR
+     * Load the on-disk {@code config.json}.
+     * Returns an empty JsonObject (not {@code null}) if the file is missing or is a stub.
      */
-    private static void copyDefaultSplitConfig(String fileName) {
-        try (InputStream in = ResourceUtil.getJarConfigResource(fileName)) {
-            if (in != null) {
-                File targetFile = ResourceUtil.getConfigFile(fileName);
-
-                // Ensure parent directories exist
-                File parentDir = targetFile.getParentFile();
-                if (parentDir != null && !parentDir.exists()) {
-                    if (!parentDir.mkdirs()) {
-                        LOGGER.warn("Could not create parent directory for {}", fileName);
-                    }
-                }
-
-                try (FileOutputStream out = new FileOutputStream(targetFile)) {
-                    byte[] buffer = new byte[8192];
-                    int len;
-                    while ((len = in.read(buffer)) > 0) {
-                        out.write(buffer, 0, len);
-                    }
-                }
-                LOGGER.debug("Copied default split config: {}", fileName);
-            } else {
-                LOGGER.warn("Default split config not found in JAR: {}", fileName);
-            }
-        } catch (Exception e) {
-            LOGGER.error("Failed to copy default split config {}: {}", fileName, e.getMessage());
-        }
+    private static JsonObject loadDiskConfig() {
+        File f = ResourceUtil.getConfigFile("config.json");
+        if (!f.exists()) return new JsonObject();
+        JsonObject obj = readJsonFile(f);
+        if (obj == null) return new JsonObject();
+        // If it's a stub (has _notice but no real sections) return empty so we fall back to JAR
+        boolean hasSections = FILE_SECTIONS_MAP.values().stream()
+            .flatMap(Collection::stream)
+            .anyMatch(obj::has);
+        return hasSections ? obj : new JsonObject();
     }
 
     /**
-     * Ensures config.json exists. If missing, attempts to generate from JAR default.
-     * Returns true if config.json exists after this call, false otherwise.
+     * Read a JSON file in lenient mode.
+     * Lenient mode is used for consistency with the JAR config reader and to handle
+     * any edge-case comments the user may have added. Returns {@code null} on parse/IO error.
      */
-    private boolean ensureUnifiedConfigExists(File configFile) {
-        if (configFile.exists()) return true;
-
-        // Ensure parent directory exists
-        File parentDir = configFile.getParentFile();
-        if (!parentDir.exists()) {
-            if (!parentDir.mkdirs()) {
-                LOGGER.error("Failed to create config directory: {}", parentDir.getAbsolutePath());
-                return false;
-            }
-        }
-
-        // Try to copy from JAR default - correct path in JAR
-        try (InputStream in = getClass().getClassLoader().getResourceAsStream("data/config/neoessentials/config.json")) {
-            if (in != null) {
-                Files.copy(in, configFile.toPath());
-                LOGGER.info("Generated missing config.json from JAR default");
-                return true;
-            } else {
-                LOGGER.error("Could not find default config.json in JAR (data/config/neoessentials/config.json)");
-                return false;
-            }
-        } catch (IOException e) {
-            LOGGER.error("Failed to generate config.json from JAR default", e);
-            return false;
+    private static JsonObject readJsonFile(File f) {
+        try (FileReader reader = new FileReader(f, StandardCharsets.UTF_8)) {
+            return parseLenient(reader);
+        } catch (Exception e) {
+            LOGGER.error("Failed to read/parse '{}': {}", f.getName(), e.getMessage());
+            return null;
         }
     }
+
+    /** Write a JsonObject to a file (pretty-printed). Creates the file's parent directory
+     * first — most split files sit directly in {@link ResourceUtil#CONFIG_DIR}, already
+     * covered by {@link #ensureConfigDir()}, but {@code templates/discord_embed.json} needs
+     * its own {@code templates/} subdirectory created on demand. */
+    private static void writeJsonFile(File f, JsonObject obj) throws IOException {
+        ensureConfigDir();
+        File parent = f.getParentFile();
+        if (parent != null && !parent.exists() && !parent.mkdirs()) {
+            LOGGER.warn("Could not create directory: {}", parent.getAbsolutePath());
+        }
+        // Atomic temp-file + rename, same pattern as JsonFileDataStore — a crash, disk-full,
+        // or serialization error partway through GSON.toJson() must not leave a split config
+        // file (or main.json) truncated/invalid, which would otherwise break startup.
+        File tmp = new File(f.getParentFile(), f.getName() + ".tmp-" + System.currentTimeMillis());
+        try (FileWriter w = new FileWriter(tmp, StandardCharsets.UTF_8)) {
+            GSON.toJson(obj, w);
+        }
+        Files.move(tmp.toPath(), f.toPath(),
+            java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+    }
+
+    private static void ensureConfigDir() {
+        File dir = new File(ResourceUtil.CONFIG_DIR);
+        if (!dir.exists() && !dir.mkdirs()) {
+            LOGGER.warn("Could not create config directory: {}", dir.getAbsolutePath());
+        }
+    }
+
 }

@@ -1,5 +1,7 @@
 package com.zerog.neoessentials.tags;
 
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,17 +53,15 @@ public class PlayerTagManager {
         return getPrimaryGroup(player);
     }
 
+    // Must go through PermissionAPI.getPrimaryGroup() (checks the active external adapter
+    // first) rather than PermissionAPI.getManager() (internal-only) directly — the latter
+    // silently returned "default" for every player whenever LuckPerms/FTB Ranks was active.
     private String getPrimaryGroup(ServerPlayer player) {
         try {
-            var permManager = com.zerog.neoessentials.api.permissions.PermissionAPI.getManager();
-            if (permManager != null) {
-                var user = permManager.getUser(player.getUUID());
-                if (user != null) {
-                    return user.getGroup();
-                }
-            }
+            String group = com.zerog.neoessentials.api.permissions.PermissionAPI.getPrimaryGroup(player.getUUID());
+            if (group != null) return group;
         } catch (Exception e) {
-            LOGGER.debug("Error getting primary group: {}", e.getMessage());
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Error getting primary group: {}", e.getMessage());
         }
         return "default";
     }
@@ -83,11 +83,11 @@ public class PlayerTagManager {
             for (File file : files) {
                 String tagName = file.getName().replaceFirst("\\.[^.]+$", "");
                 customTagFiles.put(tagName, file);
-                LOGGER.debug("Loaded custom tag image: {} -> {}", tagName, file.getAbsolutePath());
+                NeoLog.debug(LOGGER, LogCategory.GENERAL, "Loaded custom tag image: {} -> {}", tagName, file.getAbsolutePath());
             }
         }
         customImagesLoaded = true;
-        LOGGER.info("PlayerTagManager: Loaded {} custom tag images from {}", customTagFiles.size(), assetsDir.getAbsolutePath());
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "PlayerTagManager: Loaded {} custom tag images from {}", customTagFiles.size(), assetsDir.getAbsolutePath());
     }
 
     /**
@@ -125,7 +125,7 @@ public class PlayerTagManager {
                 }
             }
         } catch (Exception e) {
-            // Ignore
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Failed to read aboveHeadTagsEnabled config — defaulting to false", e);
         }
         return false;
     }

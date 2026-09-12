@@ -4,11 +4,13 @@ import com.zerog.neoessentials.api.permissions.PermissionRegistry;
 import com.zerog.neoessentials.api.permissions.PermissionScanner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 
 import java.util.List;
 import java.util.Set;
 import java.util.HashSet;
-import java.util.stream.Collectors;
+
 
 /**
  * External Permission Provider for integration with permission plugins like PermissionsEX.
@@ -51,11 +53,11 @@ public class ExternalPermissionProvider {
             
             cachedPermissions = allPermissions.stream()
                     .sorted()
-                    .collect(Collectors.toList());
+                    .toList();
                     
             lastCacheTime = now;
             
-            LOGGER.debug("External plugin requested {} NeoEssentials permissions", cachedPermissions.size());
+            NeoLog.debug(LOGGER, LogCategory.PERMISSIONS, "External plugin requested {} NeoEssentials permissions", cachedPermissions.size());
             return cachedPermissions;
             
         } catch (Exception e) {
@@ -71,11 +73,13 @@ public class ExternalPermissionProvider {
      * @param prefix The prefix to filter by
      * @return List of permissions starting with the prefix
      */
+    //noinspection unused
+    @SuppressWarnings("unused")
     public static List<String> getPermissionsStartingWith(String prefix) {
         try {
             return getAllNeoEssentialsPermissions().stream()
                     .filter(perm -> perm.toLowerCase().startsWith(prefix.toLowerCase()))
-                    .collect(Collectors.toList());
+                    .toList();
                     
         } catch (Exception e) {
             LOGGER.error("Failed to filter permissions for external plugin", e);
@@ -111,7 +115,7 @@ public class ExternalPermissionProvider {
                         String[] parts = perm.split("\\.");
                         return parts.length >= 2 && parts[1].equalsIgnoreCase(category);
                     })
-                    .collect(Collectors.toList());
+                    .toList();
                     
         } catch (Exception e) {
             LOGGER.error("Failed to get permissions by category for external plugin", e);
@@ -125,7 +129,7 @@ public class ExternalPermissionProvider {
     public static void clearCache() {
         cachedPermissions = null;
         lastCacheTime = 0;
-        LOGGER.debug("Permission cache cleared");
+        NeoLog.debug(LOGGER, LogCategory.PERMISSIONS, "Permission cache cleared");
     }
     
     /**
@@ -133,7 +137,7 @@ public class ExternalPermissionProvider {
      * This should be called during mod initialization.
      */
     public static void initialize() {
-        LOGGER.info("Initializing External Permission Provider for PermissionsEX integration...");
+        NeoLog.info(LOGGER, LogCategory.PERMISSIONS, "Initializing External Permission Provider for PermissionsEX integration...");
         
         try {
             // Clear any existing cache and force fresh scan
@@ -141,16 +145,16 @@ public class ExternalPermissionProvider {
             
             // Pre-load all permissions to ensure they're cached
             List<String> permissions = getAllNeoEssentialsPermissions();
-            LOGGER.info("External Permission Provider initialized with {} permissions available", permissions.size());
+            NeoLog.info(LOGGER, LogCategory.PERMISSIONS, "External Permission Provider initialized with {} permissions available", permissions.size());
             
             // Print some key permissions for verification
-            LOGGER.info("Sample permissions available for external plugins:");
+            NeoLog.info(LOGGER, LogCategory.PERMISSIONS, "Sample permissions available for external plugins:");
             permissions.stream()
                     .limit(10)
-                    .forEach(perm -> LOGGER.info("  - {}", perm));
+                    .forEach(perm -> NeoLog.info(LOGGER, LogCategory.PERMISSIONS, "  - {}", perm));
             
             if (permissions.size() > 10) {
-                LOGGER.info("  ... and {} more permissions", permissions.size() - 10);
+                NeoLog.info(LOGGER, LogCategory.PERMISSIONS, "  ... and {} more permissions", permissions.size() - 10);
             }
             
         } catch (Exception e) {
@@ -187,6 +191,8 @@ public class ExternalPermissionProvider {
      * 
      * @return Formatted string for PermissionsEX import
      */
+    //noinspection unused
+    @SuppressWarnings("unused")
     public static String exportForPermissionsEX() {
         StringBuilder sb = new StringBuilder();
         

@@ -31,8 +31,7 @@ public class NearCommand {
      * Register the /near command
      */
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        if (!ConfigManager.getInstance().isCommandEnabled("near")) return;
-        
+        if (ConfigManager.getInstance().isCommandEnabled("near")) {
         dispatcher.register(
             Commands.literal("near")
                 // /near - Show nearby players with default radius (requires player)
@@ -67,8 +66,10 @@ public class NearCommand {
                     })
                 )
         );
-        
+        }
+
         // Also register /nearby alias
+        if (ConfigManager.getInstance().isCommandEnabled("nearby")) {
         dispatcher.register(
             Commands.literal("nearby")
                 .executes(ctx -> {
@@ -101,8 +102,9 @@ public class NearCommand {
                     })
                 )
         );
+        }
     }
-    
+
     /**
      * Show nearby players within the specified radius
      */
@@ -119,7 +121,14 @@ public class NearCommand {
         List<NearbyPlayerInfo> nearbyPlayers = player.getServer().getPlayerList().getPlayers().stream()
             .filter(p -> !p.equals(player))
             .filter(p -> p.level() == player.level()) // Same dimension
-            .filter(p -> !isVanished(p) || canSeeVanished(player)) // Vanish check
+            // Vanish check — per-pair (viewer, target) rank comparison, matching what actually
+            // governs whether the vanished player's entity is visible in the viewer's client
+            // (see VanishManager#hidePlayerFromOthers). The old blanket canSeeVanished(player)
+            // check ignored rank entirely, so /near could report a vanished player's presence
+            // to a lower-priority staff viewer whose client had that entity fully removed.
+            .filter(p -> !ConfigManager.getInstance().isVanishSystemEnabled()
+                || com.zerog.neoessentials.moderation.VanishManager.getInstance()
+                    .canViewerSeeVanishedPlayer(player.getUUID(), p.getUUID()))
             .map(p -> new NearbyPlayerInfo(p, playerPos))
             .filter(info -> info.distance <= radius)
             .sorted(Comparator.comparingDouble(info -> info.distance))
@@ -161,44 +170,45 @@ public class NearCommand {
         String direction = CommandUtil.getSimpleDirection(info.relativePos.x, info.relativePos.z);
         
         // Base message with distance and direction
-        MutableComponent message = Component.literal(MessageUtil.localize("commands.neoessentials.near.entry",
-            info.player.getName().getString(), distanceStr, direction));
-        
+        MutableComponent message = (MutableComponent) MessageUtil.component("commands.neoessentials.near.entry",
+            info.player.getName().getString(), distanceStr, direction);
+
         // Add status indicators
         List<String> statusList = new ArrayList<>();
-        
+
         if (isAfk(info.player)) {
-            statusList.add(MessageUtil.localize("commands.neoessentials.near.status_afk"));
+            statusList.add(MessageUtil.localize("commands.neoessentials.near.tag_afk"));
         }
 
         if (isVanished(info.player)) {
-            statusList.add(MessageUtil.localize("commands.neoessentials.near.status_vanished"));
+            statusList.add(MessageUtil.localize("commands.neoessentials.near.tag_vanished"));
         }
 
         if (info.player.hasPermissions(4)) {
-            statusList.add(MessageUtil.localize("commands.neoessentials.near.status_op"));
+            statusList.add(MessageUtil.localize("commands.neoessentials.near.tag_op"));
         }
 
         if (!statusList.isEmpty()) {
-            message.append(Component.literal(MessageUtil.localize("commands.neoessentials.near.status_wrap", String.join("§7,", statusList))));
+            message.append(MessageUtil.component("commands.neoessentials.near.status_suffix",
+                String.join("§7,", statusList)));
         }
-        
+
         // Create hover text with detailed info
         MutableComponent hoverText = Component.literal("")
-            .append(Component.literal(MessageUtil.localize("commands.neoessentials.near.hover_player", info.player.getName().getString()) + "\n"))
-            .append(Component.literal(MessageUtil.localize("commands.neoessentials.near.hover_distance", distanceStr) + "\n"))
-            .append(Component.literal(MessageUtil.localize("commands.neoessentials.near.hover_direction", direction) + "\n"))
-            .append(Component.literal(MessageUtil.localize("commands.neoessentials.near.hover_world", info.player.level().dimension().location()) + "\n"))
-            .append(Component.literal(MessageUtil.localize("commands.neoessentials.near.hover_coordinates",
-                (int)info.player.getX(), (int)info.player.getY(), (int)info.player.getZ()) + "\n"))
-            .append(Component.literal(MessageUtil.localize("commands.neoessentials.near.hover_health",
-                String.format("%.1f", info.player.getHealth()), String.format("%.1f", info.player.getMaxHealth())) + "\n"));
+            .append(MessageUtil.component("commands.neoessentials.near.hover_player", info.player.getName().getString())).append("\n")
+            .append(MessageUtil.component("commands.neoessentials.near.hover_distance", distanceStr)).append("\n")
+            .append(MessageUtil.component("commands.neoessentials.near.hover_direction", direction)).append("\n")
+            .append(MessageUtil.component("commands.neoessentials.near.hover_world", info.player.level().dimension().location())).append("\n")
+            .append(MessageUtil.component("commands.neoessentials.near.hover_coordinates",
+                (int)info.player.getX(), (int)info.player.getY(), (int)info.player.getZ())).append("\n")
+            .append(MessageUtil.component("commands.neoessentials.near.hover_health",
+                String.format("%.1f", info.player.getHealth()), String.format("%.1f", info.player.getMaxHealth()))).append("\n");
 
         if (isAfk(info.player)) {
-            hoverText.append(Component.literal(MessageUtil.localize("commands.neoessentials.near.hover_afk") + "\n"));
+            hoverText.append(MessageUtil.component("commands.neoessentials.near.hover_afk")).append("\n");
         }
 
-        hoverText.append(Component.literal("\n" + MessageUtil.localize("commands.neoessentials.near.hover_click_teleport")));
+        hoverText.append("\n").append(MessageUtil.component("commands.neoessentials.near.hover_click_teleport"));
         
         // Add click event for teleportation (if has permission)
         PermissionValidator.PermissionResult tpResult = 
@@ -206,14 +216,14 @@ public class NearCommand {
         
         if (tpResult.hasPermission()) {
             message = message.withStyle(style -> style
-                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, hoverText))
-                .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, 
+                .withHoverEvent(com.zerog.neoessentials.util.HoverEventCompat.create(HoverEvent.Action.SHOW_TEXT, hoverText))
+                .withClickEvent(com.zerog.neoessentials.util.ClickEventCompat.create(ClickEvent.Action.SUGGEST_COMMAND, 
                     "/tp " + info.player.getName().getString()))
             );
         } else {
             // Just hover text, no click event
             message = message.withStyle(style -> style
-                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, hoverText))
+                .withHoverEvent(com.zerog.neoessentials.util.HoverEventCompat.create(HoverEvent.Action.SHOW_TEXT, hoverText))
             );
         }
         
@@ -240,26 +250,6 @@ public class NearCommand {
             return false;
         }
     }
-    
-    /**
-     * Check if viewer can see vanished players
-     * Integrates with VanishManager for actual permission state
-     */
-    private static boolean canSeeVanished(ServerPlayer viewer) {
-        // If vanish system is disabled, always return false
-        if (!ConfigManager.getInstance().isVanishSystemEnabled()) {
-            return false;
-        }
-        // Use VanishManager to check if viewer can see vanished players
-        try {
-            com.zerog.neoessentials.moderation.VanishManager vanishManager = 
-                com.zerog.neoessentials.moderation.VanishManager.getInstance();
-            return vanishManager.canPlayerSeeVanished(viewer.getUUID());
-        } catch (Exception e) {
-            return PermissionValidator.validatePermission(viewer.createCommandSourceStack(), "neoessentials.vanish.see").hasPermission();
-        }
-    }
-    
     /**
      * Check if a player is AFK
      * Integrates with AfkManager for actual AFK state

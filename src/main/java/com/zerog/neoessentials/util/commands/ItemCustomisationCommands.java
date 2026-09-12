@@ -9,6 +9,7 @@ import com.zerog.neoessentials.util.MessageUtil;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.commands.arguments.MessageArgument;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -27,6 +28,8 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.ItemLore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 
 import javax.annotation.Nonnull;
 import java.util.*;
@@ -72,10 +75,18 @@ public class ItemCustomisationCommands {
                 var p = src.getPlayer();
                 return p == null || PermissionAPI.hasPermission(p.getUUID(), "neoessentials.me");
             })
-            .then(Commands.argument("action", StringArgumentType.greedyString())
+            // Vanilla already registers its own built-in "/me <action>" using
+            // MessageArgumentType for the "action" argument. Brigadier's addChild() merges
+            // same-named argument nodes by keeping the FIRST-registered node's type and just
+            // swapping in whichever .executes() was registered last — so regardless of what
+            // type this registration declares, the argument is retrieved at runtime as
+            // whatever vanilla's node actually is. Using StringArgumentType here (as this used
+            // to) threw "Argument 'action' is defined as Message, not String" for exactly that
+            // reason. Matching vanilla's own MessageArgument.message() avoids the mismatch.
+            .then(Commands.argument("action", MessageArgument.message())
                 .executes(ctx -> {
                     var src = ctx.getSource();
-                    String action = StringArgumentType.getString(ctx, "action");
+                    String action = MessageArgument.getMessage(ctx, "action").getString();
                     String name = src.getPlayer() != null
                         ? src.getPlayer().getName().getString() : "Console";
                     Component msg = MessageUtil.coloredText("§5* §d" + name + " §f" + action);
@@ -164,7 +175,10 @@ public class ItemCustomisationCommands {
                 double avgMs = avgNs / 1_000_000.0;
                 tps = Math.min(20.0, 1000.0 / avgMs);
             }
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, com.zerog.neoessentials.logging.LogCategory.COMMANDS,
+                "Failed to resolve server TPS, using default", e);
+        }
         String tpsColor = tps >= 18 ? "§a" : tps >= 15 ? "§e" : "§c";
         int loaded = 0;
         for (var level : src.getServer().getAllLevels()) loaded += level.getChunkSource().getLoadedChunksCount();
@@ -219,7 +233,7 @@ public class ItemCustomisationCommands {
                 src.sendFailure(MessageUtil.error("commands.neoessentials.general.player_not_found", targetName));
                 return 0;
             }
-            strikeLightning(target.serverLevel(), target.getX(), target.getY(), target.getZ());
+            strikeLightning(com.zerog.neoessentials.util.LevelCompat.of(target), target.getX(), target.getY(), target.getZ());
             src.sendSuccess(() -> MessageUtil.success("commands.neoessentials.lightning.struck", targetName), true);
         } else {
             // Strike at self's look target
@@ -227,14 +241,14 @@ public class ItemCustomisationCommands {
             if (self == null) { src.sendFailure(MessageUtil.error("commands.neoessentials.general.player_only")); return 0; }
             var hit = self.pick(100, 1.0f, false);
             var pos = hit.getLocation();
-            strikeLightning(self.serverLevel(), pos.x, pos.y, pos.z);
+            strikeLightning(com.zerog.neoessentials.util.LevelCompat.of(self), pos.x, pos.y, pos.z);
             src.sendSuccess(() -> MessageUtil.success("commands.neoessentials.lightning.self"), false);
         }
         return 1;
     }
 
     private static void strikeLightning(net.minecraft.server.level.ServerLevel level, double x, double y, double z) {
-        LightningBolt bolt = EntityType.LIGHTNING_BOLT.create(level);
+        LightningBolt bolt = com.zerog.neoessentials.util.EntityTypeCompat.create(EntityType.LIGHTNING_BOLT, level);
         if (bolt != null) {
             bolt.moveTo(x, y, z);
             level.addFreshEntity(bolt);
@@ -405,7 +419,7 @@ public class ItemCustomisationCommands {
             .requires(src -> { var p = src.getPlayer(); return p == null || PermissionAPI.hasPermission(p.getUUID(), "neoessentials.remove"); })
             .then(Commands.argument("type", StringArgumentType.word())
                 .suggests((ctx, b) -> SharedSuggestionProvider.suggest(
-                    Arrays.asList("all","items","drops","mobs","animals","monsters",
+                    List.of("all","items","drops","mobs","animals","monsters",
                         "arrows","xp","paintings","boats","minecarts","tnt","boats"), b))
                 .executes(ctx -> executeRemove(ctx, StringArgumentType.getString(ctx, "type"), 200))
                 .then(Commands.argument("radius", IntegerArgumentType.integer(1, 10000))
@@ -422,7 +436,7 @@ public class ItemCustomisationCommands {
         var player = src.getPlayer();
         if (player == null) { src.sendFailure(MessageUtil.error("commands.neoessentials.general.player_only")); return 0; }
 
-        var level = player.serverLevel();
+        var level = com.zerog.neoessentials.util.LevelCompat.of(player);
         var pos = player.blockPosition();
         int removed = 0;
 
@@ -447,7 +461,7 @@ public class ItemCustomisationCommands {
 
         final int fr = removed;
         src.sendSuccess(() -> MessageUtil.success("commands.neoessentials.remove.success", fr, type, radius), true);
-        LOGGER.info("{} removed {} {} entities within {}r", senderName(src), fr, type, radius);
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "{} removed {} {} entities within {}r", senderName(src), fr, type, radius);
         return 1;
     }
 
@@ -460,7 +474,7 @@ public class ItemCustomisationCommands {
                 var player = src.getPlayer();
                 if (player == null) { src.sendFailure(MessageUtil.error("commands.neoessentials.general.player_only")); return 0; }
                 player.openMenu(new MenuProvider() {
-                    @Override @Nonnull public Component getDisplayName() { return Component.literal("Loom"); }
+                    @Override @Nonnull public Component getDisplayName() { return MessageUtil.component("commands.neoessentials.loom.menu_title"); }
                     @Override @Nonnull public AbstractContainerMenu createMenu(int id, @Nonnull Inventory inv, @Nonnull Player p) {
                         return new LoomMenu(id, inv, ContainerLevelAccess.create(p.level(), p.blockPosition()));
                     }
@@ -488,7 +502,7 @@ public class ItemCustomisationCommands {
         var player = src.getPlayer();
         if (player == null) { src.sendFailure(MessageUtil.error("commands.neoessentials.general.player_only")); return 0; }
         player.openMenu(new MenuProvider() {
-            @Override @Nonnull public Component getDisplayName() { return Component.literal("Cartography Table"); }
+            @Override @Nonnull public Component getDisplayName() { return MessageUtil.component("commands.neoessentials.cartography.menu_title"); }
             @Override @Nonnull public AbstractContainerMenu createMenu(int id, @Nonnull Inventory inv, @Nonnull Player p) {
                 return new CartographyTableMenu(id, inv, ContainerLevelAccess.create(p.level(), p.blockPosition()));
             }

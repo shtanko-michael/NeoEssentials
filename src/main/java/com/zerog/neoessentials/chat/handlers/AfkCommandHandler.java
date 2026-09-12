@@ -5,6 +5,8 @@ import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.CommandEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,16 +30,21 @@ public class AfkCommandHandler {
         if (event.getParseResults().getContext().getSource().getEntity() instanceof ServerPlayer player) {
             String commandName = getCommandName(event.getParseResults().getReader().getString());
             
+            AfkManager afkManager = AfkManager.getInstance();
+            if (!afkManager.isEnableActivityTracking() || !afkManager.isTrackCommands()) {
+                return;
+            }
+
             // Skip excluded commands (from config)
-            if (AfkManager.getInstance().getExcludedCommands().contains(commandName.toLowerCase())) {
-                LOGGER.debug("Command '{}' excluded from AFK activity tracking for {}", 
+            if (afkManager.getExcludedCommands().contains(commandName.toLowerCase())) {
+                NeoLog.debug(LOGGER, LogCategory.CHAT, "Command '{}' excluded from AFK activity tracking for {}",
                     commandName, player.getName().getString());
                 return;
             }
-            
+
             // Update activity for non-excluded commands
-            AfkManager.getInstance().updateActivity(player.getUUID());
-            LOGGER.debug("Command activity tracked for {}: /{}", 
+            afkManager.updateActivity(player.getUUID());
+            NeoLog.debug(LOGGER, LogCategory.CHAT, "Command activity tracked for {}: /{}",
                 player.getName().getString(), commandName);
         }
     }

@@ -1,5 +1,7 @@
 package com.zerog.neoessentials.resourcepack;
 
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -49,26 +51,26 @@ public class ResourcePackManager {
     public void initialize() {
         try {
             if (!isAutoSendEnabled()) {
-                LOGGER.info("Auto-send resource pack is disabled in config");
+                NeoLog.info(LOGGER, LogCategory.GENERAL, "Auto-send resource pack is disabled in config");
                 return;
             }
 
             // Check if we should generate pack
             if (shouldGeneratePack()) {
-                LOGGER.info("Generating badge resource pack...");
+                NeoLog.info(LOGGER, LogCategory.GENERAL, "Generating badge resource pack...");
                 Path packPath = ResourcePackGenerator.generateResourcePack();
 
                 if (packPath != null) {
                     // Load SHA-1
                     loadResourcePackInfo(packPath);
                     autoSendEnabled = true;
-                    LOGGER.info("Resource pack system initialized successfully");
+                    NeoLog.info(LOGGER, LogCategory.GENERAL, "Resource pack system initialized successfully");
                 } else {
                     LOGGER.warn("Failed to generate resource pack - will use emoji badges");
                     autoSendEnabled = false;
                 }
             } else {
-                LOGGER.info("Resource pack generation skipped (custom images not enabled)");
+                NeoLog.info(LOGGER, LogCategory.GENERAL, "Resource pack generation skipped (custom images not enabled)");
             }
 
         } catch (Exception e) {
@@ -86,7 +88,7 @@ public class ResourcePackManager {
 
         if (configuredUrl != null && !configuredUrl.isEmpty()) {
             resourcePackUrl = configuredUrl;
-            LOGGER.info("Using configured resource pack URL: {}", resourcePackUrl);
+            NeoLog.info(LOGGER, LogCategory.GENERAL, "Using configured resource pack URL: {}", resourcePackUrl);
         } else {
             // Use local file path (requires players to download separately)
             // In production, you'd host this on a web server
@@ -99,7 +101,7 @@ public class ResourcePackManager {
         Path sha1File = Paths.get("config/neoessentials/NeoEssentials-Badges.sha1");
         if (Files.exists(sha1File)) {
             resourcePackHash = Files.readString(sha1File).trim();
-            LOGGER.info("Loaded resource pack SHA-1: {}", resourcePackHash);
+            NeoLog.info(LOGGER, LogCategory.GENERAL, "Loaded resource pack SHA-1: {}", resourcePackHash);
         }
     }
 
@@ -123,7 +125,7 @@ public class ResourcePackManager {
             // When available, use: player.connection.send(new ClientboundResourcePackPushPacket(...))
             // For now, provide helpful logging
 
-            LOGGER.debug("Resource pack auto-send requested for player: {}", player.getName().getString());
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Resource pack auto-send requested for player: {}", player.getName().getString());
             LOGGER.warn("Auto-send not yet implemented - please configure server.properties");
             LOGGER.warn("Add to server.properties:");
             LOGGER.warn("  resource-pack={}", resourcePackUrl);
@@ -144,15 +146,10 @@ public class ResourcePackManager {
         if (event.getEntity() instanceof ServerPlayer player) {
             var server = player.getServer();
             if (server != null) {
-                // Send resource pack after a short delay
-                server.execute(() -> {
-                    try {
-                        Thread.sleep(1000); // 1 second delay
-                        getInstance().sendResourcePack(player);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    }
-                });
+                // Delay on the shared bounded pool (not a fresh Thread per join — see
+                // DelayedTaskExecutor), then marshal the send back to the server tick thread.
+                com.zerog.neoessentials.util.DelayedTaskExecutor.schedule(
+                    () -> server.execute(() -> getInstance().sendResourcePack(player)), 1000);
             }
         }
     }
@@ -169,7 +166,7 @@ public class ResourcePackManager {
                 }
             }
         } catch (Exception e) {
-            // Ignore
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Failed to read badges.autoSendResourcePack config — defaulting to false", e);
         }
         return false;
     }
@@ -184,7 +181,7 @@ public class ResourcePackManager {
                 }
             }
         } catch (Exception e) {
-            // Ignore
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Failed to read badges.useCustomImages config — defaulting to false", e);
         }
         return false;
     }
@@ -200,7 +197,7 @@ public class ResourcePackManager {
                 }
             }
         } catch (Exception e) {
-            // Ignore
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Failed to read badges.requireResourcePack config — defaulting to false", e);
         }
         return false;
     }
@@ -215,7 +212,7 @@ public class ResourcePackManager {
                 }
             }
         } catch (Exception e) {
-            // Ignore
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Failed to read badges.resourcePackUrl config", e);
         }
         return null;
     }
@@ -231,9 +228,8 @@ public class ResourcePackManager {
                 }
             }
         } catch (Exception e) {
-            // Ignore
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Failed to read badges.resourcePackPrompt config — using default prompt", e);
         }
         return "This server uses custom badge images. Please accept the resource pack for the best experience!";
     }
 }
-

@@ -3,6 +3,8 @@ package com.zerog.neoessentials.webdashboard.websocket;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.server.WebSocketServer;
@@ -37,7 +39,7 @@ public class DashboardWebSocketServer extends WebSocketServer {
     private DashboardWebSocketServer(int port) {
         super(new InetSocketAddress(port));
         setReuseAddr(true);
-        LOGGER.info("WebSocket server created on port {}", port);
+        NeoLog.info(LOGGER, LogCategory.WEB_DASHBOARD, "WebSocket server created on port {}", port);
     }
 
     public static synchronized DashboardWebSocketServer getInstance(int port) {
@@ -59,7 +61,7 @@ public class DashboardWebSocketServer extends WebSocketServer {
     @Override
     public void onOpen(WebSocket conn, ClientHandshake handshake) {
         clientSubscriptions.put(conn, ConcurrentHashMap.newKeySet());
-        LOGGER.debug("WebSocket connection opened: {}", conn.getRemoteSocketAddress());
+        NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "WebSocket connection opened: {}", conn.getRemoteSocketAddress());
 
         JsonObject welcome = new JsonObject();
         welcome.addProperty("type", "welcome");
@@ -73,7 +75,7 @@ public class DashboardWebSocketServer extends WebSocketServer {
         clientSubscriptions.remove(conn);
         authenticatedClients.remove(conn);
         lastMessageTime.remove(conn);
-        LOGGER.debug("WebSocket connection closed: {} (code={}, reason={})", conn.getRemoteSocketAddress(), code, reason);
+        NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "WebSocket connection closed: {} (code={}, reason={})", conn.getRemoteSocketAddress(), code, reason);
     }
 
     @Override
@@ -99,41 +101,61 @@ public class DashboardWebSocketServer extends WebSocketServer {
                 default -> sendError(conn, "Unknown message type: " + type);
             }
         } catch (Exception e) {
-            LOGGER.warn("Error processing WebSocket message from {}: {}", conn.getRemoteSocketAddress(), e.getMessage());
+            NeoLog.warn(LOGGER, LogCategory.WEB_DASHBOARD, "Error processing WebSocket message from {}: {}", conn.getRemoteSocketAddress(), e.getMessage());
             sendError(conn, "Invalid message format");
         }
     }
 
     @Override
     public void onError(WebSocket conn, Exception ex) {
-        LOGGER.error("WebSocket error on {}: {}", conn != null ? conn.getRemoteSocketAddress() : "unknown", ex.getMessage());
+        NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "WebSocket error on {}: {}", conn != null ? conn.getRemoteSocketAddress() : "unknown", ex.getMessage());
     }
 
     @Override
     public void onStart() {
-        LOGGER.info("WebSocket server started successfully on port {}", getPort());
+        NeoLog.info(LOGGER, LogCategory.WEB_DASHBOARD, "WebSocket server started successfully on port {}", getPort());
         setConnectionLostTimeout(30);
     }
 
     // ── Message handlers ─────────────────────────────────────────────────────
 
+    /**
+     * Accepts either a human dashboard session ({@code sessionId}) or a long-lived API key
+     * ({@code apiKey}) — the same two credential types the REST API's {@code withAuth()}
+     * accepts, so an external dashboard backend can use the one API key for both its REST calls
+     * and this live event feed rather than needing a human session just to subscribe.
+     */
     private void handleAuthenticate(WebSocket conn, JsonObject msg) {
-        if (!msg.has("sessionId")) {
-            sendError(conn, "Missing sessionId in authentication request");
-            return;
-        }
-        String sessionId = msg.get("sessionId").getAsString();
+        String username;
+        String role;
 
-        com.zerog.neoessentials.webdashboard.security.AuthenticationManager authManager =
-            com.zerog.neoessentials.webdashboard.security.AuthenticationManager.getInstance();
-        com.zerog.neoessentials.webdashboard.security.Session session =
-            authManager.validateSession(sessionId);
-
-        if (session == null) {
-            JsonObject error = new JsonObject();
-            error.addProperty("type", "auth_error");
-            error.addProperty("message", "Invalid or expired session");
-            sendToClient(conn, error);
+        if (msg.has("apiKey")) {
+            com.zerog.neoessentials.webdashboard.security.ApiKeyManager.ApiKeyRecord record =
+                com.zerog.neoessentials.webdashboard.security.ApiKeyManager.getInstance().validate(msg.get("apiKey").getAsString());
+            if (record == null) {
+                JsonObject error = new JsonObject();
+                error.addProperty("type", "auth_error");
+                error.addProperty("message", "Invalid or revoked API key");
+                sendToClient(conn, error);
+                return;
+            }
+            username = "apikey:" + record.label;
+            role = record.role.name();
+        } else if (msg.has("sessionId")) {
+            com.zerog.neoessentials.webdashboard.security.Session session =
+                com.zerog.neoessentials.webdashboard.security.AuthenticationManager.getInstance()
+                    .validateSession(msg.get("sessionId").getAsString());
+            if (session == null) {
+                JsonObject error = new JsonObject();
+                error.addProperty("type", "auth_error");
+                error.addProperty("message", "Invalid or expired session");
+                sendToClient(conn, error);
+                return;
+            }
+            username = session.getUsername();
+            role = session.getRole().name();
+        } else {
+            sendError(conn, "Missing sessionId or apiKey in authentication request");
             return;
         }
 
@@ -142,12 +164,12 @@ public class DashboardWebSocketServer extends WebSocketServer {
         JsonObject response = new JsonObject();
         response.addProperty("type", "authenticated");
         response.addProperty("message", "Authentication successful");
-        response.addProperty("username", session.getUsername());
-        response.addProperty("role", session.getRole().name());
+        response.addProperty("username", username);
+        response.addProperty("role", role);
         response.addProperty("timestamp", System.currentTimeMillis());
         sendToClient(conn, response);
 
-        LOGGER.debug("WebSocket client authenticated: {} ({})", session.getUsername(), conn.getRemoteSocketAddress());
+        NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "WebSocket client authenticated: {} ({})", username, conn.getRemoteSocketAddress());
     }
 
     private void handleSubscribe(WebSocket conn, JsonObject msg) {

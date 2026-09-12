@@ -4,6 +4,8 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.zerog.neoessentials.config.ConfigManager;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,7 +23,7 @@ import java.util.*;
 public class DiscordAuthConfig {
     private static final Logger LOGGER = LoggerFactory.getLogger(DiscordAuthConfig.class);
     @SuppressWarnings("unused") // Reserved for future JSON serialization features
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
     @SuppressWarnings("unused") // Reserved for future file-based config loading
     private static final Path CONFIG_FILE = Paths.get("config", "neoessentials", "discord_auth.json");
     public static final String CONFIG_NAME = "discord_auth.json";
@@ -41,12 +43,6 @@ public class DiscordAuthConfig {
     private boolean syncOnJoin;
     private Map<String, List<String>> permissionMappings; // Discord Role ID -> List of Minecraft permissions
 
-    // OAuth2 settings
-    private String oauth2ClientId;
-    private String oauth2ClientSecret;
-    private String oauth2RedirectUri;
-    private String oauth2Scopes;
-
     private DiscordAuthConfig() {
         // Set defaults
         this.enabled = true;
@@ -61,10 +57,6 @@ public class DiscordAuthConfig {
         this.permissionSyncEnabled = true;
         this.syncOnJoin = true;
         this.permissionMappings = new HashMap<>();
-        this.oauth2ClientId = "";
-        this.oauth2ClientSecret = "";
-        this.oauth2RedirectUri = "http://localhost:8080/api/auth/discord/callback";
-        this.oauth2Scopes = "identify guilds.members.read";
     }
     
     /**
@@ -79,7 +71,7 @@ public class DiscordAuthConfig {
             JsonObject root = configManager.getConfig(CONFIG_NAME);
             
             if (root == null) {
-                LOGGER.warn("Failed to load Discord auth config from ConfigManager, using defaults");
+                NeoLog.warn(LOGGER, LogCategory.WEB_DASHBOARD, "Failed to load Discord auth config from ConfigManager, using defaults");
                 return config;
             }
             
@@ -93,7 +85,7 @@ public class DiscordAuthConfig {
                 try {
                     config.defaultRole = User.Role.valueOf(root.get("defaultRole").getAsString().toUpperCase());
                 } catch (IllegalArgumentException e) {
-                    LOGGER.warn("Invalid defaultRole in config, using VIEWER: {}", root.get("defaultRole").getAsString());
+                    NeoLog.warn(LOGGER, LogCategory.WEB_DASHBOARD, "Invalid defaultRole in config, using VIEWER: {}", root.get("defaultRole").getAsString());
                     config.defaultRole = User.Role.VIEWER;
                 }
             }
@@ -172,24 +164,11 @@ public class DiscordAuthConfig {
                 }
             }
 
-            // Parse OAuth2 settings
-            if (root.has("oauth2")) {
-                JsonObject oauth2Obj = root.getAsJsonObject("oauth2");
-                if (oauth2Obj.has("clientId"))
-                    config.oauth2ClientId = oauth2Obj.get("clientId").getAsString();
-                if (oauth2Obj.has("clientSecret"))
-                    config.oauth2ClientSecret = oauth2Obj.get("clientSecret").getAsString();
-                if (oauth2Obj.has("redirectUri"))
-                    config.oauth2RedirectUri = oauth2Obj.get("redirectUri").getAsString();
-                if (oauth2Obj.has("scopes"))
-                    config.oauth2Scopes = oauth2Obj.get("scopes").getAsString();
-            }
-
-            LOGGER.info("Discord auth config loaded successfully. Enabled: {}, Permission Sync: {}, OAuth2 configured: {}",
-                config.enabled, config.permissionSyncEnabled, !config.oauth2ClientId.isEmpty());
+            NeoLog.info(LOGGER, LogCategory.WEB_DASHBOARD, "Discord auth config loaded successfully. Enabled: {}, Permission Sync: {}",
+                config.enabled, config.permissionSyncEnabled);
 
         } catch (Exception e) {
-            LOGGER.error("Failed to load Discord auth config: {}", e.getMessage(), e);
+            NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Failed to load Discord auth config", e);
         }
         
         return config;
@@ -215,7 +194,7 @@ public class DiscordAuthConfig {
         try {
             return User.Role.valueOf(mapped);
         } catch (IllegalArgumentException e) {
-            LOGGER.warn("Invalid role mapping for Discord role ID '{}': {}", discordRoleId, mapped);
+            NeoLog.warn(LOGGER, LogCategory.WEB_DASHBOARD, "Invalid role mapping for Discord role ID '{}': {}", discordRoleId, mapped);
             return defaultRole;
         }
     }
@@ -285,16 +264,6 @@ public class DiscordAuthConfig {
     public boolean isPermissionSyncEnabled() { return permissionSyncEnabled; }
     public boolean isSyncOnJoin() { return syncOnJoin; }
     public Map<String, List<String>> getPermissionMappings() { return new HashMap<>(permissionMappings); }
-
-    // OAuth2 getters
-    public String getOauth2ClientId() { return oauth2ClientId; }
-    public String getOauth2ClientSecret() { return oauth2ClientSecret; }
-    public String getOauth2RedirectUri() { return oauth2RedirectUri; }
-    public String getOauth2Scopes() { return oauth2Scopes; }
-    public boolean isOauth2Configured() {
-        return oauth2ClientId != null && !oauth2ClientId.isEmpty()
-            && oauth2ClientSecret != null && !oauth2ClientSecret.isEmpty();
-    }
 
     // Setters
     public void setEnabled(boolean enabled) { this.enabled = enabled; }

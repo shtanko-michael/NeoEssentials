@@ -3,17 +3,20 @@ package com.zerog.neoessentials.economy.commands;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.zerog.neoessentials.economy.managers.EconomyManager;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import com.zerog.neoessentials.util.MessageUtil;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.server.MinecraftServer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Collectors;
 
 /**
  * /baltop [page] — Balance leaderboard, ported from EssentialsX BalanceTopImpl.
@@ -28,6 +31,7 @@ import java.util.stream.Collectors;
  *  - Configurable page size (default 10, matches Essentials)
  */
 public class BaltopCommand {
+    private static final Logger LOGGER = LoggerFactory.getLogger(BaltopCommand.class);
 
     private static final int PAGE_SIZE = 10;
 
@@ -36,6 +40,14 @@ public class BaltopCommand {
     private static volatile BigDecimal cachedTotal = BigDecimal.ZERO;
     private static volatile long cacheAge = 0L;
     private static final AtomicBoolean cacheBuilding = new AtomicBoolean(false);
+    // Set whenever invalidateCache() fires while a build is already in flight — that build
+    // started reading balancesCache before the invalidating change landed, so its result is
+    // stale the moment it finishes. Checked at the end of every build; if set, another build
+    // is kicked off immediately instead of the invalidation being silently dropped (previously:
+    // a rapid invalidate-while-building could leave the cache stuck on old data indefinitely,
+    // since compareAndSet(false, true) just no-ops when a build is already running).
+    private static final AtomicBoolean rebuildQueued = new AtomicBoolean(false);
+    private static volatile MinecraftServer lastServer = null;
 
     /** Immutable leaderboard entry. */
     private record BaltopEntry(UUID uuid, String name, BigDecimal balance) {}
@@ -66,13 +78,26 @@ public class BaltopCommand {
         }
 
         // If cache is stale (>60 s) or empty, rebuild asynchronously
+        boolean triggeredBuild = false;
         if (System.currentTimeMillis() - cacheAge > 60_000L || cachedTop.isEmpty()) {
             refreshCacheAsync(source.getServer());
+            triggeredBuild = true;
         }
 
         List<BaltopEntry> top = cachedTop;
 
         if (top.isEmpty()) {
+            // Distinguish "genuinely no economy data exists yet" from "the cache has simply
+            // never been built before, and the rebuild just kicked off above hasn't finished
+            // yet" — the two were conflated into the same "no data" message, which is actively
+            // misleading on the very first /baltop ever run on a server: the async rebuild is
+            // still in flight (a completely normal, ~instant background task), so the balances
+            // that DO exist just haven't been read into cachedTop yet. Telling the admin
+            // "no data" here reads as "the economy is broken," not "try again in a second."
+            if (triggeredBuild && cacheBuilding.get()) {
+                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.baltop.building"), false);
+                return 1;
+            }
             source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.baltop.empty"), false);
             return 1;
         }
@@ -108,9 +133,19 @@ public class BaltopCommand {
 
     // ── Async cache rebuild (BalanceTopImpl.calculateBalanceTopMapAsync port) ─
     public static CompletableFuture<Void> refreshCacheAsync(MinecraftServer server) {
+        lastServer = server;
         if (!cacheBuilding.compareAndSet(false, true)) {
-            return CompletableFuture.completedFuture(null); // Already building
+            // A build is already in flight. It started reading balancesCache before whatever
+            // just called refreshCacheAsync() (e.g. this /eco give) landed, so mark that its
+            // result will be stale — the in-flight build re-checks this flag when it finishes
+            // and immediately re-runs itself if set, instead of this invalidation being lost.
+            rebuildQueued.set(true);
+            return CompletableFuture.completedFuture(null);
         }
+        return runBuild(server);
+    }
+
+    private static CompletableFuture<Void> runBuild(MinecraftServer server) {
         return CompletableFuture.runAsync(() -> {
             try {
                 Map<UUID, BigDecimal> all = EconomyManager.getInstance().getAllBalances();
@@ -130,7 +165,10 @@ public class BaltopCommand {
                         if (profile.isPresent() && profile.get().getName() != null) {
                             displayName = profile.get().getName();
                         }
-                    } catch (Exception ignored) {}
+                    } catch (Exception ignored) {
+                        NeoLog.debug(LOGGER, LogCategory.ECONOMY,
+                            "runBuild: failed to resolve player name for " + e.getKey() + ", falling back to UUID", ignored);
+                    }
 
                     entries.add(new BaltopEntry(e.getKey(), displayName, e.getValue()));
                     total = total.add(e.getValue());
@@ -142,8 +180,17 @@ public class BaltopCommand {
                 cachedTop   = Collections.unmodifiableList(entries);
                 cachedTotal = total;
                 cacheAge    = System.currentTimeMillis();
+                NeoLog.debug(LOGGER, LogCategory.ECONOMY,
+                    "runBuild: rebuilt baltop cache — {} entries, total economy wealth={}", entries.size(), total);
             } finally {
                 cacheBuilding.set(false);
+            }
+            // If an invalidation arrived while we were building, our just-published result is
+            // already stale — immediately rebuild again rather than waiting for the next
+            // /baltop call (which, under the old cacheAge>60s check alone, could be minutes away).
+            if (rebuildQueued.compareAndSet(true, false)
+                    && cacheBuilding.compareAndSet(false, true)) {
+                runBuild(server);
             }
         });
     }
@@ -151,5 +198,31 @@ public class BaltopCommand {
     /** Invalidate cache (call after eco give/take/set). */
     public static void invalidateCache() {
         cacheAge = 0L;
+        // Proactively kick off a rebuild now rather than waiting for the next /baltop call to
+        // notice staleness — that could otherwise be minutes away, or (for a brand-new account
+        // that's never been in the leaderboard before) might not happen until someone thinks to
+        // run /baltop again at all. Safe to call before any /baltop has ever run: lastServer is
+        // simply null until then, and refreshCacheAsync() itself sets rebuildQueued if a build
+        // is already in flight rather than dropping this invalidation.
+        MinecraftServer server = lastServer;
+        if (server != null) {
+            refreshCacheAsync(server);
+        }
+
+        // The generalized leaderboard system's "money" board (used by {leaderboard_money:...}
+        // placeholders — e.g. a scoreboard/tablist "richest player" line) wraps this exact same
+        // balance data through its own, entirely separate cache (LeaderboardCache), which no
+        // economy-mutating command ever invalidated — only this /baltop-specific cache did. So
+        // a balance change via /eco give|set|take or /pay updated /baltop immediately but left
+        // any {leaderboard_money:...} placeholder showing stale data for up to that board's own
+        // refreshIntervalSeconds (default 60s), reported as "the scoreboard shows the wrong
+        // richest player." Piggybacking the same invalidation here covers every caller of this
+        // method, not just the ones that happen to also touch LeaderboardManager directly.
+        try {
+            var moneyBoard = com.zerog.neoessentials.leaderboard.LeaderboardManager.getInstance().getBoard("money");
+            if (moneyBoard != null) moneyBoard.invalidate();
+        } catch (Exception ignored) {
+            // Leaderboard system not initialized/enabled — nothing to invalidate.
+        }
     }
 }

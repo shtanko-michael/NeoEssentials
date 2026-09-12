@@ -32,9 +32,9 @@ public class ChatComponentUtil {
         
         // Add click event to run command
         component.setStyle(Style.EMPTY
-            .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/" + command))
+            .withClickEvent(com.zerog.neoessentials.util.ClickEventCompat.create(ClickEvent.Action.RUN_COMMAND, "/" + command))
             .withHoverEvent(hoverText != null ? 
-                new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(hoverText)) : null)
+                com.zerog.neoessentials.util.HoverEventCompat.create(HoverEvent.Action.SHOW_TEXT, Component.literal(hoverText)) : null)
             .withColor(ChatFormatting.YELLOW)
             .withUnderlined(true)
         );
@@ -53,9 +53,9 @@ public class ChatComponentUtil {
         MutableComponent component = Component.literal(text);
         
         component.setStyle(Style.EMPTY
-            .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/" + command))
+            .withClickEvent(com.zerog.neoessentials.util.ClickEventCompat.create(ClickEvent.Action.SUGGEST_COMMAND, "/" + command))
             .withHoverEvent(hoverText != null ? 
-                new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(hoverText)) : null)
+                com.zerog.neoessentials.util.HoverEventCompat.create(HoverEvent.Action.SHOW_TEXT, Component.literal(hoverText)) : null)
             .withColor(ChatFormatting.AQUA)
             .withUnderlined(true)
         );
@@ -74,9 +74,9 @@ public class ChatComponentUtil {
         MutableComponent component = Component.literal(text);
         
         component.setStyle(Style.EMPTY
-            .withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, url))
+            .withClickEvent(com.zerog.neoessentials.util.ClickEventCompat.create(ClickEvent.Action.OPEN_URL, url))
             .withHoverEvent(hoverText != null ? 
-                new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(hoverText)) : null)
+                com.zerog.neoessentials.util.HoverEventCompat.create(HoverEvent.Action.SHOW_TEXT, Component.literal(hoverText)) : null)
             .withColor(ChatFormatting.BLUE)
             .withUnderlined(true)
         );
@@ -95,7 +95,7 @@ public class ChatComponentUtil {
         MutableComponent component = Component.literal(text);
         
         component.setStyle(Style.EMPTY
-            .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(hoverText)))
+            .withHoverEvent(com.zerog.neoessentials.util.HoverEventCompat.create(HoverEvent.Action.SHOW_TEXT, Component.literal(hoverText)))
             .withColor(color != null ? color : ChatFormatting.WHITE)
         );
         
@@ -139,14 +139,36 @@ public class ChatComponentUtil {
         
         MutableComponent component = Component.literal(permission);
         component.setStyle(Style.EMPTY
-            .withClickEvent(new ClickEvent(ClickEvent.Action.COPY_TO_CLIPBOARD, permission))
-            .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(hoverText)))
+            .withClickEvent(com.zerog.neoessentials.util.ClickEventCompat.create(ClickEvent.Action.COPY_TO_CLIPBOARD, permission))
+            .withHoverEvent(com.zerog.neoessentials.util.HoverEventCompat.create(HoverEvent.Action.SHOW_TEXT, Component.literal(hoverText)))
             .withColor(ChatFormatting.LIGHT_PURPLE)
         );
         
         return component;
     }
-    
+
+    /**
+     * Create a click-to-copy component for an arbitrary secret (API key/token), styled and
+     * labeled distinctly from {@link #createPermissionComponent(String)} so it's visually clear
+     * this is sensitive, one-time-shown material rather than a permission node.
+     * @param label What this value is, shown in the hover tooltip (e.g. "API key")
+     * @param value The raw secret to copy
+     * @return Component that copies {@code value} to clipboard when clicked
+     */
+    public static Component createCopyableSecret(String label, String value) {
+        String hoverText = String.format("%s\nClick to copy to clipboard", label);
+
+        MutableComponent component = Component.literal(value);
+        component.setStyle(Style.EMPTY
+            .withClickEvent(com.zerog.neoessentials.util.ClickEventCompat.create(ClickEvent.Action.COPY_TO_CLIPBOARD, value))
+            .withHoverEvent(com.zerog.neoessentials.util.HoverEventCompat.create(HoverEvent.Action.SHOW_TEXT, Component.literal(hoverText)))
+            .withColor(ChatFormatting.GOLD)
+            .withUnderlined(true)
+        );
+
+        return component;
+    }
+
     /**
      * Parse color codes in text and return a colored component.
      * Supports: §/& color codes (0-9, a-f), format codes (k-o, r), and hex (&#RRGGBB)
@@ -155,12 +177,43 @@ public class ChatComponentUtil {
      * @return Colored component
      */
     public static Component parseColorCodes(String text) {
+        return parseColorCodesTracked(text, Style.EMPTY).component();
+    }
+
+    /**
+     * Same as {@link #parseColorCodes(String)}, but starts from {@code baseStyle} instead of no
+     * style at all — any color/format code encountered in {@code text} still overrides it as
+     * normal, but text with no code of its own keeps {@code baseStyle} (e.g. a color inherited
+     * from whatever preceded it in the template) instead of falling back to default/white. Appended
+     * sibling components in this codebase's component tree do NOT inherit a preceding sibling's
+     * color on their own, which is what this exists to work around — see
+     * {@code ChatFormatter#createClickablePlayerNameComponent}'s ambient-style usage.
+     */
+    public static Component parseColorCodes(String text, Style baseStyle) {
+        return parseColorCodesTracked(text, baseStyle).component();
+    }
+
+    /**
+     * The style still "active" at the very end of {@code text} once every color/format code in
+     * it has been applied in order — e.g. for {@code "&cHello &lWorld"} this is red+bold, not
+     * just bold. Used to seed an ambient style for content appended immediately after {@code
+     * text} (e.g. a clickable player name built as its own sibling component) so a color code
+     * placed before it in a template actually carries over, instead of that sibling defaulting
+     * to no color the way a fresh unstyled component otherwise would.
+     */
+    public static Style getTrailingStyle(String text) {
+        return parseColorCodesTracked(text, Style.EMPTY).trailingStyle();
+    }
+
+    private record ParsedText(Component component, Style trailingStyle) {}
+
+    private static ParsedText parseColorCodesTracked(String text, Style baseStyle) {
         if (text == null || text.isEmpty()) {
-            return Component.empty();
+            return new ParsedText(Component.empty(), baseStyle);
         }
 
         MutableComponent result = Component.empty();
-        
+
         // First convert & to § for uniform processing (using pre-compiled pattern)
         text = AMPERSAND_CODE_PATTERN.matcher(text).replaceAll("§$1");
         
@@ -181,7 +234,7 @@ public class ChatComponentUtil {
         
         // Now parse the text character by character, building Components
         StringBuilder currentText = new StringBuilder();
-        net.minecraft.network.chat.Style currentStyle = net.minecraft.network.chat.Style.EMPTY;
+        net.minecraft.network.chat.Style currentStyle = baseStyle;
         
         for (int i = 0; i < text.length(); i++) {
             char c = text.charAt(i);
@@ -239,8 +292,8 @@ public class ChatComponentUtil {
         if (currentText.length() > 0) {
             result.append(Component.literal(currentText.toString()).setStyle(currentStyle));
         }
-        
-        return result;
+
+        return new ParsedText(result, currentStyle);
     }
     
     /**

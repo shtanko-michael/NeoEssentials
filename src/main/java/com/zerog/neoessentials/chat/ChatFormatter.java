@@ -11,6 +11,8 @@ import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.ChatFormatting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 
 import java.util.regex.Pattern;
 import java.util.regex.Matcher;
@@ -31,6 +33,13 @@ public class ChatFormatter {
     private static final Pattern AMPERSAND_CODE_PATTERN = Pattern.compile("&([0-9a-fk-or])");
     private static final Pattern COLOR_CODE_PATTERN = Pattern.compile("&([0-9a-f])");
     private static final Pattern FORMAT_CODE_PATTERN = Pattern.compile("&([k-or])");
+    // Named-color / format tags (stripped from player messages without permission)
+    private static final Pattern NAMED_TAG_PATTERN = Pattern.compile(
+        "<(black|dark_blue|dark_green|dark_aqua|dark_cyan|dark_red|dark_purple|gold|"
+        + "gray|grey|dark_gray|dark_grey|blue|green|aqua|cyan|red|light_purple|pink|yellow|white|"
+        + "bold|b|italic|i|underline|underlined|u|strikethrough|s|obfuscated|magic|reset|r|color"
+        + "|hover|click|gradient|rainbow)([^>]*)>",
+        Pattern.CASE_INSENSITIVE);
     
     // Phase 2: Enhancement patterns
     @SuppressWarnings("RegExpDuplicateCharacterInClass") // Period in char class is intentional
@@ -44,76 +53,147 @@ public class ChatFormatter {
      * Formats a chat message using the provided template and player context.
      */
     public static Component formatMessage(String template, ServerPlayer player, String message) {
+        return formatMessage(template, player, message, null);
+    }
+
+    /**
+     * Formats a chat message using the provided template and player context.
+     *
+     * @param resolvedChannel the channel THIS message actually routed to (may differ from the
+     *                        player's persistent channel state due to a one-off prefix override,
+     *                        e.g. typing {@code @text} to hit staff without switching channels) —
+     *                        used to resolve {@code {channel}}. Pass {@code null} to fall back to
+     *                        {@link ChatHandler#getEffectiveChannel} (the player's persistent channel).
+     */
+    public static Component formatMessage(String template, ServerPlayer player, String message, String resolvedChannel) {
         try {
-            boolean debugEnabled = com.zerog.neoessentials.config.ConfigManager.getInstance().isDebugLoggingEnabled();
+            boolean debugEnabled = com.zerog.neoessentials.logging.NeoLog.isDebugEnabled(com.zerog.neoessentials.logging.LogCategory.CHAT);
 
             if (debugEnabled) {
-                LOGGER.info("=== CHAT FORMATTING DEBUG ===");
-                LOGGER.info("Player: {}, OP: {}", player.getName().getString(), player.hasPermissions(2));
-                LOGGER.info("Original message: [{}]", message);
-                LOGGER.info("Template: [{}]", template);
+                NeoLog.info(LOGGER, LogCategory.CHAT, "=== CHAT FORMATTING DEBUG ===");
+                NeoLog.info(LOGGER, LogCategory.CHAT, "Player: {}, OP: {}", player.getName().getString(), player.hasPermissions(2));
+                NeoLog.info(LOGGER, LogCategory.CHAT, "Original message: [{}]", message);
+                NeoLog.info(LOGGER, LogCategory.CHAT, "Template: [{}]", template);
             }
 
             // Normalize placeholders to new format
             String normalizedTemplate = normalizePlaceholders(template);
             if (debugEnabled) {
-                LOGGER.debug("After normalization: {}", normalizedTemplate);
+                NeoLog.debug(LOGGER, LogCategory.CHAT, "After normalization: {}", normalizedTemplate);
             }
 
-            // Phase 3: Apply badges and icons to template
+            // Phase 3: Apply badges and icons to template.
+            // MUST run before the clickable-name marker injection below — BadgeManager's
+            // "before_name"/"after_name" icon-position logic works by string-replacing the
+            // literal {neoessentials_username}/{neoessentials_displayname} tokens, and once
+            // those tokens are replaced with §HNAME§/§HDNAME§ markers, that replace() call
+            // silently finds nothing to match. Since chat.clickablePlayerNames defaults to
+            // true and statusIcons' default iconPosition is "after_name", this ordering used
+            // to make AFK/vanished/muted status icons a no-op by default for anyone using
+            // clickable names — rank badges only survived because their default position
+            // (before_prefix) never touches the username token in the first place.
             normalizedTemplate = BadgeManager.getInstance().applyBadgesAndIcons(player, normalizedTemplate);
             if (debugEnabled) {
-                LOGGER.debug("After badges/icons: {}", normalizedTemplate);
+                NeoLog.debug(LOGGER, LogCategory.CHAT, "After badges/icons: {}", normalizedTemplate);
             }
 
+            // Inject clickable player-name markers when both features are enabled.
+            // We substitute the placeholder with an internal §HNAME§/§HDNAME§ marker
+            // so that buildComponentFromMarkup() can create proper hover+click Components.
+            // When enhancements are disabled the placeholder is left alone and resolved
+            // to plain text by PlaceholderAPI below.
+            if (isClickablePlayerNamesEnabled() && isChatEnhancementsEnabled()) {
+                String uname = player.getName().getString();
+                // Use the player's nickname for displayname hover, falling back to the raw name —
+                // NOT getDisplayName(), which (e.g. under LuckPerms' vanilla team-based name
+                // formatting) already has the group prefix/suffix baked in, doubling up with the
+                // template's own {neoessentials_prefix}/{neoessentials_suffix} placeholders. See
+                // DefaultPlaceholderExpansion.getNickOrDisplayName() for the same fix.
+                String nickRaw = com.zerog.neoessentials.util.commands.NickCommand.getNickname(player.getUUID());
+                String dname = (nickRaw != null && !nickRaw.isEmpty())
+                    ? nickRaw.replace("&", "§")
+                    : uname;
+                normalizedTemplate = normalizedTemplate
+                    .replace("{neoessentials_username}", "§HNAME§" + uname + "§/HNAME§")
+                    .replace("{neoessentials_displayname}", "§HDNAME§" + dname + "§/HDNAME§");
+            }
+
+            // Strip any literal occurrences of our internal markup markers from the raw
+            // player message BEFORE anything else touches it — see stripInjectedMarkupMarkers().
+            String sanitizedMessage = stripInjectedMarkupMarkers(message);
+
             // Restrict colors in message BEFORE inserting into template
-            String restrictedMessage = restrictPlayerMessageColors(message, player);
+            String restrictedMessage = restrictPlayerMessageColors(sanitizedMessage, player);
             if (debugEnabled) {
-                LOGGER.info("After color restriction: [{}]", restrictedMessage);
+                NeoLog.info(LOGGER, LogCategory.CHAT, "After color restriction: [{}]", restrictedMessage);
             }
 
             // Directly replace {MESSAGE} before PlaceholderAPI processing
             String preFormatted = normalizedTemplate.replace("{MESSAGE}", restrictedMessage);
             if (debugEnabled) {
-                LOGGER.info("After message insertion: [{}]", preFormatted);
+                NeoLog.info(LOGGER, LogCategory.CHAT, "After message insertion: [{}]", preFormatted);
             }
 
             // Resolve all other placeholders via PlaceholderAPI
             String formatted = com.zerog.neoessentials.api.PlaceholderAPI.setPlaceholders(player, preFormatted);
             if (debugEnabled) {
-                LOGGER.info("After placeholder resolution: [{}]", formatted);
+                NeoLog.info(LOGGER, LogCategory.CHAT, "After placeholder resolution: [{}]", formatted);
+            }
+
+            // Tablist-style short-form tokens ({tps}, {online}, {animation:name}, etc.) that
+            // have no {neoessentials_*} equivalent — lets tablist/hologram snippets be reused in chat.
+            formatted = resolveShortPlaceholders(formatted, player, resolvedChannel);
+            formatted = com.zerog.neoessentials.tablist.AnimationManager.getInstance().resolveAnimations(formatted);
+            // Gradients/rainbow that came IN via an animation frame are admin-authored content
+            // (from animations.json), not something the player typed — render them the same way
+            // tablist/hologram already do, regardless of chat.richText.enabled (that config only
+            // gates a player's own raw <gradient:...> typed directly, handled later below by
+            // preprocessTags()). Without this an animation using gradients showed up stripped in
+            // chat on any server that hadn't separately opted into richText.enabled.
+            formatted = RichTextFormatter.processAnimationFrameGradients(formatted);
+            if (debugEnabled) {
+                NeoLog.info(LOGGER, LogCategory.CHAT, "After short-form placeholders/animations: [{}]", formatted);
             }
 
             // Phase 4: Apply conditional formatting
             formatted = ConditionalFormatter.processConditionals(player, formatted);
             if (debugEnabled) {
-                LOGGER.info("After conditional formatting: [{}]", formatted);
+                NeoLog.info(LOGGER, LogCategory.CHAT, "After conditional formatting: [{}]", formatted);
             }
 
             // Clean up formatting
             formatted = cleanupFormatting(formatted);
             if (debugEnabled) {
-                LOGGER.info("After cleanup: [{}]", formatted);
+                NeoLog.info(LOGGER, LogCategory.CHAT, "After cleanup: [{}]", formatted);
             }
 
-            // Phase 4: Apply rich text effects (gradients, rainbow)
-            Component richTextResult = RichTextFormatter.processRichText(formatted);
+            // Phase 4: Pre-process rich text tags.
+            // When richText.enabled=true  → converts <tag> syntax to & codes / internal markers.
+            // When richText.enabled=false → strips <tag> syntax, leaving legacy & codes intact.
             if (debugEnabled) {
-                LOGGER.info("After rich text: [{}]", richTextResult.getString());
+                boolean richTextOn = isRichTextEnabled();
+                NeoLog.info(LOGGER, LogCategory.CHAT, "Rich text enabled: {}", richTextOn);
+            }
+            String richPreProcessed = RichTextFormatter.preprocessTags(formatted);
+            if (debugEnabled) {
+                NeoLog.info(LOGGER, LogCategory.CHAT, "After rich text pre-processing: [{}]", richPreProcessed);
             }
 
             // Apply Phase 2 enhancements if enabled
             Component result;
             if (isChatEnhancementsEnabled()) {
-                // Convert component back to string for enhancement processing
-                String richTextString = componentToFormattedString(richTextResult);
-                result = enhanceMessage(richTextString, player, player.getServer());
+                // Pass the string with & color codes intact; buildComponentFromMarkup will
+                // call parseColorCodes on each plain-text segment so all & and &#RRGGBB
+                // codes are honoured correctly.
+                result = enhanceMessage(richPreProcessed, player, player.getServer());
             } else {
-                result = richTextResult;
+                // No enhancements — richPreProcessed already has tags stripped/converted;
+                // use it directly instead of re-processing the original formatted string.
+                result = RichTextFormatter.processRichText(richPreProcessed);
             }
 
             if (debugEnabled) {
-                LOGGER.info("=== END CHAT FORMATTING DEBUG ===");
+                NeoLog.info(LOGGER, LogCategory.CHAT, "=== END CHAT FORMATTING DEBUG ===");
             }
             return result;
 
@@ -121,8 +201,29 @@ public class ChatFormatter {
             LOGGER.error("Failed to format chat message for player {}: {}",
                 player.getName().getString(), e.getMessage(), e);
             // Fallback
-            return Component.literal(player.getName().getString() + ": " + message);
+            return MessageUtil.component("commands.neoessentials.chat.fallback_format", player.getName().getString(), message);
         }
+    }
+
+    // Literal marker sequences buildComponentFromMarkup() treats as its own internal
+    // syntax for interactive components. § is an ordinary character in a chat packet —
+    // nothing stops a player from sending one of these literally — so they must be
+    // stripped from raw player input before it ever reaches processItemLinks/markupUrls/
+    // markupMentions, or a forged marker would be rendered as a real, trusted-looking
+    // clickable/hoverable component (e.g. impersonating another player's clickable name).
+    // Package-private (not private) so RichTextFormatter's gradient/rainbow character-by-character
+    // colorers (same package) can skip over these atomically too — see their use there.
+    static final String[] INTERNAL_MARKUP_MARKERS = {
+        "§ITEM§", "§/ITEM§", "§URL§", "§/URL§", "§MENTION§", "§/MENTION§",
+        "§HNAME§", "§/HNAME§", "§HDNAME§", "§/HDNAME§"
+    };
+
+    private static String stripInjectedMarkupMarkers(String message) {
+        String result = message;
+        for (String marker : INTERNAL_MARKUP_MARKERS) {
+            result = result.replace(marker, "");
+        }
+        return result;
     }
 
     /**
@@ -132,17 +233,17 @@ public class ChatFormatter {
     private static String restrictPlayerMessageColors(String message, ServerPlayer player) {
         UUID uuid = player.getUUID();
         String result = message;
-        boolean debugEnabled = com.zerog.neoessentials.config.ConfigManager.getInstance().isDebugLoggingEnabled();
+        boolean debugEnabled = com.zerog.neoessentials.logging.NeoLog.isDebugEnabled(com.zerog.neoessentials.logging.LogCategory.CHAT);
 
         if (debugEnabled) {
-            LOGGER.info(">>> Restricting colors for player {} (UUID: {})", player.getName().getString(), uuid);
-            LOGGER.info(">>> Original message: [{}]", message);
+            NeoLog.info(LOGGER, LogCategory.CHAT, ">>> Restricting colors for player {} (UUID: {})", player.getName().getString(), uuid);
+            NeoLog.info(LOGGER, LogCategory.CHAT, ">>> Original message: [{}]", message);
         }
 
         // First check if color codes are enabled globally in config
         boolean colorCodesEnabled = com.zerog.neoessentials.config.ConfigManager.isColorCodesEnabled();
         if (debugEnabled) {
-            LOGGER.info(">>> Config enable-color-codes: {}", colorCodesEnabled);
+            NeoLog.info(LOGGER, LogCategory.CHAT, ">>> Config enable-color-codes: {}", colorCodesEnabled);
         }
 
         if (!colorCodesEnabled) {
@@ -150,7 +251,7 @@ public class ChatFormatter {
             result = HEX_PATTERN.matcher(result).replaceAll("");
             result = AMPERSAND_CODE_PATTERN.matcher(result).replaceAll("");
             if (debugEnabled) {
-                LOGGER.info(">>> Color codes DISABLED in config - Stripped all codes: [{}]", result);
+                NeoLog.info(LOGGER, LogCategory.CHAT, ">>> Color codes DISABLED in config - Stripped all codes: [{}]", result);
             }
             return result;
         }
@@ -161,17 +262,17 @@ public class ChatFormatter {
         boolean hasFormatPerm = PermissionAPI.hasPermission(uuid, "neoessentials.chat.format");
         
         if (debugEnabled) {
-            LOGGER.info(">>> Permission Check Results:");
-            LOGGER.info(">>>   - neoessentials.chat.color.hex: {}", hasHexPerm);
-            LOGGER.info(">>>   - neoessentials.chat.color: {}", hasColorPerm);
-            LOGGER.info(">>>   - neoessentials.chat.format: {}", hasFormatPerm);
+            NeoLog.info(LOGGER, LogCategory.CHAT, ">>> Permission Check Results:");
+            NeoLog.info(LOGGER, LogCategory.CHAT, ">>>   - neoessentials.chat.color.hex: {}", hasHexPerm);
+            NeoLog.info(LOGGER, LogCategory.CHAT, ">>>   - neoessentials.chat.color: {}", hasColorPerm);
+            NeoLog.info(LOGGER, LogCategory.CHAT, ">>>   - neoessentials.chat.format: {}", hasFormatPerm);
         }
 
         if (!hasHexPerm) {
             if (debugEnabled) {
                 String before = result;
                 result = HEX_PATTERN.matcher(result).replaceAll("");
-                LOGGER.info(">>>   Stripped hex codes: [{}] -> [{}]", before, result);
+                NeoLog.info(LOGGER, LogCategory.CHAT, ">>>   Stripped hex codes: [{}] -> [{}]", before, result);
             } else {
                 result = HEX_PATTERN.matcher(result).replaceAll("");
             }
@@ -181,7 +282,7 @@ public class ChatFormatter {
             if (debugEnabled) {
                 String before = result;
                 result = COLOR_CODE_PATTERN.matcher(result).replaceAll("");
-                LOGGER.info(">>>   Stripped color codes: [{}] -> [{}]", before, result);
+                NeoLog.info(LOGGER, LogCategory.CHAT, ">>>   Stripped color codes: [{}] -> [{}]", before, result);
             } else {
                 result = COLOR_CODE_PATTERN.matcher(result).replaceAll("");
             }
@@ -191,14 +292,23 @@ public class ChatFormatter {
             if (debugEnabled) {
                 String before = result;
                 result = FORMAT_CODE_PATTERN.matcher(result).replaceAll("");
-                LOGGER.info(">>>   Stripped format codes: [{}] -> [{}]", before, result);
+                NeoLog.info(LOGGER, LogCategory.CHAT, ">>>   Stripped format codes: [{}] -> [{}]", before, result);
             } else {
                 result = FORMAT_CODE_PATTERN.matcher(result).replaceAll("");
             }
         }
+
+        // Strip named color/format tags (e.g. <red>, <bold>) unless player has appropriate perm
+        boolean hasNamedTagPerm = PermissionAPI.hasPermission(uuid, "neoessentials.chat.namedcolors");
+        if (!hasNamedTagPerm) {
+            // Also strip hover/click tags (those always require namedcolors perm in player messages)
+            result = NAMED_TAG_PATTERN.matcher(result).replaceAll("");
+            // Strip matching close-tags
+            result = result.replaceAll("</(\\w+)>", "");
+        }
         
         if (debugEnabled) {
-            LOGGER.info(">>> Final restricted message: [{}]", result);
+            NeoLog.info(LOGGER, LogCategory.CHAT, ">>> Final restricted message: [{}]", result);
         }
         return result;
     }
@@ -295,6 +405,63 @@ public class ChatFormatter {
     }
     
     /**
+     * Resolves tablist-style short-form tokens that have no {@code {neoessentials_*}}
+     * equivalent, so header/footer-style snippets can be copy-pasted into chat formats.
+     * Values reflect the sending player's own context (e.g. {@code {ping}} is the
+     * sender's latency — there's only one recipient-agnostic broadcast, unlike tablist
+     * where each viewer sees their own ping).
+     *
+     * <p>Tokens already covered by {@code {neoessentials_*}} PlaceholderAPI expansions
+     * (prefix/suffix/group/balance/ping/world/x/y/z/level/health/afk/time/server_name/server_motd)
+     * are intentionally NOT duplicated here — this only fills the gap.
+     */
+    private static String resolveShortPlaceholders(String text, ServerPlayer player, String resolvedChannel) {
+        if (text.indexOf('{') < 0) return text;
+        net.minecraft.server.MinecraftServer server = player.getServer();
+        if (server == null) return text;
+
+        if (text.contains("{tps}")) {
+            double tps = com.zerog.neoessentials.tablist.TablistManager.getInstance().getTps(server);
+            String tpsStr = tps >= 19.0 ? "&a" + String.format("%.1f", tps)
+                          : tps >= 15.0 ? "&e" + String.format("%.1f", tps)
+                          : "&c" + String.format("%.1f", tps);
+            text = text.replace("{tps}", tpsStr);
+        }
+        if (text.contains("{online}")) {
+            int online = com.zerog.neoessentials.tablist.TablistManager.getInstance()
+                .countOnlineExcludingVanish(server, player);
+            text = text.replace("{online}", String.valueOf(online));
+        }
+        if (text.contains("{max}")) {
+            text = text.replace("{max}", String.valueOf(server.getMaxPlayers()));
+        }
+        if (text.contains("{channel}")) {
+            String channel = resolvedChannel != null ? resolvedChannel : ChatHandler.getEffectiveChannel(player.getUUID());
+            text = text.replace("{channel}", ChatHandler.getChannelDisplayName(channel));
+        }
+        if (text.contains("{rank_weight}")) {
+            int weight = com.zerog.neoessentials.tablist.TablistManager.getInstance().getGroupWeight(player);
+            text = text.replace("{rank_weight}", String.valueOf(weight));
+        }
+        if (text.contains("{network_online}") || text.contains("{current_server}") || text.contains("{server_label}")) {
+            var proxy = com.zerog.neoessentials.tablist.ProxyIntegration.getInstance();
+            int networkOnline = proxy.isProxyEnabled() ? proxy.getNetworkOnline()
+                : com.zerog.neoessentials.tablist.TablistManager.getInstance().countOnlineExcludingVanish(server, player);
+            String currentServer = proxy.isProxyEnabled() ? proxy.getPlayerServer(player.getUUID()) : proxy.getServerLabel();
+            text = text.replace("{network_online}", String.valueOf(networkOnline))
+                       .replace("{current_server}", currentServer)
+                       .replace("{server_label}", proxy.getServerLabel());
+        }
+        if (text.contains("{session_minutes}") || text.contains("{session_hours}")) {
+            var tablist = com.zerog.neoessentials.tablist.TablistManager.getInstance();
+            text = text.replace("{session_minutes}", String.valueOf(tablist.getSessionMinutes(player.getUUID())))
+                       .replace("{session_hours}", String.valueOf(tablist.getSessionHours(player.getUUID())));
+        }
+        text = text.replace("{newline}", "\n").replace("{bar}", "&8&m──────────");
+        return text;
+    }
+
+    /**
      * Convert legacy uppercase placeholders to lowercase format.
      */
     private static String normalizePlaceholders(String template) {
@@ -303,6 +470,7 @@ public class ChatFormatter {
             .replace("{USERNAME}", "{neoessentials_username}")
             .replace("{PREFIX}", "{neoessentials_prefix}")
             .replace("{SUFFIX}", "{neoessentials_suffix}")
+            .replace("{GROUP}", "{neoessentials_group}")
             .replace("{WORLD}", "{neoessentials_world}")
             .replace("{X}", "{neoessentials_x}")
             .replace("{Y}", "{neoessentials_y}")
@@ -311,7 +479,13 @@ public class ChatFormatter {
             .replace("{LEVEL}", "{neoessentials_level}")
             .replace("{BALANCE}", "{neoessentials_balance}")
             .replace("{GAMEMODE}", "{neoessentials_gamemode}")
-            .replace("{BIOME}", "{neoessentials_biome}");
+            .replace("{BIOME}", "{neoessentials_biome}")
+            .replace("{AFK}", "{neoessentials_afk}")
+            .replace("{PING}", "{neoessentials_ping}")
+            .replace("{SERVER_NAME}", "{neoessentials_server_name}")
+            .replace("{SERVER_MOTD}", "{neoessentials_server_motd}")
+            .replace("{ONLINE_PLAYERS}", "{neoessentials_online_players}")
+            .replace("{MAX_PLAYERS}", "{neoessentials_max_players}");
     }
     
     /**
@@ -449,6 +623,11 @@ public class ChatFormatter {
      * Markup mentions and play sounds.
      */
     private static String markupMentions(String text, ServerPlayer sender, net.minecraft.server.MinecraftServer server) {
+        if (isMentionPermissionRequired()
+                && !com.zerog.neoessentials.api.permissions.PermissionAPI.hasPermission(sender.getUUID(), getMentionPermission())) {
+            return text;
+        }
+
         Matcher matcher = MENTION_PATTERN.matcher(text);
         StringBuilder result = new StringBuilder();
 
@@ -478,6 +657,13 @@ public class ChatFormatter {
     private static Component buildComponentFromMarkup(String markup, ServerPlayer sender) {
         MutableComponent result = Component.empty();
         int index = 0;
+        // Tracks the color/format style still active at the current position — e.g. a template
+        // like "&c{neoessentials_username}" needs the clickable-name component (built as its own
+        // sibling, not inline text) to know red is "active" here, since appended sibling
+        // components never inherit a preceding sibling's color on their own. Updated after every
+        // plain-text segment; carries forward unchanged through non-text markers (items/urls/
+        // mentions/names), same as how a color code stays active in the template string itself.
+        net.minecraft.network.chat.Style ambientStyle = net.minecraft.network.chat.Style.EMPTY;
 
         while (index < markup.length()) {
             // Check for ITEM marker
@@ -516,12 +702,38 @@ public class ChatFormatter {
                 }
             }
 
+            // Check for HNAME (clickable username) marker
+            int hnameStart = markup.indexOf("§HNAME§", index);
+            if (hnameStart == index) {
+                int hnameEnd = markup.indexOf("§/HNAME§", hnameStart);
+                if (hnameEnd != -1) {
+                    String name = markup.substring(hnameStart + 7, hnameEnd);
+                    result.append(createClickablePlayerNameComponent(name, sender, ambientStyle));
+                    index = hnameEnd + 8;
+                    continue;
+                }
+            }
+
+            // Check for HDNAME (clickable displayname) marker
+            int hdnameStart = markup.indexOf("§HDNAME§", index);
+            if (hdnameStart == index) {
+                int hdnameEnd = markup.indexOf("§/HDNAME§", hdnameStart);
+                if (hdnameEnd != -1) {
+                    String name = markup.substring(hdnameStart + 8, hdnameEnd);
+                    result.append(createClickablePlayerNameComponent(name, sender, ambientStyle));
+                    index = hdnameEnd + 9;
+                    continue;
+                }
+            }
+
             // Find next marker
             int nextMarker = markup.length();
             int[] markers = {
                 markup.indexOf("§ITEM§", index),
                 markup.indexOf("§URL§", index),
-                markup.indexOf("§MENTION§", index)
+                markup.indexOf("§MENTION§", index),
+                markup.indexOf("§HNAME§", index),
+                markup.indexOf("§HDNAME§", index)
             };
 
             for (int m : markers) {
@@ -532,6 +744,7 @@ public class ChatFormatter {
             if (nextMarker > index) {
                 String plainText = markup.substring(index, nextMarker);
                 result.append(com.zerog.neoessentials.util.ChatComponentUtil.parseColorCodes(plainText));
+                ambientStyle = com.zerog.neoessentials.util.ChatComponentUtil.getTrailingStyle(plainText);
                 index = nextMarker;
             } else {
                 break;
@@ -553,7 +766,7 @@ public class ChatFormatter {
 
         if (!mainHandItem.isEmpty()) {
             component.setStyle(component.getStyle()
-                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_ITEM,
+                .withHoverEvent(com.zerog.neoessentials.util.HoverEventCompat.create(HoverEvent.Action.SHOW_ITEM,
                     new HoverEvent.ItemStackInfo(mainHandItem)))
             );
         }
@@ -571,10 +784,54 @@ public class ChatFormatter {
             .withStyle(color)
             .withStyle(ChatFormatting.BOLD)
             .withStyle(style -> style
-                .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/msg " + playerName + " "))
-                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
-                    Component.literal(MessageUtil.localize("commands.neoessentials.chat.mention_hover", playerName)).withStyle(ChatFormatting.GRAY)))
+                .withClickEvent(com.zerog.neoessentials.util.ClickEventCompat.create(ClickEvent.Action.SUGGEST_COMMAND, "/msg " + playerName + " "))
+                .withHoverEvent(com.zerog.neoessentials.util.HoverEventCompat.create(HoverEvent.Action.SHOW_TEXT,
+                    ((MutableComponent) MessageUtil.component("commands.neoessentials.chat.click_to_message", playerName)).withStyle(ChatFormatting.GRAY)))
             );
+    }
+
+    /**
+     * Create a clickable player-name component (hover = player info, click = /msg).
+     * Used when the {@code clickablePlayerNames} config option is enabled.
+     *
+     * @param ambientStyle the color/format style active in the template immediately before this
+     *                     marker (see {@code buildComponentFromMarkup}) — applied as the name's
+     *                     base style so e.g. {@code "&c{neoessentials_username}"} actually renders
+     *                     red, since this component is appended as its own sibling and would
+     *                     otherwise default to no color regardless of a preceding color code.
+     *                     Any color code inside {@code displayText} itself (e.g. a colored
+     *                     nickname) still overrides this, same as normal color-code precedence.
+     */
+    private static Component createClickablePlayerNameComponent(String displayText, ServerPlayer player, net.minecraft.network.chat.Style ambientStyle) {
+        Component base = com.zerog.neoessentials.util.ChatComponentUtil.parseColorCodes(displayText, ambientStyle);
+        // Wrap into a MutableComponent so we can attach events
+        MutableComponent comp = Component.empty().append(base);
+        comp.withStyle(style -> style
+            .withClickEvent(com.zerog.neoessentials.util.ClickEventCompat.create(ClickEvent.Action.SUGGEST_COMMAND,
+                "/msg " + player.getName().getString() + " "))
+            .withHoverEvent(com.zerog.neoessentials.util.HoverEventCompat.create(HoverEvent.Action.SHOW_TEXT,
+                ((MutableComponent) MessageUtil.component("commands.neoessentials.chat.click_to_message_icon", player.getName().getString()))
+                    .withStyle(ChatFormatting.GRAY)))
+        );
+
+        // A Style can only carry one ClickEvent, and the name itself already carries the
+        // SUGGEST_COMMAND "/msg" action above — so the "view profile" link is a separate,
+        // adjacent component (a small icon) rather than replacing that behavior.
+        if (isProfileLinkInChatEnabled()) {
+            String profileUrl = com.zerog.neoessentials.config.ConfigManager.getPlayerProfileUrl(player.getName().getString(), player.getUUID());
+            if (profileUrl != null) {
+                MutableComponent linkIcon = Component.literal(" ↗").withStyle(style -> style
+                    .withColor(ChatFormatting.BLUE)
+                    .withClickEvent(com.zerog.neoessentials.util.ClickEventCompat.create(ClickEvent.Action.OPEN_URL, profileUrl))
+                    .withHoverEvent(com.zerog.neoessentials.util.HoverEventCompat.create(HoverEvent.Action.SHOW_TEXT,
+                        ((MutableComponent) MessageUtil.component("commands.neoessentials.chat.click_to_view_profile", player.getName().getString()))
+                            .withStyle(ChatFormatting.GRAY)))
+                );
+                comp.append(linkIcon);
+            }
+        }
+
+        return comp;
     }
 
     /**
@@ -584,13 +841,13 @@ public class ChatFormatter {
         try {
             float volume = getMentionSoundVolume();
             player.playNotifySound(
-                net.minecraft.sounds.SoundEvents.EXPERIENCE_ORB_PICKUP,
+                getMentionSoundEvent(),
                 net.minecraft.sounds.SoundSource.PLAYERS,
                 volume,
                 1.0f
             );
         } catch (Exception e) {
-            LOGGER.debug("Failed to play mention sound: {}", e.getMessage());
+            NeoLog.debug(LOGGER, LogCategory.CHAT, "Failed to play mention sound: {}", e.getMessage());
         }
     }
 
@@ -644,6 +901,30 @@ public class ChatFormatter {
         return true;
     }
 
+    private static boolean isMentionPermissionRequired() {
+        try {
+            var chatConfig = com.zerog.neoessentials.config.ConfigManager.getInstance().getConfig("chat");
+            if (chatConfig.has("mentions") && chatConfig.getAsJsonObject("mentions").has("requirePermission")) {
+                return chatConfig.getAsJsonObject("mentions").get("requirePermission").getAsBoolean();
+            }
+        } catch (Exception e) {
+            // Ignore
+        }
+        return false;
+    }
+
+    private static String getMentionPermission() {
+        try {
+            var chatConfig = com.zerog.neoessentials.config.ConfigManager.getInstance().getConfig("chat");
+            if (chatConfig.has("mentions") && chatConfig.getAsJsonObject("mentions").has("permission")) {
+                return chatConfig.getAsJsonObject("mentions").get("permission").getAsString();
+            }
+        } catch (Exception e) {
+            // Ignore
+        }
+        return "neoessentials.chat.mention";
+    }
+
     private static ChatFormatting getMentionColor() {
         try {
             var chatConfig = com.zerog.neoessentials.config.ConfigManager.getInstance().getConfig("chat");
@@ -673,13 +954,68 @@ public class ChatFormatter {
         return 1.0f;
     }
 
+    /** Resolves chat.mentions.soundName to a registered SoundEvent, falling back if unset/invalid. */
+    private static net.minecraft.sounds.SoundEvent getMentionSoundEvent() {
+        try {
+            var chatConfig = com.zerog.neoessentials.config.ConfigManager.getInstance().getConfig("chat");
+            if (chatConfig.has("mentions") && chatConfig.getAsJsonObject("mentions").has("soundName")) {
+                String soundName = chatConfig.getAsJsonObject("mentions").get("soundName").getAsString();
+                net.minecraft.resources.ResourceLocation id = soundName.contains(":")
+                    ? net.minecraft.resources.ResourceLocation.parse(soundName)
+                    : net.minecraft.resources.ResourceLocation.withDefaultNamespace(soundName);
+                var sound = net.minecraft.core.registries.BuiltInRegistries.SOUND_EVENT.get(id);
+                if (sound != null) return sound;
+            }
+        } catch (Exception e) {
+            // Ignore
+        }
+        return net.minecraft.sounds.SoundEvents.EXPERIENCE_ORB_PICKUP;
+    }
+
     /**
-     * Convert component back to formatted string for further processing.
-     * This is a simple conversion - for complex components, use getString().
+     * Returns true if clickable player names are enabled in the chat config.
+     * Config key: chat.clickablePlayerNames
      */
-    private static String componentToFormattedString(Component component) {
-        // For now, just get the plain string
-        // In future, could preserve formatting codes
-        return component.getString();
+    private static boolean isClickablePlayerNamesEnabled() {
+        try {
+            var chatConfig = com.zerog.neoessentials.config.ConfigManager.getInstance().getConfig("chat");
+            if (chatConfig.has("clickablePlayerNames")) {
+                return chatConfig.get("clickablePlayerNames").getAsBoolean();
+            }
+        } catch (Exception ignored) {
+            // Default to enabled on any error
+        }
+        return true;
+    }
+
+    /**
+     * Returns true if the in-chat "view profile" link icon is enabled.
+     * Config key: chat.showProfileLinkInChat
+     */
+    private static boolean isProfileLinkInChatEnabled() {
+        try {
+            var chatConfig = com.zerog.neoessentials.config.ConfigManager.getInstance().getConfig("chat");
+            if (chatConfig.has("showProfileLinkInChat")) {
+                return chatConfig.get("showProfileLinkInChat").getAsBoolean();
+            }
+        } catch (Exception ignored) {
+            // Default to enabled on any error
+        }
+        return true;
+    }
+
+    /**
+     * Returns true if rich text tag processing ({@code <red>}, {@code <gradient:…>} etc.)
+     * is enabled.  Delegates to {@link RichTextFormatter}'s own check so the two stay
+     * in sync.  Only used for debug-logging in this class.
+     */
+    private static boolean isRichTextEnabled() {
+        try {
+            var chatConfig = com.zerog.neoessentials.config.ConfigManager.getInstance().getConfig("chat");
+            if (chatConfig.has("richText")) {
+                return chatConfig.getAsJsonObject("richText").get("enabled").getAsBoolean();
+            }
+        } catch (Exception ignored) { /* ignore */ }
+        return false;
     }
 }

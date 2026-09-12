@@ -13,6 +13,7 @@ import net.minecraft.network.chat.MutableComponent;
 import com.zerog.neoessentials.config.ConfigManager;
 import com.zerog.neoessentials.util.MessageUtil;
 import com.zerog.neoessentials.util.PermissionValidator;
+import com.zerog.neoessentials.util.ResourceUtil;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
@@ -25,7 +26,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 
 /**
  * Implements the /rules command - Displays server rules to players
@@ -34,8 +36,10 @@ import java.nio.file.Paths;
 public class RulesCommand {
     private static final Logger LOGGER = LoggerFactory.getLogger(RulesCommand.class);
     private static List<String> serverRules = new ArrayList<>();
-    private static final Path RULES_DATA_FILE = Paths.get("config", "neoessentials", "rules_data.json");
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final Path RULES_DATA_FILE = ResourceUtil.getConfigPath("rules_data.json");
+    // Legacy file name used in older NeoEssentials builds
+    private static final Path RULES_LEGACY_FILE = ResourceUtil.getConfigPath("rules.json");
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
     private static final int RULES_PER_PAGE = 10;
     
     /**
@@ -200,28 +204,30 @@ public class RulesCommand {
             String rule = serverRules.get(i);
             String formattedRule = rule.replace("&", "§");
             
-            MutableComponent ruleComponent = Component.literal(MessageUtil.localize("commands.neoessentials.rules.entry", i + 1, formattedRule));
+            MutableComponent ruleComponent = (MutableComponent) MessageUtil.component(
+                "commands.neoessentials.rules.entry", i + 1, formattedRule);
             source.sendSuccess(() -> ruleComponent, false);
         }
-        
+
         // Footer with navigation
         if (totalPages > 1) {
-            MutableComponent footer = Component.literal(MessageUtil.localize("commands.neoessentials.rules.page_indicator", page, totalPages));
+            MutableComponent footer = (MutableComponent) MessageUtil.component(
+                "commands.neoessentials.rules.page_indicator", page, totalPages);
 
             if (page > 1) {
-                footer.append(Component.literal(MessageUtil.localize("commands.neoessentials.rules.prev_button"))
+                footer.append(((MutableComponent) MessageUtil.component("commands.neoessentials.rules.prev_button"))
                     .withStyle(style -> style
-                        .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/rules " + (page - 1)))
-                        .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(MessageUtil.localize("commands.neoessentials.rules.prev_hover"))))
+                        .withClickEvent(com.zerog.neoessentials.util.ClickEventCompat.create(ClickEvent.Action.RUN_COMMAND, "/rules " + (page - 1)))
+                        .withHoverEvent(com.zerog.neoessentials.util.HoverEventCompat.create(HoverEvent.Action.SHOW_TEXT, MessageUtil.component("commands.neoessentials.rules.prev_hover")))
                     ));
                 footer.append(Component.literal(" "));
             }
 
             if (page < totalPages) {
-                footer.append(Component.literal(MessageUtil.localize("commands.neoessentials.rules.next_button"))
+                footer.append(((MutableComponent) MessageUtil.component("commands.neoessentials.rules.next_button"))
                     .withStyle(style -> style
-                        .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/rules " + (page + 1)))
-                        .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(MessageUtil.localize("commands.neoessentials.rules.next_hover"))))
+                        .withClickEvent(com.zerog.neoessentials.util.ClickEventCompat.create(ClickEvent.Action.RUN_COMMAND, "/rules " + (page + 1)))
+                        .withHoverEvent(com.zerog.neoessentials.util.HoverEventCompat.create(HoverEvent.Action.SHOW_TEXT, MessageUtil.component("commands.neoessentials.rules.next_hover")))
                     ));
             }
             
@@ -330,9 +336,8 @@ public class RulesCommand {
      * Reload rules from file
      */
     private static int reloadRules(CommandSourceStack source) {
-        loadRulesData();
+        reload();
         int newCount = serverRules.size();
-        
         source.sendSuccess(() -> MessageUtil.success("commands.neoessentials.rules.reloaded", newCount), false);
         return 1;
     }
@@ -342,28 +347,96 @@ public class RulesCommand {
      */
     private static void loadRulesData() {
         try {
-            if (!Files.exists(RULES_DATA_FILE)) {
-                // Create default rules file
-                createDefaultRules();
+            // Primary file
+            if (Files.exists(RULES_DATA_FILE)) {
+                String json = Files.readString(RULES_DATA_FILE);
+                JsonObject data;
+                try {
+                    data = JsonParser.parseString(json).getAsJsonObject();
+                } catch (Exception parseEx) {
+                    LOGGER.error("╔══════════════════════════════════════════════════════╗");
+                    LOGGER.error("║  RULES LOAD ERROR: rules_data.json is corrupt JSON  ║");
+                    LOGGER.error("║  File: {}", RULES_DATA_FILE.toAbsolutePath());
+                    LOGGER.error("║  Error: {}", parseEx.getMessage());
+                    LOGGER.error("║  Fix:  Delete the file and run /rules reload to     ║");
+                    LOGGER.error("║        regenerate defaults, then re-add your rules. ║");
+                    LOGGER.error("╚══════════════════════════════════════════════════════╝");
+                    createDefaultRules();
+                    return;
+                }
+                serverRules.clear();
+                if (data.has("rules")) {
+                    JsonArray rulesArray = data.getAsJsonArray("rules");
+                    for (JsonElement element : rulesArray) {
+                        serverRules.add(element.getAsString());
+                    }
+                }
+                NeoLog.debug(LOGGER, LogCategory.GENERAL, "Loaded {} rules from {}", serverRules.size(), RULES_DATA_FILE.getFileName());
                 return;
             }
-            
-            String json = Files.readString(RULES_DATA_FILE);
-            JsonObject data = JsonParser.parseString(json).getAsJsonObject();
-            
-            serverRules.clear();
-            
-            if (data.has("rules")) {
-                JsonArray rulesArray = data.getAsJsonArray("rules");
-                for (JsonElement element : rulesArray) {
-                    serverRules.add(element.getAsString());
+
+            // Legacy fallback: rules.json (used by NeoEssentials <1.0.2.6)
+            if (Files.exists(RULES_LEGACY_FILE)) {
+                NeoLog.info(LOGGER, LogCategory.GENERAL, "Migrating legacy rules.json → rules_data.json");
+                String json = Files.readString(RULES_LEGACY_FILE);
+                JsonObject data = JsonParser.parseString(json).getAsJsonObject();
+                serverRules.clear();
+                // Legacy format may store rules directly as an array or under a "rules" key
+                if (data.has("rules")) {
+                    JsonElement el = data.get("rules");
+                    if (el.isJsonArray()) {
+                        for (JsonElement element : el.getAsJsonArray()) {
+                            serverRules.add(element.getAsString());
+                        }
+                    }
+                } else {
+                    // Treat every top-level string value as a rule
+                    for (var entry : data.entrySet()) {
+                        if (entry.getValue().isJsonPrimitive()) {
+                            serverRules.add(entry.getValue().getAsString());
+                        }
+                    }
                 }
+                // Save to new format
+                saveRulesData();
+                NeoLog.info(LOGGER, LogCategory.GENERAL, "Migrated {} rules from rules.json to rules_data.json", serverRules.size());
+                return;
             }
-            
+
+            // No file found – create defaults and log guidance
+            NeoLog.info(LOGGER, LogCategory.GENERAL, "No rules_data.json found — generating default rules file at: {}", RULES_DATA_FILE.toAbsolutePath());
+            NeoLog.info(LOGGER, LogCategory.GENERAL, "  Edit rules in-game with:  /rules add <text>  |  /rules edit <n> <text>  |  /rules remove <n>");
+            NeoLog.info(LOGGER, LogCategory.GENERAL, "  Or edit directly:  config/neoessentials/rules_data.json  then run /rules reload");
+            createDefaultRules();
         } catch (Exception e) {
-            LOGGER.error("Failed to load rules data: {}", e.getMessage());
+            LOGGER.error("╔══════════════════════════════════════════════════════╗");
+            LOGGER.error("║  RULES LOAD ERROR — using built-in defaults         ║");
+            LOGGER.error("║  File: {}", RULES_DATA_FILE.toAbsolutePath());
+            LOGGER.error("║  Error: {}", e.getMessage());
+            LOGGER.error("║  Fix:                                                ║");
+            LOGGER.error("║   1. Check file permissions on config/neoessentials/ ║");
+            LOGGER.error("║   2. Verify rules_data.json is valid JSON            ║");
+            LOGGER.error("║   3. Run /rules reload after fixing                  ║");
+            LOGGER.error("╚══════════════════════════════════════════════════════╝");
             createDefaultRules();
         }
+    }
+
+    /**
+     * Public reload method — called by /neoe reload and the dashboard API.
+     */
+    public static void reload() {
+        loadRulesData();
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "Rules reloaded — {} rule(s) active", serverRules.size());
+    }
+
+    /**
+     * Replace the full rules list (called by the dashboard API after an edit).
+     * Persists to disk immediately.
+     */
+    public static void setRules(List<String> newRules) {
+        serverRules = new ArrayList<>(newRules);
+        saveRulesData();
     }
     
     /**
@@ -417,6 +490,7 @@ public class RulesCommand {
     /**
      * Show rules to a player (for join messages or other events)
      */
+    @SuppressWarnings("unused") // Public API method
     public static void showRulesToPlayer(ServerPlayer player) {
         showRules(player.createCommandSourceStack(), 1);
     }

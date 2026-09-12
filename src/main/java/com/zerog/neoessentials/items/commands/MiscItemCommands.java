@@ -20,6 +20,8 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -175,7 +177,7 @@ public class MiscItemCommands {
             player.inventoryMenu.sendAllDataToRemote();
             final int fc = convertCount;
             src.sendSuccess(() -> MessageUtil.success("commands.neoessentials.condense.success", fc), false);
-            LOGGER.info("{} condensed {} item type(s)", player.getName().getString(), convertCount);
+            NeoLog.info(LOGGER, LogCategory.GENERAL, "{} condensed {} item type(s)", player.getName().getString(), convertCount);
         } else {
             src.sendFailure(MessageUtil.error("commands.neoessentials.condense.nothing"));
         }
@@ -212,17 +214,19 @@ public class MiscItemCommands {
 
             src.sendSuccess(() -> MessageUtil.info("commands.neoessentials.showkit.header", kit.getDisplayName()), false);
             if (!kit.getDescription().isEmpty()) {
-                src.sendSuccess(() -> Component.literal("§7" + kit.getDescription()), false);
+                final String desc = kit.getDescription();
+                src.sendSuccess(() -> MessageUtil.component("commands.neoessentials.showkit.description", desc), false);
             }
             // Cooldown line
             long cdMs = kit.getCooldownMillis();
-            String cdStr = cdMs <= 0 ? MessageUtil.localize("commands.neoessentials.showkit.no_cooldown") : formatDuration(cdMs);
-            src.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.showkit.cooldown", cdStr)), false);
+            String cdStr = cdMs <= 0 ? "No cooldown" : formatDuration(cdMs);
+            final String fCdStr = cdStr;
+            src.sendSuccess(() -> MessageUtil.component("commands.neoessentials.showkit.cooldown", fCdStr), false);
             // Items
             for (ItemStack stack : kit.getItems()) {
                 String itemName = stack.getItem().getDescription().getString();
                 int count = stack.getCount();
-                src.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.showkit.item_entry", count, itemName)), false);
+                src.sendSuccess(() -> MessageUtil.component("commands.neoessentials.showkit.item_line", count, itemName), false);
             }
             shown++;
         }
@@ -264,7 +268,7 @@ public class MiscItemCommands {
         for (Map.Entry<String, String> entry : powers.entrySet()) {
             String itemName = entry.getKey().contains(":") ? entry.getKey().substring(entry.getKey().indexOf(':') + 1) : entry.getKey();
             String cmd = entry.getValue();
-            src.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.powertoollist.entry", itemName, cmd)), false);
+            src.sendSuccess(() -> MessageUtil.component("commands.neoessentials.powertoollist.entry", itemName, cmd), false);
         }
         return 1;
     }
@@ -358,15 +362,14 @@ public class MiscItemCommands {
         int start = (p - 1) * LINES_PER_PAGE;
         int end = Math.min(start + LINES_PER_PAGE, formatted.size());
 
-        final String header = MessageUtil.localize("commands.neoessentials.customtext.page_header", safeChapter, p, totalPages);
-        src.sendSuccess(() -> Component.literal(header), false);
+        final int fp = p, fTotalPages = totalPages;
+        src.sendSuccess(() -> MessageUtil.component("commands.neoessentials.customtext.page_header", safeChapter, fp, fTotalPages), false);
         for (int i = start; i < end; i++) {
             String line = formatted.get(i);
             src.sendSuccess(() -> Component.literal(line), false);
         }
         if (totalPages > 1) {
-            src.sendSuccess(() -> Component.literal(
-                MessageUtil.localize("commands.neoessentials.customtext.page_nav", safeChapter)), false);
+            src.sendSuccess(() -> MessageUtil.component("commands.neoessentials.customtext.page_footer", safeChapter), false);
         }
         return 1;
     }

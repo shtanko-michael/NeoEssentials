@@ -15,10 +15,22 @@ import java.nio.file.*;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 
 /**
  * Manages server bans and whitelist entries.
+ *
+ * <p><b>Note on the ban half of this class:</b> its bans map / {@code BanEntry} (everything
+ * {@link com.zerog.neoessentials.webdashboard.endpoints.ModerationEndpoint} currently
+ * reads/writes) is a second, disconnected ban store that is never consulted by the actual
+ * join/kick enforcement path — that lives in {@link BanManager}, which is UUID+IP-aware,
+ * vanilla-ban-list-synced, and (as of the ban-system consolidation) has ban IDs, an
+ * active/inactive flag, full per-player history, and an unban audit trail. A ban created
+ * here does not block anyone from joining. Slated for removal once
+ * {@code ModerationEndpoint} is rewired onto {@link BanManager} directly — do not add new
+ * callers of the ban-related methods on this class. The whitelist half is unrelated and
+ * unaffected by this note.
  */
 public class ModerationManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(ModerationManager.class);
@@ -43,7 +55,7 @@ public class ModerationManager {
         this.storageDirectory = Paths.get(MODERATION_DIR);
         this.bansFile = storageDirectory.resolve(BANS_FILE);
         this.whitelistFile = storageDirectory.resolve(WHITELIST_FILE);
-        this.gson = new GsonBuilder().setPrettyPrinting().create();
+        this.gson = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
         this.whitelistEnabled = false;
         
         try {
@@ -99,11 +111,11 @@ public class ModerationManager {
                     player.connection.disconnect(Component.literal(kickMessage));
                 }
             } catch (IllegalArgumentException e) {
-                LOGGER.debug("Target is not a valid UUID: {}", target);
+                NeoLog.debug(LOGGER, LogCategory.MODERATION, "Target is not a valid UUID: {}", target);
             }
         }
         
-        LOGGER.info("Ban added: {} banned {} ({})", bannedBy, playerName != null ? playerName : target, reason);
+        NeoLog.info(LOGGER, LogCategory.MODERATION, "Ban added: {} banned {} ({})", bannedBy, playerName != null ? playerName : target, reason);
         return ban;
     }
     
@@ -114,7 +126,7 @@ public class ModerationManager {
         BanEntry ban = bans.remove(banId);
         if (ban != null) {
             saveBans();
-            LOGGER.info("Ban removed: {} ({})", ban.getPlayerName() != null ? ban.getPlayerName() : ban.getTarget(), ban.getId());
+            NeoLog.info(LOGGER, LogCategory.MODERATION, "Ban removed: {} ({})", ban.getPlayerName() != null ? ban.getPlayerName() : ban.getTarget(), ban.getId());
             return true;
         }
         return false;
@@ -141,7 +153,7 @@ public class ModerationManager {
         return bans.values().stream()
             .filter(BanEntry::isActive)
             .filter(ban -> !ban.isExpired())
-            .collect(Collectors.toList());
+            .toList();
     }
     
     /**
@@ -194,7 +206,7 @@ public class ModerationManager {
         return bans.values().stream()
             .filter(ban -> ban.getTarget().equals(target))
             .sorted(Comparator.comparing(BanEntry::getBannedAt).reversed())
-            .collect(Collectors.toList());
+            .toList();
     }
     
     /**
@@ -211,7 +223,7 @@ public class ModerationManager {
         ban.setAppeal(appeal);
         saveBans();
         
-        LOGGER.info("Ban appeal submitted for ban {}", banId);
+        NeoLog.info(LOGGER, LogCategory.MODERATION, "Ban appeal submitted for ban {}", banId);
         return true;
     }
     
@@ -237,7 +249,7 @@ public class ModerationManager {
         }
         
         saveBans();
-        LOGGER.info("Ban appeal {} for ban {}: {}", status, banId, reviewNotes);
+        NeoLog.info(LOGGER, LogCategory.MODERATION, "Ban appeal {} for ban {}: {}", status, banId, reviewNotes);
         return true;
     }
     
@@ -248,7 +260,7 @@ public class ModerationManager {
      */
     public void setWhitelistEnabled(boolean enabled) {
         this.whitelistEnabled = enabled;
-        LOGGER.info("Whitelist {}", enabled ? MessageUtil.localize("commands.neoessentials.general.enabled") : MessageUtil.localize("commands.neoessentials.general.disabled"));
+        NeoLog.info(LOGGER, LogCategory.MODERATION, "Whitelist {}", enabled ? "enabled" : "disabled");
     }
     
     /**
@@ -273,7 +285,7 @@ public class ModerationManager {
         whitelist.put(entry.getId(), entry);
         saveWhitelist();
         
-        LOGGER.info("Whitelist entry added: {} by {}", playerName != null ? playerName : target, addedBy);
+        NeoLog.info(LOGGER, LogCategory.MODERATION, "Whitelist entry added: {} by {}", playerName != null ? playerName : target, addedBy);
         return entry;
     }
     
@@ -284,7 +296,7 @@ public class ModerationManager {
         WhitelistEntry entry = whitelist.remove(entryId);
         if (entry != null) {
             saveWhitelist();
-            LOGGER.info("Whitelist entry removed: {}", entry.getPlayerName() != null ? entry.getPlayerName() : entry.getTarget());
+            NeoLog.info(LOGGER, LogCategory.MODERATION, "Whitelist entry removed: {}", entry.getPlayerName() != null ? entry.getPlayerName() : entry.getTarget());
             return true;
         }
         return false;
@@ -342,7 +354,7 @@ public class ModerationManager {
             imported++;
         }
         saveWhitelist();
-        LOGGER.info("Imported {} whitelist entries", imported);
+        NeoLog.info(LOGGER, LogCategory.MODERATION, "Imported {} whitelist entries", imported);
         return imported;
     }
     
@@ -358,7 +370,7 @@ public class ModerationManager {
             Map<String, BanEntry> loaded = gson.fromJson(json, new TypeToken<Map<String, BanEntry>>(){}.getType());
             if (loaded != null) {
                 bans.putAll(loaded);
-                LOGGER.info("Loaded {} bans", loaded.size());
+                NeoLog.info(LOGGER, LogCategory.MODERATION, "Loaded {} bans", loaded.size());
             }
         } catch (Exception e) {
             LOGGER.error("Failed to load bans", e);
@@ -384,7 +396,7 @@ public class ModerationManager {
             Map<String, WhitelistEntry> loaded = gson.fromJson(json, new TypeToken<Map<String, WhitelistEntry>>(){}.getType());
             if (loaded != null) {
                 whitelist.putAll(loaded);
-                LOGGER.info("Loaded {} whitelist entries", loaded.size());
+                NeoLog.info(LOGGER, LogCategory.MODERATION, "Loaded {} whitelist entries", loaded.size());
             }
         } catch (Exception e) {
             LOGGER.error("Failed to load whitelist", e);

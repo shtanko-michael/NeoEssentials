@@ -1,6 +1,8 @@
 package com.zerog.neoessentials.commands;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import net.minecraft.commands.CommandSourceStack;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,17 +43,38 @@ public class CommandRegistry {
      * @param aliases Additional aliases for this command
      */
     public void registerCommand(String name, String description, String... aliases) {
-        CommandInfo info = new CommandInfo(name, description, Arrays.asList(aliases));
+        CommandInfo info = new CommandInfo(name, description, Arrays.asList(aliases), null);
         commands.put(name.toLowerCase(), info);
-        
+
         // Register aliases pointing to main command
         for (String alias : aliases) {
             this.aliases.put(alias.toLowerCase(), name.toLowerCase());
         }
-        
-        LOGGER.debug("Registered command: {} with {} aliases", name, aliases.length);
+
+        NeoLog.debug(LOGGER, LogCategory.COMMANDS, "Registered command: {} with {} aliases", name, aliases.length);
     }
-    
+
+    /**
+     * Register a command whose actual required permission node doesn't follow the default
+     * {@code "neoessentials." + name} convention {@link com.zerog.neoessentials.util.commands.HelpCommand}'s
+     * pre-existing guessing logic assumed everywhere — use this whenever the command's root {@code .requires(...)} check uses
+     * a different string (e.g. a nested node like {@code neoessentials.moderation.ban}, or a node
+     * shared by several aliases), so {@code /help} displays and permission-gates the real thing
+     * instead of a wrong guess.
+     * @param permissionNode the exact permission string this command's root .requires() checks,
+     *                        or null if it has none (open to everyone / OP-only via source.hasPermission(n))
+     */
+    public void registerCommandWithPermission(String name, String description, String permissionNode, String... aliases) {
+        CommandInfo info = new CommandInfo(name, description, Arrays.asList(aliases), permissionNode);
+        commands.put(name.toLowerCase(), info);
+
+        for (String alias : aliases) {
+            this.aliases.put(alias.toLowerCase(), name.toLowerCase());
+        }
+
+        NeoLog.debug(LOGGER, LogCategory.COMMANDS, "Registered command: {} with {} aliases (permission override: {})", name, aliases.length, permissionNode);
+    }
+
     /**
      * Register a command with just the name (no description or aliases).
      * @param name Primary command name (without /)
@@ -131,7 +154,9 @@ public class CommandRegistry {
             var parseResults = dispatcher.parse("/" + key, null);
             return parseResults.getContext().getCommand() != null;
         } catch (Exception e) {
-            LOGGER.debug("Command '{}' not found in dispatcher: {}", key, e.getMessage());
+            // Expected: a command that's in our registry but fails to parse against the live
+            // Brigadier dispatcher (e.g. registration failed silently, or a stale entry).
+            NeoLog.debug(LOGGER, LogCategory.COMMANDS, "Command '" + key + "' not found in dispatcher", e);
             return false;
         }
     }
@@ -152,7 +177,7 @@ public class CommandRegistry {
     public void clear() {
         commands.clear();
         aliases.clear();
-        LOGGER.debug("Command registry cleared");
+        NeoLog.debug(LOGGER, LogCategory.COMMANDS, "Command registry cleared");
     }
     
     /**
@@ -174,27 +199,45 @@ public class CommandRegistry {
         private final String name;
         private final String description;
         private final List<String> aliases;
-        
+        /** Explicit override for this command's real root permission node, or null to fall back
+         *  to the "neoessentials." + name guess (see {@link #registerCommandWithPermission}). */
+        private final String permissionNode;
+
         public CommandInfo(String name, String description, List<String> aliases) {
+            this(name, description, aliases, null);
+        }
+
+        public CommandInfo(String name, String description, List<String> aliases, String permissionNode) {
             this.name = name;
             this.description = description != null ? description : "NeoEssentials command";
             this.aliases = new ArrayList<>(aliases);
+            this.permissionNode = permissionNode;
         }
-        
+
         public String getName() {
             return name;
         }
-        
+
         public String getDescription() {
             return description;
         }
-        
+
         public List<String> getAliases() {
             return new ArrayList<>(aliases);
         }
-        
+
         public boolean hasAliases() {
             return !aliases.isEmpty();
+        }
+
+        /** True if this command was registered with an explicit permission override. */
+        public boolean hasPermissionOverride() {
+            return permissionNode != null;
+        }
+
+        /** The explicit permission override, or null if none was set (caller should fall back to guessing). */
+        public String getPermissionNodeOverride() {
+            return permissionNode;
         }
         
         @Override

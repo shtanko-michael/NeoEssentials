@@ -3,6 +3,12 @@ plugins {
     id 'maven-publish'
     id 'net.neoforged.moddev' version '2.0.107'
     id 'idea'
+    // Relocates isolated runtime libraries (HikariCP, snakeyaml, Java-WebSocket) into private
+    // packages at packaging time — see the shadowJar block below for why. Version pinned to
+    // the exact one GriefLogger's own 26.2 branch uses against this same Gradle version
+    // (9.6.1); com.github.johnrengelman.shadow (the older, unmaintained fork) doesn't support
+    // Gradle 9.
+    id 'com.gradleup.shadow' version '9.4.1'
 }
 
 // 'wrapper' only exists when this project is the Gradle root (standalone checkout);
@@ -17,26 +23,57 @@ tasks.matching { it.name == 'wrapper' }.configureEach {
 }
 
 // Build number management
+//
+// build_number.txt IS tracked in git — one copy per branch (Dev-Builds and mc-26.1-port each
+// have their own committed value) — but it's LOCAL-DEV-ONLY now, not the source of truth for
+// real shipped builds. The real, shared-across-both-branches counter lives in a repository
+// Actions variable (BUILD_NUMBER), read/bumped by .github/workflows/build-and-release.yml's
+// "Bump shared build number" step, which writes the bumped value into this file in the CI
+// workspace (uncommitted) before running the build — it's NOT committed back to the branch.
+//
+// Why not just commit it back like everything else in this repo does: tried it three different
+// ways (plain `git push`, a fresh throwaway branch, GitHub's Contents API + an auto-merged PR)
+// and all three got rejected live by this repo's branch-protection ruleset — Dev-Builds and
+// mc-26.1-port both require signed commits AND changes to land via a reviewed pull request,
+// and that ruleset's target is ~ALL branches, so even a brand new branch with no PR involved
+// hit the same rejection. Adding GitHub Actions to the ruleset's bypass list didn't reliably
+// fix it either. A repository variable isn't part of git history at all, so branch protection
+// never enters the picture — simplest fix that actually works.
+//
+// The increment below is purely a local-dev convenience (so `./gradlew build` locally still
+// shows an incrementing number while testing) — it only fires for a real packaging task
+// (`jar`/`assemble`/`build`), never for a bare `compileJava`/`test`/IDE-sync. Always
+// `git checkout -- build_number.txt` after a local test build before committing anything, so a
+// local bump never accidentally gets committed (it's meaningless now anyway — real builds get
+// their number from the CI-only Actions variable, not from what's committed in this file).
+//
+// Skipped entirely in CI (GitHub Actions sets CI=true): CI writes its own bumped value into
+// this file (see above) before `./gradlew build` runs, and this increment firing on top of that
+// would make the jar FILENAME one higher than the release tag the workflow names from the same
+// bumped value.
+def isCI = System.getenv("CI") != null
 def buildNumberFile = file('build_number.txt')
-def buildNumber = 0
+def buildNumber = buildNumberFile.exists() ? buildNumberFile.text.trim().toInteger() : 0
 
-if (buildNumberFile.exists()) {
-    buildNumber = buildNumberFile.text.trim().toInteger()
+gradle.taskGraph.whenReady { graph ->
+    boolean isPackagingBuild = graph.allTasks.any { t -> t.name in ['jar', 'assemble', 'build'] }
+    if (isPackagingBuild && !isCI) {
+        buildNumber++
+        buildNumberFile.text = buildNumber.toString()
+        project.version = "${mod_version}-${version_label}+build.${buildNumber}"
+        println "=========================================="
+        println "Building ${mod_name} v${project.version}"
+        println "Build #${buildNumber}"
+        println "=========================================="
+    }
 }
 
-// Increment build number for each build
-buildNumber++
-buildNumberFile.text = buildNumber.toString()
-
-// Set version with build number
-version = "${mod_version}+build.${buildNumber}"
+// Set version with build number (current value; only bumped above for real packaging builds).
+// Tagged with version_label (this branch's version-line, e.g. "1.21.x") so jars from
+// different branches are never confused with each other, and a patch bump within the same
+// line doesn't change the jar filename.
+version = "${mod_version}-${version_label}+build.${buildNumber}"
 group = mod_group_id
-
-// Log build information
-println "=========================================="
-println "Building ${mod_name} v${version}"
-println "Build #${buildNumber}"
-println "=========================================="
 
 repositories {
     // For local mod jars
@@ -50,6 +87,16 @@ repositories {
         content {
             includeGroup "curse.maven"
         }
+    }
+    // PB4 Maven — sgui (server-side GUI library for AuctionHouse)
+    maven {
+        name = "PB4 Maven"
+        url = "https://maven.pb4.eu/release/"
+    }
+    // Nucleoid Maven — fallback for PB4 artifacts
+    maven {
+        name = "Nucleoid Maven"
+        url = "https://maven.nucleoid.xyz/"
     }
 }
 
@@ -105,6 +152,26 @@ neoForge {
             // You can set various levels here.
             // Please read: https://stackoverflow.com/questions/2031163/when-to-use-the-different-log-levels
             logLevel = org.slf4j.event.Level.DEBUG
+
+            // Dev-run classpath gap: ModDevGradle does NOT put this project's own
+            // 'implementation' dependencies on a dev run's classpath — only the mod's own
+            // compiled classes/resources ride along automatically (see the `mods {}` block
+            // below). Everything else needs to be added to the run's own
+            // additionalRuntimeClasspathConfiguration explicitly, or it's a
+            // NoClassDefFoundError at runtime under ./gradlew runServer/runClient even
+            // though it resolves fine on the plain `runtimeClasspath` Gradle configuration
+            // and compiles fine. Confirmed live: this is exactly why the dashboard's
+            // WebSocket server silently failed to start in dev (NoClassDefFoundError:
+            // org/java_websocket/server/WebSocketServer) after HikariCP/snakeyaml/
+            // Java-WebSocket moved from jarJar (which DOES merge into the mod's own module,
+            // in dev and in production) to shadowJar+relocate (production-only — see that
+            // block's own comment). The three libraries below need their UNrelocated,
+            // unshaded jars here since dev mode never runs shadowJar at all.
+            additionalRuntimeClasspathConfiguration.dependencies.addAll([
+                project.dependencies.create('com.zaxxer:HikariCP:5.1.0'),
+                project.dependencies.create('org.yaml:snakeyaml:2.2'),
+                project.dependencies.create('org.java-websocket:Java-WebSocket:1.5.7'),
+            ])
         }
     }
 
@@ -121,16 +188,67 @@ neoForge {
 // Include resources generated by data generators.
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
+// Nothing is declared via jarJar anymore (see the dependencies block: sqlite-jdbc and
+// mysql-connector-j load on demand at runtime instead — SqliteDriverProvisioner/
+// MySqlDriverProvisioner — and HikariCP/snakeyaml/Java-WebSocket are bundled+relocated via
+// shadowJar below), so the jarJar task/configuration NeoForge's moddev plugin provides is
+// unused; no extra resources-dir wiring needed for it.
+tasks.named('jar') {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    // Merges :vault-api's compiled classes directly into this jar — it's a plain Gradle
+    // project() dependency (compile/runtime classpath only, inside this buildscript), which
+    // is NOT enough on its own for NeoForge to load those classes on a real server: only the
+    // single physical mod jar gets loaded, not the buildscript's dependency graph. vault-api
+    // is meant to be BOTH independently publishable (see jitpack.yml, docs/VaultAPI.md) AND
+    // bundled unchanged inside the shipped mod (same source, same package, same classes
+    // either way).
+    from(project(':vault-api').sourceSets.main.output)
+}
+
+// Dev-mode exploded-classpath gap: the `jar` task's `from(project(':vault-api')...)` above only
+// merges vault-api into the final packaged build/libs/*.jar, which `./gradlew runServer`/
+// `runClient` never touch — those dev runs load straight from this project's exploded
+// build/classes+build/resources, so without this, referencing any vault/api/* class at runtime
+// throws NoClassDefFoundError in dev even though a real packaged jar boots fine. Copied as a
+// resources srcDir, not registered as a classes output dir, because NeoForge's dev-mode run
+// config builds its module path from resourcesDir + the single classesDirs entry, not from
+// arbitrary additional output dirs.
+// Resolved through the vault-api project itself rather than "$rootDir/vault-api": in a
+// standalone NeoEssentials checkout rootDir IS this project, but in the farmstead-game
+// reactor rootDir is game/, so the literal path pointed at a directory that never exists.
+def vaultApiClassesDir = project(':vault-api').file('build/classes/java/main')
+sourceSets.main.resources { srcDir vaultApiClassesDir }
+tasks.named('processResources') { dependsOn ':vault-api:compileJava' }
+
 // Sets up a dependency configuration called 'localRuntime'.
 // This configuration should be used instead of 'runtimeOnly' to declare
 // a dependency that will be present for runtime testing but that is
 // "optional", meaning it will not be pulled by dependents of this mod.
 configurations {
     runtimeClasspath.extendsFrom localRuntime
-    jarJar.extendsFrom implementation
+    // Libraries bundled+relocated into the shipped jar via shadowJar (see below) — separate
+    // from 'implementation' (which still supplies them for compilation and dev-mode runs)
+    // since shadowJar needs to resolve their contents specifically, not the whole classpath.
+    shadowBundle {
+        canBeResolved = true
+        canBeConsumed = false
+    }
 }
 
 dependencies {
+    // vault/api's pure-Java interfaces (VaultServiceRegistry, VaultEconomy, VaultPermission,
+    // VaultChat) live in their own module now — see vault-api/build.gradle and
+    // docs/VaultAPI.md — so another mod author can depend on just that tiny jar via JitPack
+    // instead of all of NeoEssentials. Bundled into the shipped mod jar via the
+    // `from(project(':vault-api')...)` addition on the `jar` task above, which is the ONLY
+    // place these classes should physically end up at runtime — compileOnly here (not
+    // implementation) deliberately keeps vault-api's own jar off the runtime/module classpath.
+    // Adding it as `implementation` puts vault-api's jar on the module path in ADDITION to the
+    // merged copy already inside this mod's own jar, and NeoForge's JPMS module resolution then
+    // sees the same package "exported" by two different modules (a split-package violation) and
+    // refuses to boot with a ResolutionException.
+    compileOnly project(':vault-api')
+
     // YAWP (Yet Another World Protector) for region protection integration (local JAR workaround)
     // implementation name: 'yawp-1.21.1-neoforge-0.6.2-beta1'  // Disabled - jar file is currently .disabled
     // Example optional mod dependency with JEI
@@ -155,10 +273,51 @@ dependencies {
     // NOTE: Gson is provided by NeoForge, so we don't include it to avoid module conflicts
     // NeoForge includes Gson automatically
 
-    // Java-WebSocket for WebSocket server - bundled using JarJar to avoid module conflicts
-    // JarJar will properly isolate this dependency within our mod
+    // Java-WebSocket for WebSocket server — bundled+relocated via shadowJar (see build.gradle's
+    // shadowJar block) rather than JarJar, so it can't split-package-conflict with another mod
+    // bundling the same library under its original package name.
     implementation 'org.java-websocket:Java-WebSocket:1.5.7'
-    jarJar(group: 'org.java-websocket', name: 'Java-WebSocket', version: '[1.5.7,1.6.0)')
+    shadowBundle 'org.java-websocket:Java-WebSocket:1.5.7'
+
+
+    // SQLite JDBC driver — NOT bundled here anymore. It has a native (JNI) library, so
+    // JarJar embedding it always creates its own separate module regardless of whether
+    // SQLite storage is actually configured, and that module can collide with another mod's
+    // own bundled copy (split-package java.lang.module.ResolutionException — crashes the
+    // WHOLE server at boot, seen in the wild against GriefLogger). Relocating/shading it
+    // instead doesn't work either — its native library has the original class paths compiled
+    // in (see https://github.com/xerial/sqlite-jdbc/issues/145). Now loaded on demand at
+    // runtime instead: see com.zerog.neoessentials.storage.SqliteDriverProvisioner, which
+    // downloads it from Maven Central (checksum-verified) only when SQLite storage or a
+    // legacy Auction House migration is actually used — the default (storage.type: json)
+    // never touches it, and never has it in the jar to conflict with anything.
+
+    // MySQL JDBC driver — also NOT bundled here anymore, for the same reason as sqlite-jdbc
+    // above: JarJar embeds it as its own module, and it collided with another mod's own
+    // bundled copy of the exact same driver (split-package ResolutionException — crashed the
+    // WHOLE server at boot, seen in the wild against GriefLogger, same as the sqlite case).
+    // Now loaded on demand at runtime instead: see
+    // com.zerog.neoessentials.storage.MySqlDriverProvisioner, which downloads it from Maven
+    // Central (checksum-verified) only when storage.type is actually "mysql" — the default
+    // (storage.type: json) never touches it, and never has it in the jar to conflict with
+    // anything.
+
+    // HikariCP — connection pooling for the MySQL backend. A single unpooled
+    // JDBC connection per request would serialize every database-backed
+    // manager's reads/writes through one socket; a small pool avoids that
+    // becoming a bottleneck under normal server load. Bundled+relocated via shadowJar (see
+    // build.gradle's shadowJar block) rather than JarJar, so it can't split-package-conflict
+    // with another mod bundling the same library under its original package name.
+    implementation 'com.zaxxer:HikariCP:5.1.0'
+    shadowBundle 'com.zaxxer:HikariCP:5.1.0'
+
+    // SnakeYAML — backs the generic DataStore's YAML backend. NeoForge/Minecraft
+    // itself doesn't ship a YAML library (unlike Gson, which is already provided). Bundled+
+    // relocated via shadowJar (see build.gradle's shadowJar block) rather than JarJar, so it
+    // can't split-package-conflict with another mod bundling the same library under its
+    // original package name.
+    implementation 'org.yaml:snakeyaml:2.2'
+    shadowBundle 'org.yaml:snakeyaml:2.2'
 
     // LuckPerms API for permissions integration
     compileOnly 'net.luckperms:api:5.4'
@@ -169,12 +328,131 @@ dependencies {
     compileOnly 'curse.maven:architectury-api-419699:5786327'
     compileOnly 'curse.maven:ftb-ranks-314905:6522073'
 
+    // Simple Discord Link (SDLink) + its required CraterLib dependency, Mc2Discord, and
+    // DCIntegration — real compile-time APIs for the Discord chat-relay/account-link
+    // integrations, in place of the old reflection-only adapters. All are still
+    // runtime-optional: the adapter classes are only ever touched after a
+    // ModList.isLoaded(modid) check passes.
+    compileOnly 'curse.maven:simple-discord-link-bot-forge-fabric-spigot-541320:8437065'
+    compileOnly 'curse.maven:craterlib-867099:8117841'
+    compileOnly 'curse.maven:mc2discord-325235:7595200'
+    compileOnly 'curse.maven:dcintegration-324952:5426795'
+
+    // NightConfig TOML — always present at runtime (NeoForge's own ModConfigSpec depends on it,
+    // confirmed on the dev server's classpath as com.electronwill.night-config:{toml,core}:3.8.2)
+    // — used by SDLinkAdapter's detectNativeRelayConflicts() to actually parse
+    // simple-discord-link.toml instead of a best-effort line/regex scan.
+    compileOnly 'com.electronwill.night-config:toml:3.8.2'
+
+    // SG Economy API — real compile-time dependency for the VaultEconomy adapter
+    // (see vault/impl/SGEconomyAdapter.java), same runtime-optional posture as above.
+    compileOnly 'curse.maven:sg-economy-api-1446971:8176623'
+
     // Alternative: if you want them available during testing, use runtimeOnly
     // runtimeOnly fg.deobf("dev.architectury:architectury-neoforge:VERSION")
     // runtimeOnly fg.deobf("dev.ftb.mods:ftb-library-neoforge:VERSION")
     // runtimeOnly fg.deobf("dev.ftb.mods:ftbranks-neoforge:VERSION")
 }
 
+// Relocates HikariCP, snakeyaml, and Java-WebSocket into private packages so this mod can
+// never trigger a JPMS split-package java.lang.module.ResolutionException against another mod
+// that also bundles the same library under its original package name and crashes the WHOLE
+// server at boot — the exact class of bug we hit for real against GriefLogger over an
+// unrelocated shared mysql-connector-j copy (see MySqlDriverProvisioner's javadoc). All three
+// are pure Java (no native/JNI component), so relocation is safe here — unlike sqlite-jdbc,
+// which is loaded on demand instead specifically because relocating IT breaks its native
+// library (see SqliteDriverProvisioner's javadoc).
+//
+// Reprocesses the `jar` task's own already-complete output (vault-api merge, mod metadata,
+// resources, everything) via zipTree rather than sourceSets output directly — Shadow's
+// relocation rewrites bytecode across every class that passes through it, including our own
+// compiled classes' references to these libraries, so shadowJar's output is a strict superset
+// of jar's. Deliberately does NOT reuse jar's own output path/classifier: two Gradle tasks
+// both declaring the same output file confuses Gradle's own output tracking (confirmed live —
+// jar's file was never actually written to disk before shadowJar tried to read it back,
+// failing with "Cannot expand ZIP" since the file didn't exist yet). Left at Shadow's own
+// default classifier ("all") instead — CI's existing `ls -t build/libs/*.jar | head -n1` needs
+// no changes: shadowJar always runs after jar (dependsOn below), so its output always has the
+// later mtime and gets picked automatically. The plain (non-shadowed, without these 3
+// relocated libraries) jar is still produced too, just never used for anything — it's what
+// `components.java`/maven-publish keeps treating as the "main" artifact, unrelated to what
+// actually ships.
+shadowJar {
+    dependsOn tasks.named('jar')
+    from { zipTree(tasks.named('jar', Jar).get().archiveFile.get()) }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    // HikariCP pulls in slf4j-api transitively via shadowBundle. Never relocate/bundle it: the
+    // platform (NeoForge/Minecraft) already provides org.slf4j as its own module on the boot
+    // module path, so shipping our own unrelocated copy causes a split-package
+    // ResolutionException ("Modules neoessentials and org.slf4j export package org.slf4j.spi to
+    // module <other-mod>") the same way an unrelocated bundled JDBC driver would. Excluding it
+    // is safe: HikariCP/our own code call the slf4j API classes, which are resolved against the
+    // platform's copy at runtime instead.
+    exclude 'org/slf4j/**'
+
+    relocate 'com.zaxxer.hikari', 'com.zerog.neoessentials.lib.hikari'
+    relocate 'org.yaml.snakeyaml', 'com.zerog.neoessentials.lib.snakeyaml'
+    relocate 'org.java_websocket', 'com.zerog.neoessentials.lib.javawebsocket'
+
+    configurations = [project.configurations.shadowBundle]
+
+    mergeServiceFiles()
+}
+tasks.named('assemble') { dependsOn shadowJar }
+
+
+// --- Bundled internal dashboard UI (optional — only matters when webDashboard.mode is
+// "internal" or "both"; the shipped default remains "external") ---
+//
+// webdashboard-ui/ is a plain Vite+React+TS project (NOT a Gradle/Java module, just a
+// sibling directory) — it becomes this mod's own bundled dashboard, calling this mod's
+// REST API directly with no separate PHP/Laravel process. Follows the same "generate
+// elsewhere, wire in as a resources srcDir, make processResources depend on it" pattern
+// already used above for copyBuildNumber/jarJar/:vault-api's classes. Skipped entirely
+// (via onlyIf) if the directory doesn't exist, so a checkout without it still builds fine.
+def dashboardUiDir = file("$rootDir/webdashboard-ui")
+def npmExecutable = org.gradle.internal.os.OperatingSystem.current().isWindows() ? 'npm.cmd' : 'npm'
+
+tasks.register("installDashboardUI", Exec) {
+    onlyIf { dashboardUiDir.exists() }
+    workingDir dashboardUiDir
+    // package-lock.json must include every platform's optional native binaries (Rollup's
+    // native addon is the one that bit us — npmjs/cli#4828: a lockfile generated on one OS can
+    // end up missing another OS's optional-dependency package entry entirely, and neither `npm
+    // ci` nor `npm install` will fetch a binary that isn't in the lock at all). Fixed by
+    // deleting node_modules + package-lock.json and reinstalling fresh so npm regenerates the
+    // full platform matrix — verify with `grep '"node_modules/@rollup/rollup-linux-x64-gnu"'
+    // package-lock.json` after any future dependency change made from Windows. `npm ci` is
+    // back since the lockfile is correct again; it's the right choice for CI reproducibility.
+    // --legacy-peer-deps: @universemc/react-palette declares a peer on react@^17, but this
+    // project is on react@^18 (same mismatch the external dashboard's own build script already
+    // works around the same way — see its bin/build-installer.ps1). Works fine in practice;
+    // the peer range is just stale upstream.
+    commandLine npmExecutable, 'ci', '--legacy-peer-deps'
+    inputs.file(file("$dashboardUiDir/package-lock.json"))
+    outputs.dir(file("$dashboardUiDir/node_modules"))
+}
+
+tasks.register("buildDashboardUI", Exec) {
+    onlyIf { dashboardUiDir.exists() }
+    dependsOn 'installDashboardUI'
+    workingDir dashboardUiDir
+    commandLine npmExecutable, 'run', 'build'
+    inputs.dir(file("$dashboardUiDir/src"))
+    inputs.file(file("$dashboardUiDir/package.json"))
+    outputs.dir(file("$dashboardUiDir/dist"))
+}
+
+tasks.register("copyDashboardUI", Copy) {
+    onlyIf { dashboardUiDir.exists() }
+    dependsOn 'buildDashboardUI'
+    from file("$dashboardUiDir/dist")
+    into file('build/generated/dashboardUiResources/webdashboard')
+}
+
+sourceSets.main.resources { srcDir 'build/generated/dashboardUiResources' }
+tasks.named('processResources') { dependsOn 'copyDashboardUI' }
 
 // Copy build_number.txt to resources so it's included in the JAR
 tasks.register("copyBuildNumber", Copy) {

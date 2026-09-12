@@ -1,5 +1,7 @@
 package com.zerog.neoessentials.webdashboard.security;
 
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,7 +48,7 @@ public class DiscordPermissionSync {
         
         try {
             // Check if Discord integration is available
-            if (!SDLinkEventListener.isBotReady()) {
+            if (!DiscordAuthProvider.getInstance().isAvailable()) {
                 return new SyncResult(false, "Discord bot not ready", 0);
             }
             
@@ -61,37 +63,52 @@ public class DiscordPermissionSync {
             // Sync permissions based on Discord roles
             int permissionsGranted = 0;
             com.zerog.neoessentials.permissions.PermissionManager permManager = com.zerog.neoessentials.api.permissions.PermissionAPI.getManager();
-            
+
+            // This writes Discord-role mappings straight to the INTERNAL PermissionUser's
+            // group — there's no generic "set the active external adapter's group" operation
+            // to call instead, so unlike other PermissionAPI.getManager() consumers this can't
+            // just be swapped for an adapter-aware call. When an external adapter (LuckPerms/
+            // FTB Ranks) is active, permManager is null and this used to fall through into the
+            // loop below, NPE on the first getUser() call, and get caught by the generic
+            // catch-all at the bottom of this method as an unhelpful "Error: null" — fail fast
+            // here instead with a message that actually explains what to do.
+            if (permManager == null) {
+                NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD,
+                    "Discord permission sync skipped for {} — an external permission adapter is active; manage group membership there instead.",
+                    player.getName().getString());
+                return new SyncResult(false, "External permissions plugin (LuckPerms/FTB Ranks) is active — manage this player's group there instead.", 0);
+            }
+
             for (String role : discordUser.getDiscordRoles()) {
                 // Map Discord roles to permission groups
                 String permissionGroup = mapDiscordRoleToPermissionGroup(role);
                 
                 if (permissionGroup != null && !permissionGroup.isEmpty()) {
-                    LOGGER.debug("Granting permission group '{}' to player {} based on Discord role '{}'", 
+                    NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Granting permission group '{}' to player {} based on Discord role '{}'",
                                 permissionGroup, player.getName().getString(), role);
-                    
+
                     // Get or create the user and set their group
                     com.zerog.neoessentials.permissions.PermissionUser user = permManager.getUser(player.getUUID());
                     if (user != null) {
                         user.setGroup(permissionGroup);
                         permissionsGranted++;
-                        
+
                         // Save the permission changes
                         try {
                             com.zerog.neoessentials.permissions.PermissionStorage.save(permManager);
                         } catch (Exception saveEx) {
-                            LOGGER.error("Failed to save permission changes for player {}", player.getName().getString(), saveEx);
+                            NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Failed to save permission changes for player " + player.getName().getString(), saveEx);
                         }
                     }
                 } else {
-                    LOGGER.debug("No permission mapping for Discord role: {}", role);
+                    NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "No permission mapping for Discord role: {}", role);
                 }
             }
-            
+
             return new SyncResult(true, "Permissions synced successfully", permissionsGranted);
-            
+
         } catch (Exception e) {
-            LOGGER.error("Error syncing permissions for player {}: {}", player.getName().getString(), e.getMessage());
+            NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Error syncing permissions for player " + player.getName().getString(), e);
             return new SyncResult(false, "Error: " + e.getMessage(), 0);
         }
     }
@@ -119,7 +136,7 @@ public class DiscordPermissionSync {
                 // In the future, this could be extended to grant multiple individual permissions
                 if (permissions != null && !permissions.isEmpty()) {
                     String mappedGroup = permissions.get(0);
-                    LOGGER.debug("Found custom role mapping: Discord role '{}' -> permission group '{}'", discordRole, mappedGroup);
+                    NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Found custom role mapping: Discord role '{}' -> permission group '{}'", discordRole, mappedGroup);
                     return mappedGroup;
                 }
             }
@@ -149,7 +166,7 @@ public class DiscordPermissionSync {
      */
     public void reloadConfig() {
         this.authConfig = DiscordAuthConfig.load();
-        LOGGER.info("Discord auth config reloaded for permission sync");
+        NeoLog.info(LOGGER, LogCategory.WEB_DASHBOARD, "Discord auth config reloaded for permission sync");
     }
     
     /**

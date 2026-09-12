@@ -4,6 +4,8 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 
 import java.math.BigDecimal;
 import java.nio.file.Path;
@@ -19,9 +21,14 @@ public class InputValidator {
     
     // Security patterns
     private static final Pattern VALID_PLAYER_NAME = Pattern.compile("^[a-zA-Z0-9_]{1,16}$");
-    // Updated SAFE_COMMAND to allow colons, periods, ampersands, hashes, and tildes for legitimate Minecraft commands
-    // Allows: namespaced IDs (minecraft:sharpness), permissions (neoessentials.economy.pay), color codes (&#5d6a2c), relative coords (~ ~6 ~)
-    private static final Pattern SAFE_COMMAND = Pattern.compile("^[a-zA-Z0-9_\\-/\\s:.&#~]+$");
+    // Deny-list rather than allow-list: real Minecraft commands legitimately use target
+    // selectors (@a, @e[type=cow,distance=..5]), NBT/JSON data ({...}, "..."), coordinates
+    // (~ ~6 ~, ^ ^ ^1), negation (!), and many other punctuation characters that an
+    // enumerated allow-list keeps missing (see containsDangerousCommand's history — the old
+    // allow-list didn't even permit '@', so any selector-based command was rejected). Only
+    // reject C0 control characters and the backtick, neither of which has any legitimate use
+    // in Minecraft command syntax.
+    private static final Pattern SAFE_COMMAND = Pattern.compile("^[^\\x00-\\x1F`]+$");
     private static final Pattern SAFE_FILENAME = Pattern.compile("^[a-zA-Z0-9_\\-\\.]+$");
     
     // Config-based limits - loaded from ConfigManager
@@ -65,11 +72,21 @@ public class InputValidator {
      * Validates an economic amount for transactions.
      */
     public static ValidationResult validateEconomyAmount(double amount) {
-        if (!com.zerog.neoessentials.config.ConfigManager.getInstance().isInputValidationEnabled()) {
-            return ValidationResult.success(amount);
-        }
+        // NaN/infinite is checked even with validation disabled below — BigDecimal.valueOf()
+        // itself throws NumberFormatException on either, a crash this method exists to turn
+        // into an ordinary failure result instead of letting propagate uncaught.
         if (Double.isNaN(amount) || Double.isInfinite(amount)) {
             return ValidationResult.failure("Invalid amount: not a valid number");
+        }
+        if (!com.zerog.neoessentials.config.ConfigManager.getInstance().isInputValidationEnabled()) {
+            // Every caller of this method calls getValue(BigDecimal.class) unconditionally —
+            // this used to return the raw double (boxed to Double) here when validation was
+            // disabled, so ClassCastException: Double cannot be cast to BigDecimal crashed
+            // /pay and /eco give|take on every single use whenever an admin turned off
+            // security.enableInputValidation, with no indication of why. Still skips the
+            // actual min/max/positivity checks below (that's what "disabled" means), just
+            // returns the correct type either way.
+            return ValidationResult.success(BigDecimal.valueOf(amount));
         }
         if (amount <= 0) {
             return ValidationResult.failure("Amount must be positive");
@@ -147,7 +164,7 @@ public class InputValidator {
             }
             return ValidationResult.success(normalizedPath.toString());
         } catch (Exception e) {
-            LOGGER.debug("Path validation error: {}", e.getMessage());
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Path validation error: {}", e.getMessage());
             return ValidationResult.failure("Invalid file path format");
         }
     }
@@ -226,16 +243,23 @@ public class InputValidator {
     
     /**
      * Check for dangerous command patterns.
+     *
+     * <p>Deliberately narrow: this scans real Minecraft command strings (typed by
+     * players, or bound to powertool items), not shell/OS input, so it should only
+     * flag patterns with a genuine injection/traversal risk in that context. The
+     * previous list included things like {@code ~} (relative coordinates), {@code ;},
+     * {@code $}, {@code &&}/{@code ||}, and {@code exec} (which matches the vanilla
+     * {@code /execute} command) — all extremely common in ordinary, safe Minecraft
+     * commands — and blocked them by default for every player on every command via
+     * {@link com.zerog.neoessentials.security.CommandLengthEnforcer}.</p>
      */
     private static boolean containsDangerousCommand(String command) {
         String[] dangerousPatterns = {
-            "rm ", "del ", "delete ", "format", "shutdown", "reboot",
-            "eval", "exec", "system", "runtime", "process",
-            "../", "..\\", "~", "$", "`", "&&", "||", ";",
-            "file:", "http:", "https:", "ftp:", "jar:",
-            "class.forname", "reflection", "unsafe"
+            "../", "..\\",                              // path traversal
+            "class.forname", "reflection",              // Java reflection abuse
+            "file:", "http:", "https:", "ftp:", "jar:"   // URL/file-scheme injection
         };
-        
+
         for (String pattern : dangerousPatterns) {
             if (command.contains(pattern)) {
                 return true;

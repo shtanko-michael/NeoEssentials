@@ -10,17 +10,27 @@ import com.zerog.neoessentials.util.MessageUtil;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.stats.Stats;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.ServerChatEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Player-state and admin-tool commands ported from EssentialsX:
@@ -35,7 +45,9 @@ import java.util.UUID;
  *  /more [amount]             — fill held stack to max
  *  /hat                       — wear held item as helmet
  *  /exp [show|set|give] <amount> [player] — XP management
- *  /sudo <player> <command>   — run command as player
+ *  /sudo <player> <command>   — run command as player; command may be "c:<message>" to
+ *                                force chat instead, and <player> may be "*" (everyone but
+ *                                the sender) or "**" (everyone including the sender)
  *  /playtime [player]         — show play time
  */
 public class PlayerStateCommands {
@@ -98,7 +110,7 @@ public class PlayerStateCommands {
         } else {
             src.sendSuccess(() -> MessageUtil.success("commands.neoessentials.fly.self", state), false);
         }
-        LOGGER.info("{} set fly={} for {}", senderName(src), newState, target.getName().getString());
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "{} set fly={} for {}", senderName(src), newState, target.getName().getString());
         return 1;
     }
 
@@ -147,6 +159,75 @@ public class PlayerStateCommands {
     /** Returns true if this player is in god mode. Used by damage event handler. */
     public static boolean isGodMode(UUID uuid) {
         return godMode.getOrDefault(uuid, false);
+    }
+
+    // ── Dashboard-facing wrappers ─────────────────────────────────────────────
+    // Same state changes as the /fly, /god, /feed, /speed, /ext commands, just driven
+    // by a target ServerPlayer directly instead of a CommandSourceStack — the dashboard
+    // has no in-game command source to reply through.
+
+    /** Sets flight ability on/off for {@code target}. Returns the new state. */
+    public static boolean setFly(ServerPlayer target, Boolean enable) {
+        boolean newState = enable != null ? enable : !target.getAbilities().mayfly;
+        target.getAbilities().mayfly = newState;
+        if (!newState) target.getAbilities().flying = false;
+        target.onUpdateAbilities();
+        target.fallDistance = 0f;
+        return newState;
+    }
+
+    /** Sets god mode on/off for {@code target}. Returns the new state. */
+    public static boolean setGod(ServerPlayer target, Boolean enable) {
+        boolean cur = godMode.getOrDefault(target.getUUID(), false);
+        boolean newState = enable != null ? enable : !cur;
+        godMode.put(target.getUUID(), newState);
+        if (newState) {
+            target.setHealth(target.getMaxHealth());
+            target.getFoodData().setFoodLevel(20);
+        }
+        return newState;
+    }
+
+    /** Restores hunger/saturation for {@code target}. */
+    public static void feedPlayer(ServerPlayer target) {
+        target.getFoodData().setFoodLevel(20);
+        target.getFoodData().setSaturation(20f);
+    }
+
+    /** Extinguishes any fire on {@code target}. */
+    public static void extinguishPlayer(ServerPlayer target) {
+        target.clearFire();
+    }
+
+    /** Sets walk or fly speed (0-10 scale, same mapping as {@code /speed}) for {@code target}. */
+    public static void setSpeed(ServerPlayer target, boolean fly, float speed) {
+        float mcSpeed = Math.min(speed / 10f, 1.0f);
+        if (fly) {
+            target.getAbilities().setFlyingSpeed(mcSpeed);
+            target.onUpdateAbilities();
+        } else {
+            var attr = target.getAttribute(Attributes.MOVEMENT_SPEED);
+            if (attr != null) attr.setBaseValue(mcSpeed);
+        }
+    }
+
+    /**
+     * Forces {@code target} to run a command (or chat, if {@code isChat}), same as {@code /sudo}
+     * — just driven by the dashboard instead of a CommandSourceStack. Respects
+     * {@code neoessentials.sudo.exempt} the same way the command does. Returns an error message,
+     * or {@code null} on success.
+     */
+    public static String runSudoAdmin(ServerPlayer target, String command, boolean isChat) {
+        if (PermissionAPI.hasPermission(target.getUUID(), "neoessentials.sudo.exempt")) {
+            return target.getName().getString() + " is exempt from /sudo.";
+        }
+        if (isChat) {
+            sudoChat(target, command);
+        } else {
+            String payload = command.startsWith("/") ? command.substring(1) : command;
+            target.getServer().getCommands().performPrefixedCommand(target.createCommandSourceStack(), payload);
+        }
+        return null;
     }
 
     /** Called on player quit to clean up god/fly state. */
@@ -279,9 +360,12 @@ public class PlayerStateCommands {
         // Essentials maps 0-10 to 0.0-1.0 (x0.1), capped at 1.0
         float mcSpeed = Math.min(speed / 10f, 1.0f);
         if (isFly) {
-            // Player creative-flight speed is driven by Abilities.flyingSpeed, NOT the
-            // FLYING_SPEED attribute (that only affects flying mobs — bees/parrots/allays).
-            // Set it and re-sync abilities to the client. (default 0.05; Essentials max 1.0)
+            // NOTE: Attributes.FLYING_SPEED is never actually consulted for player flight —
+            // Player.createAttributes() only registers MOVEMENT_SPEED, so
+            // getAttribute(Attributes.FLYING_SPEED) always returns null here and the old
+            // "if (attr != null)" guard silently no-op'd every call. Actual client-side fly
+            // speed is driven by Abilities.flyingSpeed, synced via onUpdateAbilities()'s
+            // ClientboundPlayerAbilitiesPacket — that's the value that needs setting.
             target.getAbilities().setFlyingSpeed(mcSpeed);
             target.onUpdateAbilities();
         } else {
@@ -366,6 +450,9 @@ public class PlayerStateCommands {
             .then(Commands.argument("target", StringArgumentType.word())
                 .suggests((ctx, b) -> SharedSuggestionProvider.suggest(ctx.getSource().getServer().getPlayerNames(), b))
                 .then(Commands.argument("item", StringArgumentType.word())
+                    .suggests((ctx, b) -> SharedSuggestionProvider.suggest(
+                        net.minecraft.core.registries.BuiltInRegistries.ITEM.keySet().stream()
+                            .map(net.minecraft.resources.ResourceLocation::getPath), b))
                     .executes(ctx -> executeGive(ctx, StringArgumentType.getString(ctx, "target"), StringArgumentType.getString(ctx, "item"), 1))
                     .then(Commands.argument("amount", IntegerArgumentType.integer(1, 3456))
                         .executes(ctx -> executeGive(ctx,
@@ -550,12 +637,26 @@ public class PlayerStateCommands {
         return (int)(4.5 * level * level - 162.5 * level + 2220);
     }
 
-    // ── /sudo <player> <command> ──────────────────────────────────────────────
+    // ── /sudo <player|*|**> <command|c:message> ─────────────────────────────────
+    // "*" and "**" are registered as their own literal branches, not folded into the
+    // "target" word argument below — Brigadier's unquoted-string charset for
+    // StringArgumentType.word() doesn't include '*', so a literal "*"/"**" token would
+    // never match that argument and always fail to parse ("trailing data").
     private static void registerSudo(CommandDispatcher<CommandSourceStack> d) {
         d.register(Commands.literal("sudo")
             .requires(src -> { var p = src.getPlayer(); return p == null || PermissionAPI.hasPermission(p.getUUID(), "neoessentials.sudo"); })
+            .then(Commands.literal("*")
+                .then(Commands.argument("command", StringArgumentType.greedyString())
+                    .executes(ctx -> executeSudo(ctx, "*", StringArgumentType.getString(ctx, "command"))))
+            )
+            .then(Commands.literal("**")
+                .then(Commands.argument("command", StringArgumentType.greedyString())
+                    .executes(ctx -> executeSudo(ctx, "**", StringArgumentType.getString(ctx, "command"))))
+            )
             .then(Commands.argument("target", StringArgumentType.word())
-                .suggests((ctx, b) -> SharedSuggestionProvider.suggest(ctx.getSource().getServer().getPlayerNames(), b))
+                .suggests((ctx, b) -> SharedSuggestionProvider.suggest(
+                    Stream.concat(Stream.of("*", "**"), Arrays.stream(ctx.getSource().getServer().getPlayerNames())),
+                    b))
                 .then(Commands.argument("command", StringArgumentType.greedyString())
                     .executes(ctx -> executeSudo(ctx,
                         StringArgumentType.getString(ctx, "target"),
@@ -565,29 +666,81 @@ public class PlayerStateCommands {
         );
     }
 
-    private static int executeSudo(CommandContext<CommandSourceStack> ctx, String targetName, String command) {
+    private static int executeSudo(CommandContext<CommandSourceStack> ctx, String targetSpec, String command) {
         var src = ctx.getSource();
-        ServerPlayer target = src.getServer().getPlayerList().getPlayerByName(targetName);
-        if (target == null) {
-            src.sendFailure(MessageUtil.error("commands.neoessentials.general.player_not_found", targetName));
-            return 0;
+        boolean isWildcard = targetSpec.equals("*") || targetSpec.equals("**");
+        boolean includeSelf = targetSpec.equals("**");
+        ServerPlayer self = src.getPlayer();
+
+        List<ServerPlayer> targets;
+        if (isWildcard) {
+            targets = src.getServer().getPlayerList().getPlayers().stream()
+                .filter(p -> includeSelf || self == null || !p.getUUID().equals(self.getUUID()))
+                .collect(Collectors.toList());
+            if (targets.isEmpty()) {
+                src.sendFailure(MessageUtil.error("commands.neoessentials.sudo.no_targets"));
+                return 0;
+            }
+        } else {
+            ServerPlayer target = src.getServer().getPlayerList().getPlayerByName(targetSpec);
+            if (target == null) {
+                src.sendFailure(MessageUtil.error("commands.neoessentials.general.player_not_found", targetSpec));
+                return 0;
+            }
+            // Prevent explicitly sudo-ing yourself by name (use ** to include yourself in bulk).
+            if (self != null && self.getUUID().equals(target.getUUID())) {
+                src.sendFailure(MessageUtil.error("commands.neoessentials.sudo.self"));
+                return 0;
+            }
+            // Essentials: sudo.exempt check
+            if (PermissionAPI.hasPermission(target.getUUID(), "neoessentials.sudo.exempt") && self != null) {
+                src.sendFailure(MessageUtil.error("commands.neoessentials.sudo.exempt", targetSpec));
+                return 0;
+            }
+            targets = List.of(target);
         }
-        // Essentials: sudo.exempt check
-        if (PermissionAPI.hasPermission(target.getUUID(), "neoessentials.sudo.exempt")
-                && src.getPlayer() != null) {
-            src.sendFailure(MessageUtil.error("commands.neoessentials.sudo.exempt", targetName));
-            return 0;
+
+        boolean isChat = command.startsWith("c:");
+        String payload = isChat ? command.substring(2) : (command.startsWith("/") ? command.substring(1) : command);
+
+        List<ServerPlayer> affected = new ArrayList<>();
+        for (ServerPlayer target : targets) {
+            // In bulk (wildcard) mode, silently skip exempt players instead of aborting the whole batch.
+            if (isWildcard && self != null && PermissionAPI.hasPermission(target.getUUID(), "neoessentials.sudo.exempt")) {
+                continue;
+            }
+            if (isChat) {
+                sudoChat(target, payload);
+            } else {
+                src.getServer().getCommands().performPrefixedCommand(target.createCommandSourceStack(), payload);
+            }
+            affected.add(target);
         }
-        // Prevent sudo-ing yourself
-        if (src.getPlayer() != null && src.getPlayer().getUUID().equals(target.getUUID())) {
-            src.sendFailure(MessageUtil.error("commands.neoessentials.sudo.self"));
-            return 0;
+
+        String cmdLabel = "/" + payload;
+        if (!isWildcard) {
+            String name = affected.get(0).getName().getString();
+            String key = isChat ? "commands.neoessentials.sudo.success.chat" : "commands.neoessentials.sudo.success";
+            String label = isChat ? payload : cmdLabel;
+            src.sendSuccess(() -> MessageUtil.success(key, name, label), true);
+        } else {
+            int count = affected.size();
+            String key = isChat ? "commands.neoessentials.sudo.success.chat.bulk" : "commands.neoessentials.sudo.success.bulk";
+            String label = isChat ? payload : cmdLabel;
+            src.sendSuccess(() -> MessageUtil.success(key, count, label), true);
         }
-        String cmd = command.startsWith("/") ? command.substring(1) : command;
-        src.getServer().getCommands().performPrefixedCommand(target.createCommandSourceStack(), cmd);
-        src.sendSuccess(() -> MessageUtil.success("commands.neoessentials.sudo.success", targetName, cmd), true);
-        LOGGER.info("{} sudoed {} to run: {}", senderName(src), targetName, cmd);
-        return 1;
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "{} sudoed {} player(s) ({}) to {}: {}",
+            senderName(src), affected.size(), targetSpec, isChat ? "say" : "run", payload);
+        return affected.size();
+    }
+
+    /** Forces a player's client to publicly chat {@code message}, through the same
+     *  NeoEssentials chat pipeline (formatting, mute/freeze/anti-spam checks, Discord
+     *  relay) real player-typed chat goes through — see ChannelCommands' identical pattern. */
+    private static void sudoChat(ServerPlayer player, String message) {
+        @SuppressWarnings("UnstableApiUsage")
+        ServerChatEvent chatEvent = new ServerChatEvent(player, message, Component.literal(message));
+        NeoForge.EVENT_BUS.post(chatEvent);
     }
 
     // ── /playtime [player] ────────────────────────────────────────────────────

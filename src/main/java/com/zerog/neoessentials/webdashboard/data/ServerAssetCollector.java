@@ -2,6 +2,8 @@ package com.zerog.neoessentials.webdashboard.data;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -43,7 +45,7 @@ public class ServerAssetCollector {
             return cachedAssets;
         }
 
-        LOGGER.info("Collecting server assets...");
+        NeoLog.info(LOGGER, LogCategory.WEB_DASHBOARD, "Collecting server assets...");
         JsonObject assets = new JsonObject();
 
         // Collect all registered items
@@ -69,7 +71,7 @@ public class ServerAssetCollector {
                         itemData.addProperty("modName", modContainer.get().getModInfo().getDisplayName());
                     }
                 } catch (Exception e) {
-                    // Mod not found, skip
+                    NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Could not resolve mod name for namespace: {}", itemId.getNamespace(), e);
                 }
             }
 
@@ -109,7 +111,7 @@ public class ServerAssetCollector {
         cachedAssets = assets;
         lastCacheTime = currentTime;
 
-        LOGGER.info("Collected {} items from {} namespaces ({} modded)",
+        NeoLog.info(LOGGER, LogCategory.WEB_DASHBOARD, "Collected {} items from {} namespaces ({} modded)",
             items.size(), namespaceCount.size(), namespaceCount.size() - 1);
 
         return assets;
@@ -149,7 +151,7 @@ public class ServerAssetCollector {
                     result.addProperty("modVersion", modContainer.get().getModInfo().getVersion().toString());
                 }
             } catch (Exception e) {
-                LOGGER.debug("Could not get mod info for namespace: {}", namespace);
+                NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Could not get mod info for namespace: {}", namespace);
             }
         }
 
@@ -162,7 +164,7 @@ public class ServerAssetCollector {
     public void clearCache() {
         cachedAssets = null;
         lastCacheTime = 0;
-        LOGGER.info("Server asset cache cleared");
+        NeoLog.info(LOGGER, LogCategory.WEB_DASHBOARD, "Server asset cache cleared");
     }
 }
 

@@ -2,12 +2,17 @@ package com.zerog.neoessentials.resourcepacks;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.network.protocol.common.ClientboundResourcePackPushPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 
 import java.io.*;
 import java.nio.file.*;
@@ -20,29 +25,38 @@ import java.util.zip.ZipInputStream;
 
 /**
  * Manages server resource packs including upload, storage, and player assignments.
+ *
+ * <p>Pack metadata (name, hash, assignments, etc.) is persisted through the pluggable
+ * {@link com.zerog.neoessentials.storage.DataStore} (collection {@link #PACKS_COLLECTION},
+ * id = pack id). The actual {@code .zip} binary files always stay on disk under
+ * {@link #storageDirectory} — only their metadata record moves between backends.
  */
 public class ResourcePackManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(ResourcePackManager.class);
     private static ResourcePackManager instance;
-    
+
     private final Map<String, ResourcePack> resourcePacks;
     private final Path storageDirectory;
     private final Path packsFile;
     private final Gson gson;
+    private final com.zerog.neoessentials.storage.DataStore store;
     private MinecraftServer server;
-    
+
     private static final long MAX_PACK_SIZE = 100 * 1024 * 1024; // 100 MB
     private static final String PACKS_DIR = "neoessentials/resourcepacks";
     private static final String PACKS_FILE = "packs.json";
-    
+    private static final String PACKS_COLLECTION = "resource_packs";
+
     private ResourcePackManager() {
         this.resourcePacks = new ConcurrentHashMap<>();
         this.storageDirectory = Paths.get(PACKS_DIR);
         this.packsFile = storageDirectory.resolve(PACKS_FILE);
-        this.gson = new GsonBuilder().setPrettyPrinting().create();
-        
+        this.gson = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
+        this.store = com.zerog.neoessentials.storage.StorageManager.getInstance().getStore();
+
         try {
             Files.createDirectories(storageDirectory);
+            migrateLegacyFilesIfNeeded();
             loadPacks();
         } catch (IOException e) {
             LOGGER.error("Failed to create resource packs directory", e);
@@ -98,7 +112,7 @@ public class ResourcePackManager {
         resourcePacks.put(pack.getId(), pack);
         savePacks();
         
-        LOGGER.info("Uploaded resource pack: {} ({})", name, pack.getId());
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "Uploaded resource pack: {} ({})", name, pack.getId());
         return pack;
     }
     
@@ -117,7 +131,7 @@ public class ResourcePackManager {
         resourcePacks.put(pack.getId(), pack);
         savePacks();
         
-        LOGGER.info("Registered external resource pack: {} from {}", name, url);
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "Registered external resource pack: {} from {}", name, url);
         return pack;
     }
     
@@ -139,9 +153,10 @@ public class ResourcePackManager {
                 LOGGER.error("Failed to delete pack file for {}", packId, e);
             }
         }
-        
+
+        store.delete(PACKS_COLLECTION, packId);
         savePacks();
-        LOGGER.info("Deleted resource pack: {}", pack.getName());
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "Deleted resource pack: {}", pack.getName());
         return true;
     }
     
@@ -171,7 +186,7 @@ public class ResourcePackManager {
         if (pack != null) {
             pack.setActive(true);
             savePacks();
-            LOGGER.info("Set active resource pack: {}", pack.getName());
+            NeoLog.info(LOGGER, LogCategory.GENERAL, "Set active resource pack: {}", pack.getName());
         }
     }
     
@@ -227,7 +242,7 @@ public class ResourcePackManager {
             );
             
             player.connection.send(packet);
-            LOGGER.info("Sent resource pack {} to player {}", pack.getName(), player.getName().getString());
+            NeoLog.info(LOGGER, LogCategory.GENERAL, "Sent resource pack {} to player {}", pack.getName(), player.getName().getString());
         } catch (Exception e) {
             LOGGER.error("Failed to send resource pack to player", e);
         }
@@ -302,60 +317,155 @@ public class ResourcePackManager {
     }
     
     /**
-     * Load resource packs from disk
+     * Load resource pack metadata from the active {@link com.zerog.neoessentials.storage.DataStore}.
+     * The pack {@code .zip} binaries themselves are never touched here — only the metadata
+     * record (name, hash, url pointing at the on-disk file, assignments, etc.).
      */
     private void loadPacks() {
-        if (!Files.exists(packsFile)) {
-            return;
-        }
-        
-        try {
-            String json = Files.readString(packsFile);
-            Map<String, ResourcePack> loaded = gson.fromJson(json, new TypeToken<Map<String, ResourcePack>>(){}.getType());
-            if (loaded != null) {
-                resourcePacks.putAll(loaded);
-                LOGGER.info("Loaded {} resource packs", loaded.size());
+        Map<String, JsonObject> all = store.getAll(PACKS_COLLECTION);
+        for (Map.Entry<String, JsonObject> entry : all.entrySet()) {
+            try {
+                resourcePacks.put(entry.getKey(), fromJson(entry.getValue()));
+            } catch (Exception e) {
+                LOGGER.error("Failed to parse resource pack record {}", entry.getKey(), e);
             }
-        } catch (Exception e) {
-            LOGGER.error("Failed to load resource packs", e);
+        }
+        if (!all.isEmpty()) {
+            NeoLog.info(LOGGER, LogCategory.GENERAL, "Loaded {} resource packs", all.size());
         }
     }
-    
+
     /**
-     * Save resource packs to disk
+     * Persist all current resource pack metadata records to the active DataStore. Icon
+     * data is never included (too large — same as the legacy packs.json behavior).
      */
     private void savePacks() {
         try {
-            // Don't save icon data to JSON (too large)
-            Map<String, ResourcePack> toSave = new HashMap<>();
             for (Map.Entry<String, ResourcePack> entry : resourcePacks.entrySet()) {
-                ResourcePack pack = entry.getValue();
-                ResourcePack copy = new ResourcePack();
-                copy.setId(pack.getId());
-                copy.setName(pack.getName());
-                copy.setDescription(pack.getDescription());
-                copy.setFileName(pack.getFileName());
-                copy.setFileHash(pack.getFileHash());
-                copy.setFileSize(pack.getFileSize());
-                copy.setUrl(pack.getUrl());
-                copy.setExternal(pack.isExternal());
-                copy.setMetadata(pack.getMetadata());
-                copy.setUploadedAt(pack.getUploadedAt());
-                copy.setUploadedBy(pack.getUploadedBy());
-                copy.setActive(pack.isActive());
-                copy.setEnforcementMode(pack.getEnforcementMode());
-                copy.setAssignedPlayers(new HashSet<>(pack.getAssignedPlayers()));
-                copy.setAssignedGroups(new HashSet<>(pack.getAssignedGroups()));
-                toSave.put(entry.getKey(), copy);
+                store.put(PACKS_COLLECTION, entry.getKey(), toJson(entry.getValue()));
             }
-            
-            String json = gson.toJson(toSave);
-            Files.writeString(packsFile, json);
         } catch (Exception e) {
             LOGGER.error("Failed to save resource packs", e);
         }
     }
-    
+
+    /** Manually build a metadata JsonObject for one pack (icon data is deliberately excluded). */
+    private JsonObject toJson(ResourcePack pack) {
+        JsonObject obj = new JsonObject();
+        obj.addProperty("id", pack.getId());
+        obj.addProperty("name", pack.getName());
+        obj.addProperty("description", pack.getDescription());
+        obj.addProperty("fileName", pack.getFileName());
+        obj.addProperty("fileHash", pack.getFileHash());
+        obj.addProperty("fileSize", pack.getFileSize());
+        obj.addProperty("url", pack.getUrl());
+        obj.addProperty("external", pack.isExternal());
+        obj.addProperty("uploadedAt", pack.getUploadedAt() != null ? pack.getUploadedAt().toString() : null);
+        obj.addProperty("uploadedBy", pack.getUploadedBy());
+        obj.addProperty("active", pack.isActive());
+        obj.addProperty("enforcementMode", pack.getEnforcementMode() != null ? pack.getEnforcementMode().name() : null);
+
+        JsonArray players = new JsonArray();
+        for (String p : pack.getAssignedPlayers()) players.add(p);
+        obj.add("assignedPlayers", players);
+
+        JsonArray groups = new JsonArray();
+        for (String g : pack.getAssignedGroups()) groups.add(g);
+        obj.add("assignedGroups", groups);
+
+        ResourcePack.PackMetadata metadata = pack.getMetadata();
+        if (metadata != null) {
+            JsonObject metaObj = new JsonObject();
+            metaObj.addProperty("packFormat", metadata.getPackFormat());
+            metaObj.addProperty("description", metadata.getDescription());
+            metaObj.add("additionalData", gson.toJsonTree(metadata.getAdditionalData()));
+            obj.add("metadata", metaObj);
+        }
+        return obj;
+    }
+
+    /** Reconstruct a ResourcePack from a metadata JsonObject (see {@link #toJson}). */
+    private ResourcePack fromJson(JsonObject obj) {
+        ResourcePack pack = new ResourcePack();
+        if (obj.has("id") && !obj.get("id").isJsonNull()) pack.setId(obj.get("id").getAsString());
+        pack.setName(getOrNull(obj, "name"));
+        pack.setDescription(getOrNull(obj, "description"));
+        pack.setFileName(getOrNull(obj, "fileName"));
+        pack.setFileHash(getOrNull(obj, "fileHash"));
+        pack.setFileSize(obj.has("fileSize") && !obj.get("fileSize").isJsonNull() ? obj.get("fileSize").getAsLong() : 0L);
+        pack.setUrl(getOrNull(obj, "url"));
+        pack.setExternal(obj.has("external") && obj.get("external").getAsBoolean());
+        String uploadedAt = getOrNull(obj, "uploadedAt");
+        pack.setUploadedAt(uploadedAt != null ? Instant.parse(uploadedAt) : Instant.now());
+        pack.setUploadedBy(getOrNull(obj, "uploadedBy"));
+        pack.setActive(obj.has("active") && obj.get("active").getAsBoolean());
+        String enforcement = getOrNull(obj, "enforcementMode");
+        pack.setEnforcementMode(enforcement != null
+            ? ResourcePack.EnforcementMode.valueOf(enforcement)
+            : ResourcePack.EnforcementMode.OPTIONAL);
+
+        Set<String> players = new HashSet<>();
+        if (obj.has("assignedPlayers") && obj.get("assignedPlayers").isJsonArray()) {
+            for (JsonElement e : obj.getAsJsonArray("assignedPlayers")) players.add(e.getAsString());
+        }
+        pack.setAssignedPlayers(players);
+
+        Set<String> groups = new HashSet<>();
+        if (obj.has("assignedGroups") && obj.get("assignedGroups").isJsonArray()) {
+            for (JsonElement e : obj.getAsJsonArray("assignedGroups")) groups.add(e.getAsString());
+        }
+        pack.setAssignedGroups(groups);
+
+        if (obj.has("metadata") && obj.get("metadata").isJsonObject()) {
+            JsonObject metaObj = obj.getAsJsonObject("metadata");
+            ResourcePack.PackMetadata metadata = new ResourcePack.PackMetadata();
+            if (metaObj.has("packFormat") && !metaObj.get("packFormat").isJsonNull()) {
+                metadata.setPackFormat(metaObj.get("packFormat").getAsInt());
+            }
+            if (metaObj.has("description") && !metaObj.get("description").isJsonNull()) {
+                metadata.setDescription(metaObj.get("description").getAsString());
+            }
+            if (metaObj.has("additionalData") && !metaObj.get("additionalData").isJsonNull()) {
+                Map<String, Object> additionalData = gson.fromJson(metaObj.get("additionalData"),
+                    new TypeToken<Map<String, Object>>(){}.getType());
+                metadata.setAdditionalData(additionalData);
+            }
+            pack.setMetadata(metadata);
+        }
+        return pack;
+    }
+
+    private static String getOrNull(JsonObject obj, String key) {
+        return obj.has(key) && !obj.get(key).isJsonNull() ? obj.get(key).getAsString() : null;
+    }
+
+    /**
+     * One-time import of the legacy packs.json file into the active DataStore, if it's
+     * still empty and storage.autoMigrate is enabled. The .zip binaries on disk are left
+     * exactly where they are — only the metadata records move.
+     */
+    private void migrateLegacyFilesIfNeeded() {
+        if (store.hasAnyData(PACKS_COLLECTION)) return;
+        if (!com.zerog.neoessentials.config.ConfigManager.getInstance().isStorageAutoMigrateEnabled()) return;
+        if (!Files.exists(packsFile)) return;
+
+        try {
+            String json = Files.readString(packsFile);
+            Map<String, ResourcePack> loaded = gson.fromJson(json, new TypeToken<Map<String, ResourcePack>>(){}.getType());
+            if (loaded == null || loaded.isEmpty()) return;
+
+            int count = 0;
+            for (Map.Entry<String, ResourcePack> entry : loaded.entrySet()) {
+                store.put(PACKS_COLLECTION, entry.getKey(), toJson(entry.getValue()));
+                count++;
+            }
+            NeoLog.info(LOGGER, LogCategory.GENERAL, "ResourcePackManager: migrated {} resource pack record(s) from legacy packs.json into the '{}' storage backend.",
+                count, com.zerog.neoessentials.storage.StorageManager.getInstance().getActiveType());
+        } catch (Exception e) {
+            LOGGER.error("Failed to migrate legacy packs.json: {}", e.getMessage(), e);
+        }
+    }
+
     /**
      * Convert byte array to hex string
      */

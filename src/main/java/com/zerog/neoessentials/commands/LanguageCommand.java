@@ -5,13 +5,15 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.zerog.neoessentials.i18n.CustomLanguageManager;
 import com.zerog.neoessentials.i18n.CustomLanguageManager.LanguageFileInfo;
+import com.zerog.neoessentials.i18n.CustomLanguageManager.ValidationReport;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import com.zerog.neoessentials.util.MessageUtil;
+import com.zerog.neoessentials.util.ResourceUtil;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 
@@ -22,6 +24,9 @@ public class LanguageCommand {
     private static final Logger LOGGER = LoggerFactory.getLogger(LanguageCommand.class);
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
+        if (!com.zerog.neoessentials.config.ConfigManager.getInstance().isCommandEnabled("language")) {
+            return;
+        }
         dispatcher.register(
             Commands.literal("language")
                 .requires(source -> source.hasPermission(4)) // Op level 4
@@ -40,9 +45,39 @@ public class LanguageCommand {
                     .executes(LanguageCommand::clearMissingKeys))
                 .then(Commands.literal("info")
                     .executes(LanguageCommand::showInfo))
+                .then(Commands.literal("set")
+                    .then(Commands.argument("languageCode", StringArgumentType.word())
+                        .executes(LanguageCommand::setLanguage)))
+                // Bare `/language <code>` as a shortcut for `/language set <code>`
+                .then(Commands.argument("languageCode", StringArgumentType.word())
+                    .executes(LanguageCommand::setLanguage))
+                // --- New subcommands ---
+                .then(Commands.literal("validate")
+                    .then(Commands.argument("languageCode", StringArgumentType.word())
+                        .executes(LanguageCommand::validateLanguage)))
+                .then(Commands.literal("regenerate")
+                    .then(Commands.argument("languageCode", StringArgumentType.word())
+                        .executes(LanguageCommand::regenerateLanguage)))
+                .then(Commands.literal("override")
+                    .then(Commands.literal("set")
+                        .then(Commands.argument("key", StringArgumentType.word())
+                            .then(Commands.argument("value", StringArgumentType.greedyString())
+                                .executes(LanguageCommand::overrideSet))))
+                    .then(Commands.literal("get")
+                        .then(Commands.argument("key", StringArgumentType.word())
+                            .executes(LanguageCommand::overrideGet)))
+                    .then(Commands.literal("remove")
+                        .then(Commands.argument("key", StringArgumentType.word())
+                            .executes(LanguageCommand::overrideRemove)))
+                    .then(Commands.literal("list")
+                        .executes(LanguageCommand::overrideList))
+                    .then(Commands.literal("clear")
+                        .executes(LanguageCommand::overrideClear))
+                    .then(Commands.literal("reload")
+                        .executes(LanguageCommand::overrideReload)))
         );
 
-        LOGGER.info("Language command registered");
+        NeoLog.info(LOGGER, LogCategory.COMMANDS, "Language command registered");
     }
 
     /**
@@ -77,6 +112,44 @@ public class LanguageCommand {
     }
 
     /**
+     * Switch the active server language and persist it to config.json (localization.language).
+     * Validates the code against the deployed custom-language files before switching, and
+     * reloads translations immediately so the change applies without a restart.
+     */
+    private static int setLanguage(CommandContext<CommandSourceStack> ctx) {
+        CommandSourceStack source = ctx.getSource();
+        String languageCode = StringArgumentType.getString(ctx, "languageCode").trim().toLowerCase();
+
+        List<LanguageFileInfo> available = CustomLanguageManager.getInstance().getCustomLanguages();
+        boolean valid = available.stream().anyMatch(l -> l.getLanguageCode().equalsIgnoreCase(languageCode));
+
+        if (!valid) {
+            source.sendFailure(MessageUtil.error("Unknown language code: §f{0}", languageCode));
+            if (available.isEmpty()) {
+                source.sendFailure(MessageUtil.error("No languages are deployed. Run /language reload first."));
+            } else {
+                String codes = available.stream().map(LanguageFileInfo::getLanguageCode)
+                    .sorted().reduce((a, b) -> a + ", " + b).orElse("");
+                source.sendFailure(MessageUtil.error("Available languages: §f{0}", codes));
+            }
+            return 0;
+        }
+
+        try {
+            com.zerog.neoessentials.config.ConfigManager.setServerLanguage(languageCode);
+            MessageUtil.reloadTranslations();
+            source.sendSuccess(() -> MessageUtil.success("Server language set to: §e{0}", languageCode), true);
+            NeoLog.info(LOGGER, LogCategory.COMMANDS, "Server language changed to '{}' by {}", languageCode, source.getTextName());
+        } catch (Exception e) {
+            source.sendFailure(MessageUtil.error("Failed to set language: {0}", e.getMessage()));
+            NeoLog.error(LOGGER, LogCategory.COMMANDS, "Failed to set server language to {}", languageCode, e);
+            return 0;
+        }
+
+        return 1;
+    }
+
+    /**
      * Reload all custom language files
      */
     private static int reloadLanguages(CommandContext<CommandSourceStack> ctx) {
@@ -84,13 +157,21 @@ public class LanguageCommand {
 
         try {
             CustomLanguageManager.getInstance().reload();
+            // CustomLanguageManager.reload() only refreshes ITS OWN in-memory maps and the
+            // on-disk file — it never touches MessageUtil's separate in-memory translations
+            // cache, which is what every MessageUtil.localize()/.success()/etc. call actually
+            // reads from (that's the vast majority of the mod's messages, including all of
+            // jail/ban/freeze/etc.). Without this, /language reload could fix the file on disk
+            // but the running server would keep serving stale, already-loaded values for the
+            // rest of its uptime — exactly what was happening here.
+            MessageUtil.reloadTranslations();
             int count = CustomLanguageManager.getInstance().getCustomLanguages().size();
 
             source.sendSuccess(() -> MessageUtil.success("commands.neoessentials.language.reload.success", count), true);
-            LOGGER.info("Custom languages reloaded by {}", source.getTextName());
+            NeoLog.info(LOGGER, LogCategory.COMMANDS, "Custom languages reloaded by {}", source.getTextName());
         } catch (Exception e) {
             source.sendFailure(MessageUtil.error("commands.neoessentials.language.reload.failed", e.getMessage()));
-            LOGGER.error("Failed to reload languages", e);
+            NeoLog.error(LOGGER, LogCategory.COMMANDS, "Failed to reload languages", e);
         }
 
         return 1;
@@ -106,6 +187,7 @@ public class LanguageCommand {
         source.sendSuccess(() -> MessageUtil.success("commands.neoessentials.language.stats.header"), false);
         source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.stats.loaded", stats.get("customLanguagesLoaded")), false);
         source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.stats.missing_tracked", stats.get("missingKeysTracked")), false);
+        source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.stats.overrides", stats.get("overrideCount")), false);
         source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.stats.custom_dir", stats.get("customLanguageDirectory")), false);
         source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.stats.template_dir", stats.get("templateDirectory")), false);
 
@@ -129,7 +211,7 @@ public class LanguageCommand {
             String fileName = languageCode + "_template.json";
             CustomLanguageManager.getInstance().generateTemplate(
                 languageCode,
-                Paths.get("neoessentials", "languages", "templates", fileName)
+                ResourceUtil.getDataPath("languages/templates/" + fileName)
             );
 
             source.sendSuccess(() -> MessageUtil.success("commands.neoessentials.language.template.success", languageCode), true);
@@ -139,10 +221,10 @@ public class LanguageCommand {
             source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.template.step2", languageCode), false);
             source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.template.step3"), false);
 
-            LOGGER.info("Generated language template for {} by {}", languageCode, source.getTextName());
+            NeoLog.info(LOGGER, LogCategory.COMMANDS, "Generated language template for {} by {}", languageCode, source.getTextName());
         } catch (Exception e) {
             source.sendFailure(MessageUtil.error("commands.neoessentials.language.template.failed", e.getMessage()));
-            LOGGER.error("Failed to generate template for {}", languageCode, e);
+            NeoLog.error(LOGGER, LogCategory.COMMANDS, "Failed to generate template for {}", languageCode, e);
         }
 
         return 1;
@@ -165,16 +247,16 @@ public class LanguageCommand {
 
             String fileName = "missing_keys_" + System.currentTimeMillis() + ".json";
             CustomLanguageManager.getInstance().exportMissingKeys(
-                Paths.get("neoessentials", "languages", "templates", fileName)
+                ResourceUtil.getDataPath("languages/templates/" + fileName)
             );
 
             source.sendSuccess(() -> MessageUtil.success("commands.neoessentials.language.exportmissing.success", count), true);
             source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.exportmissing.file", fileName), false);
 
-            LOGGER.info("Exported {} missing keys by {}", count, source.getTextName());
+            NeoLog.info(LOGGER, LogCategory.COMMANDS, "Exported {} missing keys by {}", count, source.getTextName());
         } catch (Exception e) {
             source.sendFailure(MessageUtil.error("commands.neoessentials.language.exportmissing.failed", e.getMessage()));
-            LOGGER.error("Failed to export missing keys", e);
+            NeoLog.error(LOGGER, LogCategory.COMMANDS, "Failed to export missing keys", e);
         }
 
         return 1;
@@ -204,12 +286,21 @@ public class LanguageCommand {
         source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.intro"), false);
         source.sendSuccess(() -> MessageUtil.info(""), false);
         source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.commands_header"), false);
+        source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.cmd_switch"), false);
         source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.cmd_list"), false);
         source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.cmd_reload"), false);
         source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.cmd_stats"), false);
         source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.cmd_template"), false);
         source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.cmd_exportmissing"), false);
         source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.cmd_clearmissing"), false);
+        source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.cmd_validate"), false);
+        source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.cmd_regenerate"), false);
+        source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.cmd_override_set"), false);
+        source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.cmd_override_list"), false);
+        source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.cmd_override_get"), false);
+        source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.cmd_override_remove"), false);
+        source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.cmd_override_clear"), false);
+        source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.cmd_override_reload"), false);
         source.sendSuccess(() -> MessageUtil.info(""), false);
         source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.codes_header"), false);
         source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.codes_line1"), false);
@@ -221,6 +312,171 @@ public class LanguageCommand {
         source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.create_step3"), false);
         source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.language.info.create_step4"), false);
 
+        return 1;
+    }
+
+    // =========================================================================
+    // Validate
+    // =========================================================================
+
+    /**
+     * Validate a language file against the base English translations
+     */
+    private static int validateLanguage(CommandContext<CommandSourceStack> ctx) {
+        CommandSourceStack source = ctx.getSource();
+        String languageCode = StringArgumentType.getString(ctx, "languageCode");
+
+        ValidationReport report = CustomLanguageManager.getInstance().validateLanguage(languageCode);
+
+        if (report.hasError()) {
+            source.sendFailure(MessageUtil.error("Validation failed for {0}: {1}", languageCode, report.getErrorMessage()));
+            return 0;
+        }
+
+        // Coverage colour: red <50%, yellow 50–89%, green ≥90%
+        String coverageColor = report.getCoveragePercent() >= 90 ? "§a" :
+                               report.getCoveragePercent() >= 50 ? "§e" : "§c";
+
+        source.sendSuccess(() -> MessageUtil.success("═══ Language Validation: {0} ═══", languageCode), false);
+        source.sendSuccess(() -> MessageUtil.info("Total base keys: §f{0}", report.getTotalKeys()), false);
+        source.sendSuccess(() -> MessageUtil.info("Translated keys: §f{0}", report.getPresentKeys()), false);
+        source.sendSuccess(() -> MessageUtil.component("  Coverage: " + coverageColor + report.getCoveragePercent() + "%"), false);
+        source.sendSuccess(() -> MessageUtil.info("Missing keys: §f{0}", report.getMissingCount()), false);
+        source.sendSuccess(() -> MessageUtil.info("Extra keys (not in base): §f{0}", report.getExtraCount()), false);
+
+        if (report.getMissingCount() > 0) {
+            int toShow = Math.min(report.getMissingCount(), 10);
+            source.sendSuccess(() -> MessageUtil.warning("First {0} missing key(s):", toShow), false);
+            for (int i = 0; i < toShow; i++) {
+                final String key = report.getMissingKeys().get(i);
+                source.sendSuccess(() -> MessageUtil.component("  §7- §f" + key), false);
+            }
+            if (report.getMissingCount() > 10) {
+                source.sendSuccess(() -> MessageUtil.info("  ... and {0} more. Run /language exportmissing to export all.", report.getMissingCount() - 10), false);
+            }
+        }
+
+        if (report.getCoveragePercent() < 100) {
+            source.sendSuccess(() -> MessageUtil.info("Run §e/language regenerate {0}§7 to update the file from JAR.", languageCode), false);
+        } else {
+            source.sendSuccess(() -> MessageUtil.success("✓ Language file is fully up-to-date."), false);
+        }
+
+        NeoLog.info(LOGGER, LogCategory.COMMANDS, "Language validation for {} by {}: {}% coverage, {} missing, {} extra",
+            languageCode, source.getTextName(), report.getCoveragePercent(),
+            report.getMissingCount(), report.getExtraCount());
+        return 1;
+    }
+
+    // =========================================================================
+    // Regenerate
+    // =========================================================================
+
+    /**
+     * Regenerate a language file from the JAR, preserving user edits, backing up first
+     */
+    private static int regenerateLanguage(CommandContext<CommandSourceStack> ctx) {
+        CommandSourceStack source = ctx.getSource();
+        String languageCode = StringArgumentType.getString(ctx, "languageCode");
+
+        try {
+            int newKeys = CustomLanguageManager.getInstance().regenerate(languageCode);
+            // See the matching comment in reloadLanguages() — regenerate() only rewrites the
+            // on-disk file and CustomLanguageManager's own cache; without this, MessageUtil's
+            // separate in-memory translations cache (what jail/ban/freeze/etc. actually read)
+            // would keep serving whatever it loaded at server boot for the rest of the session.
+            MessageUtil.reloadTranslations();
+            source.sendSuccess(() -> MessageUtil.success("Regenerated {0}.json from JAR. {1} new key(s) added.", languageCode, newKeys), true);
+            source.sendSuccess(() -> MessageUtil.info("Your previous file was backed up to §e{0}.json.bak§7.", languageCode), false);
+            if (newKeys == 0) {
+                source.sendSuccess(() -> MessageUtil.info("No new keys were needed — file was already up to date."), false);
+            }
+            NeoLog.info(LOGGER, LogCategory.COMMANDS, "Regenerated language {} by {} ({} new keys)", languageCode, source.getTextName(), newKeys);
+        } catch (Exception e) {
+            source.sendFailure(MessageUtil.error("Failed to regenerate {0}: {1}", languageCode, e.getMessage()));
+            NeoLog.error(LOGGER, LogCategory.COMMANDS, "Failed to regenerate language {} for {}", languageCode, source.getTextName(), e);
+        }
+        return 1;
+    }
+
+    // =========================================================================
+    // Override commands
+    // =========================================================================
+
+    private static int overrideSet(CommandContext<CommandSourceStack> ctx) {
+        CommandSourceStack source = ctx.getSource();
+        String key = StringArgumentType.getString(ctx, "key");
+        String value = StringArgumentType.getString(ctx, "value");
+
+        CustomLanguageManager.getInstance().setOverride(key, value);
+        // Also force MessageUtil to reload so the override is picked up immediately
+        MessageUtil.reloadTranslations();
+
+        source.sendSuccess(() -> MessageUtil.success("Override set: §e{0} §7→ §f{1}", key, value), true);
+        NeoLog.info(LOGGER, LogCategory.COMMANDS, "{} set translation override: {} = {}", source.getTextName(), key, value);
+        return 1;
+    }
+
+    private static int overrideGet(CommandContext<CommandSourceStack> ctx) {
+        CommandSourceStack source = ctx.getSource();
+        String key = StringArgumentType.getString(ctx, "key");
+
+        String value = CustomLanguageManager.getInstance().getOverride(key);
+        if (value == null) {
+            source.sendSuccess(() -> MessageUtil.warning("No override set for key: §f{0}", key), false);
+        } else {
+            source.sendSuccess(() -> MessageUtil.info("Override for §e{0}§7: §f{1}", key, value), false);
+        }
+        return 1;
+    }
+
+    private static int overrideRemove(CommandContext<CommandSourceStack> ctx) {
+        CommandSourceStack source = ctx.getSource();
+        String key = StringArgumentType.getString(ctx, "key");
+
+        boolean removed = CustomLanguageManager.getInstance().removeOverride(key);
+        if (removed) {
+            MessageUtil.reloadTranslations();
+            source.sendSuccess(() -> MessageUtil.success("Override removed for key: §f{0}", key), true);
+            NeoLog.info(LOGGER, LogCategory.COMMANDS, "{} removed translation override for: {}", source.getTextName(), key);
+        } else {
+            source.sendSuccess(() -> MessageUtil.warning("No override found for key: §f{0}", key), false);
+        }
+        return 1;
+    }
+
+    private static int overrideList(CommandContext<CommandSourceStack> ctx) {
+        CommandSourceStack source = ctx.getSource();
+        Map<String, String> overrides = CustomLanguageManager.getInstance().getOverrides();
+
+        if (overrides.isEmpty()) {
+            source.sendSuccess(() -> MessageUtil.info("No admin translation overrides are set."), false);
+            source.sendSuccess(() -> MessageUtil.info("Use §e/language override set <key> <value>§7 to add one."), false);
+        } else {
+            source.sendSuccess(() -> MessageUtil.success("═══ Translation Overrides ({0}) ═══", overrides.size()), false);
+            for (Map.Entry<String, String> entry : overrides.entrySet()) {
+                source.sendSuccess(() -> MessageUtil.component("  §e" + entry.getKey() + " §7→ §f" + entry.getValue()), false);
+            }
+        }
+        return 1;
+    }
+
+    private static int overrideClear(CommandContext<CommandSourceStack> ctx) {
+        CommandSourceStack source = ctx.getSource();
+        int count = CustomLanguageManager.getInstance().getOverrides().size();
+        CustomLanguageManager.getInstance().clearOverrides();
+        MessageUtil.reloadTranslations();
+        source.sendSuccess(() -> MessageUtil.success("Cleared {0} translation override(s).", count), true);
+        NeoLog.info(LOGGER, LogCategory.COMMANDS, "{} cleared all ({}) translation overrides", source.getTextName(), count);
+        return 1;
+    }
+
+    private static int overrideReload(CommandContext<CommandSourceStack> ctx) {
+        CommandSourceStack source = ctx.getSource();
+        // Clear and re-load from disk by full reload
+        CustomLanguageManager.getInstance().reload();
+        int count = CustomLanguageManager.getInstance().getOverrides().size();
+        source.sendSuccess(() -> MessageUtil.success("Reloaded overrides from disk. {0} override(s) active.", count), true);
         return 1;
     }
 }

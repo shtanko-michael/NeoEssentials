@@ -4,17 +4,20 @@ import com.google.gson.*;
 import net.minecraft.server.MinecraftServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import com.zerog.neoessentials.util.ResourceUtil;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Task manager for CRUD operations and persistence
@@ -22,12 +25,12 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class TaskManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(TaskManager.class);
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
     private static TaskManager INSTANCE;
     
-    private static final Path TASKS_DIR = Paths.get("neoessentials", "scheduler");
-    private static final Path TASKS_FILE = TASKS_DIR.resolve("tasks.json");
-    private static final Path HISTORY_FILE = TASKS_DIR.resolve("execution_history.json");
+    private static final Path TASKS_DIR = ResourceUtil.getDataPath("scheduler");
+    private static final Path TASKS_FILE = ResourceUtil.getDataPath("scheduler/tasks.json");
+    private static final Path HISTORY_FILE = ResourceUtil.getDataPath("scheduler/execution_history.json");
     
     // Tasks storage: ID -> ScheduledTask
     private final Map<String, ScheduledTask> tasks = new ConcurrentHashMap<>();
@@ -85,7 +88,7 @@ public class TaskManager {
         tasks.put(task.getId(), task);
         saveTasks();
         
-        LOGGER.info("Created scheduled task: {} ({})", name, task.getId());
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "Created scheduled task: {} ({})", name, task.getId());
         return task;
     }
     
@@ -127,7 +130,7 @@ public class TaskManager {
         task.setUpdatedAt(System.currentTimeMillis());
         saveTasks();
         
-        LOGGER.info("Updated scheduled task: {} ({})", task.getName(), id);
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "Updated scheduled task: {} ({})", task.getName(), id);
         return true;
     }
     
@@ -140,7 +143,7 @@ public class TaskManager {
             executionHistory.remove(id);
             saveTasks();
             saveExecutionHistory();
-            LOGGER.info("Deleted scheduled task: {} ({})", removed.getName(), id);
+            NeoLog.info(LOGGER, LogCategory.GENERAL, "Deleted scheduled task: {} ({})", removed.getName(), id);
             return true;
         }
         return false;
@@ -184,9 +187,11 @@ public class TaskManager {
         execution.message = message;
         execution.executionTime = executionTime;
         
-        List<TaskExecution> history = executionHistory.computeIfAbsent(taskId, k -> new ArrayList<>());
-        history.add(0, execution); // Add to beginning
-        
+        // CopyOnWriteArrayList: this list is mutated both from the main-thread scheduler
+        // tick and from the dashboard's manual-execute HTTP path, which run concurrently.
+        List<TaskExecution> history = executionHistory.computeIfAbsent(taskId, k -> new CopyOnWriteArrayList<>());
+        history.add(0, execution);
+
         // Limit history size
         if (history.size() > MAX_HISTORY_PER_TASK) {
             history.remove(history.size() - 1);
@@ -252,9 +257,7 @@ public class TaskManager {
             ZonedDateTime now = ZonedDateTime.now(tz);
             long currentTime = now.getHour() * 3600000L + now.getMinute() * 60000L + now.getSecond() * 1000L;
             
-            if (currentTime < conditions.getStartTime() || currentTime > conditions.getEndTime()) {
-                return false;
-            }
+            return currentTime >= conditions.getStartTime() && currentTime <= conditions.getEndTime();
         }
         
         return true;
@@ -281,7 +284,7 @@ public class TaskManager {
                     }
                 }
                 
-                LOGGER.info("Loaded {} scheduled tasks from disk", tasks.size());
+                NeoLog.info(LOGGER, LogCategory.GENERAL, "Loaded {} scheduled tasks from disk", tasks.size());
             }
         } catch (Exception e) {
             LOGGER.error("Failed to load tasks", e);
@@ -324,7 +327,7 @@ public class TaskManager {
                     JsonObject historyObj = data.getAsJsonObject("history");
                     for (String taskId : historyObj.keySet()) {
                         JsonArray executions = historyObj.getAsJsonArray(taskId);
-                        List<TaskExecution> execList = new ArrayList<>();
+                        List<TaskExecution> execList = new CopyOnWriteArrayList<>();
                         for (JsonElement element : executions) {
                             execList.add(GSON.fromJson(element, TaskExecution.class));
                         }
@@ -332,7 +335,7 @@ public class TaskManager {
                     }
                 }
                 
-                LOGGER.info("Loaded execution history for {} tasks", executionHistory.size());
+                NeoLog.info(LOGGER, LogCategory.GENERAL, "Loaded execution history for {} tasks", executionHistory.size());
             }
         } catch (Exception e) {
             LOGGER.error("Failed to load execution history", e);

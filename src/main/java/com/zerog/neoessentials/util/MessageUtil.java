@@ -1,9 +1,10 @@
 package com.zerog.neoessentials.util;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
@@ -11,7 +12,6 @@ import java.util.Map;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import java.lang.reflect.Type;
-import java.text.MessageFormat;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.Style;
 import net.minecraft.network.chat.TextColor;
@@ -20,6 +20,8 @@ import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.MutableComponent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 
 /**
  * Centralized message handling system for NeoEssentials
@@ -41,23 +43,87 @@ public class MessageUtil {
      */
     public static void syncDebugModeFromConfig() {
         debugMode = com.zerog.neoessentials.config.ConfigManager.isDebugModeEnabled();
-        LOGGER.debug("Debug mode set to: {} (from config)", debugMode);
+        NeoLog.debug(LOGGER, LogCategory.GENERAL, "Debug mode set to: {} (from config)", debugMode);
     }
     
     // Language version tracking - increment when translations change
     private static final String LANG_VERSION_KEY = "_langVersion";
-    private static final int CURRENT_LANG_VERSION = 21;
+    private static final int CURRENT_LANG_VERSION = 25; // v25 — admin_notice.header (combined admin-notices block)
 
     /**
-     * Load translations from server directory, updating from JAR if needed.
-     * If the deployed file exists but is at an older version, any missing keys
-     * are merged in from the JAR without overwriting user edits.
+     * Keys with a confirmed VALUE bug (wrong/missing {n} argument, argument-order swap, etc.)
+     * fixed at v20 — force-refreshed on an already-deployed server's custom lang file even
+     * though the key already exists there, bypassing the normal additive-only merge. Add to
+     * this set only when a key's shipped TEXT was actually broken, never for wording/style
+     * preferences (those must stay additive-only so real user customizations aren't clobbered).
+     *
+     * <p>Public (not private) so {@link com.zerog.neoessentials.i18n.CustomLanguageManager} —
+     * a completely separate lang-file manager (backing {@code /language reload}/{@code
+     * regenerate}) that independently reads/writes the SAME on-disk custom lang file — can
+     * apply the identical override. That manager's own {@code regenerate()} otherwise always
+     * prefers the existing on-disk value over the JAR's for any key that's already present
+     * ("user wins" merge, by design, to protect real customizations), which meant it would
+     * silently keep re-saving a known-broken value forever, completely undoing this fix.</p>
      */
+    public static final java.util.Set<String> FORCE_REFRESH_KEYS = java.util.Set.of(
+        "neoessentials.moderation.jail_success",
+        "neoessentials.moderation.jail_broadcast",
+        "neoessentials.moderation.jail_failed",
+        "neoessentials.moderation.unjail_success",
+        "neoessentials.moderation.unjail_broadcast",
+        "neoessentials.moderation.jailed_message",
+        "neoessentials.moderation.unjailed_message",
+        "neoessentials.moderation.jail_reminder",
+        "neoessentials.moderation.ban_failed",
+        "neoessentials.moderation.banip_failed",
+        "neoessentials.moderation.unbanip_failed",
+        "neoessentials.moderation.freeze_failed",
+        "neoessentials.moderation.unfreeze_failed",
+        "neoessentials.moderation.ban_success",
+        "neoessentials.moderation.banip_success",
+        "neoessentials.moderation.freeze_success",
+        "neoessentials.moderation.kick_success",
+        "neoessentials.moderation.banlist_entry_player",
+        "neoessentials.moderation.banlist_entry_ip",
+        "neoessentials.moderation.freezelist_entry",
+        "neoessentials.moderation.freezeall_broadcast",
+        "neoessentials.moderation.unfreezeall_broadcast",
+        "neoessentials.moderation.jaillist_entry",
+        "commands.neoessentials.permissions.export_help",
+        "commands.neoessentials.permissions.export_success",
+        "commands.neoessentials.teleport.warp.playerwarps_list_header",
+        "commands.neoessentials.eco.give_failed",
+        "commands.neoessentials.eco.take_failed",
+        "commands.neoessentials.enchant.target.notified",
+        "commands.neoessentials.teleport.admin.tpall.teleported",
+        "commands.neoessentials.teleport.admin.tpall.completed",
+        "commands.neoessentials.teleport.request.already_sent",
+        "commands.neoessentials.realname.partial_matches_header",
+        "commands.neoessentials.whois.session_time",
+        "commands.neoessentials.seen.current_location"
+    );
+
+    /**
+     * Returns the configured server language code, e.g. "fr_fr".
+     * Safe to call before config is fully loaded (falls back to "en_us").
+     */
+    private static String getConfiguredLanguage() {
+        try {
+            return com.zerog.neoessentials.config.ConfigManager.getServerLanguage();
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Failed to read configured server language, defaulting to en_us", e);
+        }
+        return "en_us";
+    }
+
     private static void loadTranslations() {
         if (loaded) return;
         loaded = true;
 
-        LOGGER.debug("=== LOADING NEOESSENTIALS TRANSLATIONS ===");
+        NeoLog.debug(LOGGER, LogCategory.GENERAL, "=== LOADING NEOESSENTIALS TRANSLATIONS ===");
+
+        String langCode = getConfiguredLanguage();
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "NeoEssentials: loading language '{}'", langCode);
 
         File customLangDir = getNeoEssentialsLangCustomDir();
         if (!customLangDir.exists()) {
@@ -65,13 +131,20 @@ public class MessageUtil {
             if (!dirCreated) {
                 LOGGER.error("Failed to create custom language directory: {}", customLangDir.getAbsolutePath());
             } else {
-                LOGGER.debug("Created custom language directory: {}", customLangDir.getAbsolutePath());
+                NeoLog.debug(LOGGER, LogCategory.GENERAL, "Created custom language directory: {}", customLangDir.getAbsolutePath());
             }
         }
-        File serverLangFile = new File(customLangDir, "en_us.json");
-        LOGGER.debug("Server language file path: {}", serverLangFile.getAbsolutePath());
+        File serverLangFile = new File(customLangDir, langCode + ".json");
+        NeoLog.debug(LOGGER, LogCategory.GENERAL, "Server language file path: {}", serverLangFile.getAbsolutePath());
 
-        Map<String, String> finalTranslations = null;
+        boolean preserveCustom = false;
+        try {
+            preserveCustom = com.zerog.neoessentials.config.ConfigManager.isPreserveCustomTranslationsEnabled();
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Failed to read preserveCustomTranslations setting, defaulting to false", e);
+        }
+
+        Map<String, String> finalTranslations;
         if (serverLangFile.exists() && serverLangFile.length() > 0) {
             finalTranslations = loadServerTranslations(serverLangFile);
             if (finalTranslations != null) {
@@ -80,62 +153,160 @@ public class MessageUtil {
                 try {
                     deployedVersion = Integer.parseInt(
                         finalTranslations.getOrDefault(LANG_VERSION_KEY, "0"));
-                } catch (NumberFormatException ignored) {}
+                } catch (NumberFormatException e) {
+                    NeoLog.debug(LOGGER, LogCategory.GENERAL,
+                        "Failed to parse deployed language version, treating as 0 (forces a merge)", e);
+                }
 
-                if (deployedVersion < CURRENT_LANG_VERSION) {
-                    LOGGER.info("NeoEssentials: lang file is v{} (current v{}) — merging new keys...",
-                        deployedVersion, CURRENT_LANG_VERSION);
-                    Map<String, String> jarTranslations = loadJarTranslations();
-                    if (jarTranslations != null) {
+                // One-time repair of the "§" double-UTF-8-encoding corruption that could be
+                // baked into a server's custom lang file from before this was fixed at the
+                // source (old FileReader/FileWriter calls used the JVM's platform-default
+                // charset instead of UTF-8). Values corrupted before that fix stay corrupted
+                // forever under the additive-only merge below, since merge only ADDS missing
+                // keys — it never touches existing values. Skipped under preserveCustom, same
+                // as the merge/legacy-placeholder auto-fix.
+                int repaired = 0;
+                if (!preserveCustom) {
+                    repaired = repairMojibake(finalTranslations);
+                    if (repaired > 0) {
+                        NeoLog.info(LOGGER, LogCategory.GENERAL, "NeoEssentials: repaired {} corrupted §-formatting entries in '{}'",
+                            repaired, serverLangFile.getName());
+                    }
+                }
+
+                // Coverage check — some bundled non-English language files carry a stale
+                // _langVersion (from an unrelated template-versioning scheme) that is numerically
+                // higher than CURRENT_LANG_VERSION even though the file itself is only a small
+                // fraction translated. Relying on the version number alone would then skip the
+                // English-fallback merge below forever, leaving most keys to render as an
+                // auto-generated "humanized key" placeholder instead of real text. Force the merge
+                // whenever coverage is suspiciously low, regardless of what the version says.
+                boolean lowCoverage = false;
+                if (!preserveCustom && !"en_us".equals(langCode)) {
+                    Map<String, String> enUs = loadJarTranslations("en_us");
+                    if (enUs != null && !enUs.isEmpty()) {
+                        lowCoverage = finalTranslations.size() < enUs.size() * 0.5;
+                    }
+                }
+
+                if (preserveCustom) {
+                    NeoLog.info(LOGGER, LogCategory.GENERAL, "NeoEssentials: localization.preserveCustomTranslations is enabled — " +
+                        "skipping merge/auto-fix of '{}'.", serverLangFile.getName());
+                } else if (deployedVersion < CURRENT_LANG_VERSION || lowCoverage) {
+                    if (lowCoverage) {
+                        NeoLog.info(LOGGER, LogCategory.GENERAL, "NeoEssentials: lang file '{}' has low key coverage ({} keys) — " +
+                            "merging with en_us fallback...", serverLangFile.getName(), finalTranslations.size());
+                    } else {
+                        NeoLog.info(LOGGER, LogCategory.GENERAL, "NeoEssentials: lang file is v{} (current v{}) — merging new keys...",
+                            deployedVersion, CURRENT_LANG_VERSION);
+                    }
+                    // Build merge source: configured language + en_us fallback for missing keys
+                    Map<String, String> mergeSource = buildJarTranslationsWithFallback(langCode);
+                    if (mergeSource != null) {
                         int added = 0;
-                        for (Map.Entry<String, String> e : jarTranslations.entrySet()) {
+                        int updated = 0;
+                        java.util.regex.Pattern legacyNamedPattern =
+                            java.util.regex.Pattern.compile("\\{[A-Z][A-Z0-9_]+}");
+                        for (Map.Entry<String, String> e : mergeSource.entrySet()) {
                             if (!finalTranslations.containsKey(e.getKey())) {
                                 finalTranslations.put(e.getKey(), e.getValue());
                                 added++;
+                            } else {
+                                // Update keys where server still has legacy {HOME}/{NAME} style
+                                // but the JAR now uses positional {0}/{1} style
+                                String serverVal = finalTranslations.get(e.getKey());
+                                if (serverVal != null
+                                        && legacyNamedPattern.matcher(serverVal).find()
+                                        && e.getValue().contains("{0}")) {
+                                    finalTranslations.put(e.getKey(), e.getValue());
+                                    updated++;
+                                }
                             }
                         }
                         finalTranslations.put(LANG_VERSION_KEY, String.valueOf(CURRENT_LANG_VERSION));
-                        try (java.io.FileWriter fw = new java.io.FileWriter(serverLangFile)) {
+                        try (FileWriter fw = new FileWriter(serverLangFile, StandardCharsets.UTF_8)) {
                             new com.google.gson.GsonBuilder().setPrettyPrinting()
-                                .create().toJson(finalTranslations, fw);
+                                .disableHtmlEscaping().create().toJson(finalTranslations, fw);
                         } catch (Exception ex) {
                             LOGGER.warn("NeoEssentials: could not save merged lang file: {}", ex.getMessage());
                         }
-                        LOGGER.info("NeoEssentials: merged {} new translation keys (total: {})",
-                            added, finalTranslations.size());
+                        NeoLog.info(LOGGER, LogCategory.GENERAL, "NeoEssentials: merged {} new + {} updated translation keys (total: {})",
+                            added, updated, finalTranslations.size());
+                    }
+                } else if (repaired > 0) {
+                    // No key merge needed, but the mojibake repair above changed values —
+                    // persist those fixes so they don't need to be repaired again next boot.
+                    try (FileWriter fw = new FileWriter(serverLangFile, StandardCharsets.UTF_8)) {
+                        new com.google.gson.GsonBuilder().setPrettyPrinting()
+                            .disableHtmlEscaping().create().toJson(finalTranslations, fw);
+                    } catch (Exception ex) {
+                        LOGGER.warn("NeoEssentials: could not save repaired lang file: {}", ex.getMessage());
+                    }
+                }
+                // Force-refresh known-buggy keys UNCONDITIONALLY, independent of the version
+                // number stored in the server's custom lang file. This used to be nested
+                // inside the "deployedVersion < CURRENT_LANG_VERSION" branch above, but that
+                // makes correctness depend on the deployed file's version counter being in
+                // exactly the state this code expects — if a server's file was already bumped
+                // to the current version by an earlier partial fix, the whole merge block
+                // (including the force-refresh) would be skipped entirely and a broken value
+                // would never get corrected. Running this every single boot, regardless of
+                // version, guarantees these specific keys converge no matter what state the
+                // deployed file is in.
+                if (!preserveCustom) {
+                    Map<String, String> jarTranslations = loadJarTranslations(langCode);
+                    if (jarTranslations != null) {
+                        boolean forceChanged = false;
+                        for (String key : FORCE_REFRESH_KEYS) {
+                            String jarVal = jarTranslations.get(key);
+                            if (jarVal != null && !jarVal.equals(finalTranslations.get(key))) {
+                                finalTranslations.put(key, jarVal);
+                                forceChanged = true;
+                            }
+                        }
+                        if (forceChanged) {
+                            NeoLog.info(LOGGER, LogCategory.GENERAL, "NeoEssentials: force-refreshed known-buggy translation key value(s) in '{}'.",
+                                serverLangFile.getName());
+                            try (FileWriter fw = new FileWriter(serverLangFile, StandardCharsets.UTF_8)) {
+                                new com.google.gson.GsonBuilder().setPrettyPrinting()
+                                    .disableHtmlEscaping().create().toJson(finalTranslations, fw);
+                            } catch (Exception ex) {
+                                LOGGER.warn("NeoEssentials: could not save force-refreshed lang file: {}", ex.getMessage());
+                            }
+                        }
                     }
                 }
                 translations.putAll(finalTranslations);
-                LOGGER.info("NeoEssentials: loaded {} translations", translations.size());
+                NeoLog.info(LOGGER, LogCategory.GENERAL, "NeoEssentials: loaded {} translations (language: {})", translations.size(), langCode);
             } else {
                 LOGGER.error("Failed to load custom language file, will attempt to update from JAR");
             }
         }
         // If file missing or unreadable, deploy from JAR
         if (translations.isEmpty()) {
-            Map<String, String> jarTranslations = loadJarTranslations();
+            Map<String, String> jarTranslations = buildJarTranslationsWithFallback(langCode);
             if (jarTranslations == null || jarTranslations.isEmpty()) {
                 LOGGER.error("Failed to load JAR translations - cannot proceed");
                 try (InputStream testIn = ResourceUtil.getJarLangResource("en_us.json")) {
                     if (testIn == null) {
                         LOGGER.error("JAR resource 'en_us.json' is missing or not found in /data/lang/");
                     } else {
-                        LOGGER.debug("JAR resource 'en_us.json' is present but failed to load as translations.");
+                        NeoLog.debug(LOGGER, LogCategory.GENERAL, "JAR resource 'en_us.json' is present but failed to load as translations.");
                     }
                 } catch (Exception e) {
                     LOGGER.error("Exception when testing JAR resource existence: {}", e.getMessage(), e);
                 }
                 return;
             }
-            LOGGER.debug("JAR contains {} translation keys", jarTranslations.size());
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "JAR contains {} translation keys for '{}'", jarTranslations.size(), langCode);
             try {
                 updateServerLanguageFile(serverLangFile, jarTranslations);
                 if (serverLangFile.exists()) {
-                    LOGGER.debug("Language file successfully created: {}", serverLangFile.getAbsolutePath());
+                    NeoLog.debug(LOGGER, LogCategory.GENERAL, "Language file successfully created: {}", serverLangFile.getAbsolutePath());
                     finalTranslations = loadServerTranslations(serverLangFile);
                     if (finalTranslations != null) {
                         translations.putAll(finalTranslations);
-                        LOGGER.info("NeoEssentials: loaded {} translations (updated from JAR)", translations.size());
+                        NeoLog.info(LOGGER, LogCategory.GENERAL, "NeoEssentials: loaded {} translations (updated from JAR, language: {})", translations.size(), langCode);
                     } else {
                         LOGGER.error("Failed to load custom language file after update, using JAR translations directly");
                         translations.putAll(jarTranslations);
@@ -149,103 +320,18 @@ public class MessageUtil {
                 translations.putAll(jarTranslations);
             }
         }
-        // Overlay the configured language over the en_us base (untranslated keys keep English)
-        applyLanguageOverlay();
-
-        LOGGER.debug("Translation loading complete. Total keys: {}", translations.size());
+        NeoLog.debug(LOGGER, LogCategory.GENERAL, "Translation loading complete. Total keys: {}", translations.size());
         if (serverLangFile.length() == 0) {
             LOGGER.error("Server language file is empty after creation! Check file permissions and JAR resource.");
         }
     }
     
     /**
-     * Overlay the configured language on top of the en_us base map.
-     * en_us is always loaded first as the fallback layer; this replaces any key that the
-     * selected language actually translates, leaving English for the rest. No-op when the
-     * configured language is en_us (or unset/blank).
+     * Load translations from JAR resource for the given language code.
+     * Returns null if the resource is not found.
      */
-    private static void applyLanguageOverlay() {
-        String lang;
-        try {
-            lang = com.zerog.neoessentials.config.ConfigManager.getLanguage();
-        } catch (Exception e) {
-            lang = "en_us";
-            LOGGER.warn("NeoEssentials: could not read 'language' from config, defaulting to en_us: {}", e.getMessage());
-        }
-        LOGGER.info("NeoEssentials i18n: configured language = '{}' (read from config.json key 'language'; en_us is the base/fallback)", lang);
-        if (lang == null || lang.isBlank() || lang.equalsIgnoreCase("en_us")) {
-            LOGGER.info("NeoEssentials i18n: using en_us base — no language overlay applied. To switch, set \"language\" in the SERVER config (config/neoessentials/config.json) and run /neoessentials reload.");
-            return; // en_us is already the base layer
-        }
-
-        Map<String, String> langMap = loadLanguageMap(lang);
-        if (langMap == null || langMap.isEmpty()) {
-            LOGGER.warn("NeoEssentials: configured language '{}' has no usable translation file; staying on en_us.", lang);
-            return;
-        }
-
-        int overlaid = 0;
-        for (Map.Entry<String, String> e : langMap.entrySet()) {
-            String key = e.getKey();
-            String value = e.getValue();
-            if (key == null || key.startsWith("_")) continue; // skip metadata/version keys
-            if (value != null && !value.isEmpty()) {
-                translations.put(key, value);
-                overlaid++;
-            }
-        }
-        LOGGER.info("NeoEssentials: applied language '{}' ({} keys overlaid over the en_us base, total {})",
-            lang, overlaid, translations.size());
-    }
-
-    /**
-     * Load a language map by code, preferring the admin-editable on-disk file
-     * (neoessentials/languages/custom/&lt;code&gt;.json, deployed by CustomLanguageManager),
-     * falling back to the bundled JAR resource data/lang/&lt;code&gt;.json.
-     */
-    private static Map<String, String> loadLanguageMap(String lang) {
-        Map<String, String> merged = new HashMap<>();
-        // 1) JAR base — the complete, up-to-date translation shipped with the mod.
-        try (InputStream in = ResourceUtil.getJarLangResource(lang + ".json")) {
-            if (in != null) {
-                try (java.util.Scanner scanner = new java.util.Scanner(in, java.nio.charset.StandardCharsets.UTF_8).useDelimiter("\\A")) {
-                    String json = scanner.hasNext() ? scanner.next() : "";
-                    Gson gson = new Gson();
-                    Type type = new TypeToken<Map<String, String>>(){}.getType();
-                    Map<String, String> jarMap = gson.fromJson(json, type);
-                    if (jarMap != null) {
-                        merged.putAll(jarMap);
-                        LOGGER.info("NeoEssentials i18n: loaded {} keys from JAR data/lang/{}.json", jarMap.size(), lang);
-                    }
-                }
-            } else {
-                LOGGER.warn("NeoEssentials i18n: no bundled translation 'data/lang/{}.json' in the JAR for language '{}'", lang, lang);
-            }
-        } catch (Exception e) {
-            LOGGER.warn("NeoEssentials i18n: failed reading bundled language '{}': {}", lang, e.getMessage());
-        }
-        // 2) on-disk custom file overlaid on top — lets an admin override/add specific keys
-        // (overlay, not replace, so a partial/stale custom file can't hide the JAR translation).
-        try {
-            File diskFile = new File(getNeoEssentialsLangCustomDir(), lang + ".json");
-            if (diskFile.exists() && diskFile.length() > 0) {
-                Map<String, String> diskMap = loadServerTranslations(diskFile);
-                if (diskMap != null && !diskMap.isEmpty()) {
-                    merged.putAll(diskMap);
-                    LOGGER.info("NeoEssentials i18n: overlaid {} custom keys from {}", diskMap.size(), diskFile.getAbsolutePath());
-                }
-            }
-        } catch (Exception e) {
-            LOGGER.warn("NeoEssentials i18n: failed reading on-disk language '{}': {}", lang, e.getMessage());
-        }
-        return merged.isEmpty() ? null : merged;
-    }
-
-    /**
-     * Load translations from JAR resource
-     */
-    private static Map<String, String> loadJarTranslations() {
-        try (InputStream in = ResourceUtil.getJarLangResource("en_us.json")) {
+    private static Map<String, String> loadJarTranslations(String langCode) {
+        try (InputStream in = ResourceUtil.getJarLangResource(langCode + ".json")) {
             if (in != null) {
                 try (java.util.Scanner scanner = new java.util.Scanner(in, java.nio.charset.StandardCharsets.UTF_8).useDelimiter("\\A")) {
                     String json = scanner.hasNext() ? scanner.next() : "";
@@ -254,21 +340,170 @@ public class MessageUtil {
                     return gson.fromJson(json, type);
                 }
             } else {
-                LOGGER.error("JAR language resource 'en_us.json' not found.");
+                NeoLog.debug(LOGGER, LogCategory.GENERAL, "JAR language resource '{}' not found.", langCode + ".json");
             }
         } catch (Exception e) {
-            LOGGER.error("Failed to load JAR translations: {}", e.getMessage(), e);
+            LOGGER.error("Failed to load JAR translations for '{}': {}", langCode, e.getMessage(), e);
         }
         return null;
     }
+
+    /**
+     * Load translations from JAR resource (en_us fallback).
+     */
+    //noinspection unused
+    @SuppressWarnings("unused") // convenience overload kept for external callers
+    private static Map<String, String> loadJarTranslations() {
+        Map<String, String> result = loadJarTranslations("en_us");
+        if (result == null) {
+            LOGGER.error("JAR language resource 'en_us.json' not found.");
+        }
+        return result;
+    }
+
+    /**
+     * Build a merged translation map for the given language code.
+     * Loads the JAR's <langCode>.json and fills any missing keys from en_us.json.
+     * If langCode == "en_us" or the language file is not bundled, returns en_us directly.
+     */
+    private static Map<String, String> buildJarTranslationsWithFallback(String langCode) {
+        if (langCode == null || langCode.equals("en_us")) {
+            return loadJarTranslations("en_us");
+        }
+        Map<String, String> base = loadJarTranslations("en_us");
+        Map<String, String> lang = loadJarTranslations(langCode);
+        if (lang == null || lang.isEmpty()) {
+            LOGGER.warn("NeoEssentials: no bundled JAR file for language '{}', falling back to en_us.", langCode);
+            return base;
+        }
+        // Start from en_us base so every key is covered, then overlay the target language
+        Map<String, String> merged = new HashMap<>();
+        if (base != null) merged.putAll(base);
+        merged.putAll(lang); // target language takes priority
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "NeoEssentials: built '{}' translations ({} keys, {} from en_us fallback)",
+            langCode, merged.size(), base != null ? Math.max(0, merged.size() - lang.size()) : 0);
+        return merged;
+    }
     
+    /**
+     * Repairs the "§" double-UTF-8-encoding mojibake (§ formatting codes stored as the
+     * two-character sequence U+00C2 U+00A7 instead of the single character U+00A7) that
+     * can be baked into a server's on-disk custom lang file from before this was fixed
+     * at the source. Mutates {@code translations} in place.
+     *
+     * @return the number of entries that were fixed
+     */
+    private static int repairMojibake(Map<String, String> translations) {
+        int fixed = 0;
+        for (Map.Entry<String, String> entry : translations.entrySet()) {
+            String value = entry.getValue();
+            if (value == null) continue;
+            String repaired = repairMojibakeString(value);
+            if (repaired != null && !repaired.equals(value)) {
+                entry.setValue(repaired);
+                fixed++;
+            }
+        }
+        return fixed;
+    }
+
+    /**
+     * Repairs double-UTF-8-encoded mojibake within a single string (§, box-drawing
+     * characters, en/em dashes, arrows, checkmarks, etc. that were re-encoded through
+     * Windows-1252 at some point). Only touches contiguous non-ASCII runs — a run only
+     * gets replaced if reversing it (encode as windows-1252, re-decode as UTF-8) round-trips
+     * cleanly, so already-correctly-encoded text (which won't round-trip this way) is left
+     * untouched even when mixed in the same string as genuinely corrupted text.
+     *
+     * @return the repaired string (identical to the input if nothing needed fixing),
+     *         or {@code null} if {@code value} contained no non-ASCII characters at all
+     */
+    private static String repairMojibakeString(String value) {
+        if (value.isEmpty()) return value;
+        StringBuilder result = null; // lazily created only if a repair actually happens
+        int i = 0;
+        int n = value.length();
+        int segmentStart = 0; // start of the run of characters (ASCII or not) not yet appended
+        while (i < n) {
+            char c = value.charAt(i);
+            if (c < 0x80) {
+                i++;
+                continue;
+            }
+            int runStart = i;
+            while (i < n && value.charAt(i) >= 0x80) i++;
+            String run = value.substring(runStart, i);
+            String repairedRun = tryReverseCorruption(run);
+            if (repairedRun != null) {
+                if (result == null) result = new StringBuilder(value.length());
+                result.append(value, segmentStart, runStart); // preceding ASCII (and any untouched runs)
+                result.append(repairedRun);
+                segmentStart = i;
+            }
+        }
+        if (result == null) return value;
+        result.append(value, segmentStart, n); // trailing text after the last repaired run
+        return result.toString();
+    }
+
+    /**
+     * Reverse lookup for the buggy "Windows-1252 read, with undefined 0x80-0x9F slots
+     * passed through as their raw byte value (Latin-1-style)" decode used by whatever
+     * tool originally produced this corruption. Built once from Java's own windows-1252
+     * charset so it stays in sync with the JDK's mapping table rather than a hand-copied one.
+     */
+    private static final Map<Character, Byte> BUGGY_CP1252_REVERSE = buildBuggyCp1252ReverseMap();
+
+    private static Map<Character, Byte> buildBuggyCp1252ReverseMap() {
+        Map<Character, Byte> map = new HashMap<>();
+        java.nio.charset.Charset cp1252 = java.nio.charset.Charset.forName("windows-1252");
+        for (int b = 0; b <= 0xFF; b++) {
+            java.nio.charset.CharsetDecoder decoder = cp1252.newDecoder();
+            decoder.onMalformedInput(java.nio.charset.CodingErrorAction.REPORT);
+            decoder.onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT);
+            char decoded;
+            try {
+                decoded = decoder.decode(java.nio.ByteBuffer.wrap(new byte[]{(byte) b})).charAt(0);
+            } catch (Exception e) {
+                // Undefined cp1252 slot (0x81, 0x8D, 0x8F, 0x90, 0x9D) — buggy tools commonly
+                // pass these through as their raw byte value instead of failing, same as Latin-1.
+                decoded = (char) b;
+            }
+            map.put(decoded, (byte) b);
+        }
+        return map;
+    }
+
+    /**
+     * Attempts to reverse one round of "read UTF-8 bytes as buggy Windows-1252, re-encode
+     * as UTF-8" corruption. Returns {@code null} if {@code run} doesn't round-trip cleanly
+     * (i.e. it's not this specific kind of mojibake — including already-correct text, which
+     * won't round-trip this way and is safely left untouched).
+     */
+    private static String tryReverseCorruption(String run) {
+        byte[] bytes = new byte[run.length()];
+        for (int i = 0; i < run.length(); i++) {
+            Byte b = BUGGY_CP1252_REVERSE.get(run.charAt(i));
+            if (b == null) return null;
+            bytes[i] = b;
+        }
+        try {
+            java.nio.charset.CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder();
+            decoder.onMalformedInput(java.nio.charset.CodingErrorAction.REPORT);
+            decoder.onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT);
+            return decoder.decode(java.nio.ByteBuffer.wrap(bytes)).toString();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     /**
      * Load translations from server file
      */
     private static Map<String, String> loadServerTranslations(File serverFile) {
         if (!serverFile.exists()) return null;
         
-        try (FileReader reader = new FileReader(serverFile)) {
+        try (FileReader reader = new FileReader(serverFile, StandardCharsets.UTF_8)) {
             Gson gson = new Gson();
             Type type = new TypeToken<Map<String, String>>(){}.getType();
             return gson.fromJson(reader, type);
@@ -289,15 +524,15 @@ public class MessageUtil {
                 if (!dirCreated) {
                     LOGGER.error("Failed to create language directory: {}", parentDir.getAbsolutePath());
                 } else {
-                    LOGGER.debug("Created language directory: {}", parentDir.getAbsolutePath());
+                    NeoLog.debug(LOGGER, LogCategory.GENERAL, "Created language directory: {}", parentDir.getAbsolutePath());
                 }
             }
             Map<String, String> translationsWithVersion = new HashMap<>(jarTranslations);
             translationsWithVersion.put(LANG_VERSION_KEY, String.valueOf(CURRENT_LANG_VERSION));
-            try (java.io.FileWriter writer = new java.io.FileWriter(serverFile)) {
-                Gson gson = new com.google.gson.GsonBuilder().setPrettyPrinting().create();
+            try (FileWriter writer = new FileWriter(serverFile, StandardCharsets.UTF_8)) {
+                Gson gson = new com.google.gson.GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
                 gson.toJson(translationsWithVersion, writer);
-                LOGGER.debug("Updated server language file with {} keys (version {})", translationsWithVersion.size(), CURRENT_LANG_VERSION);
+                NeoLog.debug(LOGGER, LogCategory.GENERAL, "Updated server language file with {} keys (version {})", translationsWithVersion.size(), CURRENT_LANG_VERSION);
             }
         } catch (Exception e) {
             LOGGER.error("Failed to update server language file: {} ({}): {}", serverFile.getAbsolutePath(), serverFile.getParentFile(), e.getMessage(), e);
@@ -305,33 +540,209 @@ public class MessageUtil {
     }
 
     /**
-     * Get a localized string with optional arguments
+     * Pattern matching named (non-positional) {@code {TOKEN}} placeholders — used to detect
+     * unresolved tokens after {@link #resolveTemplate} runs in debug mode.
+     */
+    private static final java.util.regex.Pattern NAMED_PLACEHOLDER_PATTERN =
+            java.util.regex.Pattern.compile("\\{([^0-9'{}\\s][^}]*)}");
+
+    /**
+     * Resolve a message template with extra named variables and PlaceholderAPI.
+     *
+     * <p>Resolution order:
+     * <ol>
+     *   <li>Apply {@code extraVars} via case-insensitive token replacement so both
+     *       {@code {MESSAGE}} and {@code {message}} work.</li>
+     *   <li>Run {@link com.zerog.neoessentials.api.PlaceholderAPI#setPlaceholders} for any
+     *       remaining {@code {neoessentials_*}} and external tokens.</li>
+     *   <li>In debug mode, log any {@code {TOKEN}} tokens that are still present after
+     *       resolution to help diagnose template misconfigurations.</li>
+     * </ol>
+     *
+     * @param player    Player context for PlaceholderAPI; may be {@code null} for server-level messages
+     * @param template  Raw template string (may contain {@code &} color codes)
+     * @param extraVars Named variable overrides (key without braces → value); may be {@code null}
+     * @return Resolved string — color codes still use {@code &} prefix for subsequent
+     *         processing by {@link #coloredText(String)}
+     */
+    public static String resolveTemplate(
+            @javax.annotation.Nullable net.minecraft.server.level.ServerPlayer player,
+            String template,
+            @javax.annotation.Nullable java.util.Map<String, String> extraVars) {
+        if (template == null || template.isEmpty()) return template == null ? "" : template;
+
+        String result = template;
+
+        // ── Step 1: apply extra named vars (case-insensitive) ───────────────────
+        if (extraVars != null && !extraVars.isEmpty()) {
+            for (java.util.Map.Entry<String, String> entry : extraVars.entrySet()) {
+                String val = entry.getValue() != null ? entry.getValue() : "";
+                result = result.replaceAll(
+                    "(?i)\\{" + java.util.regex.Pattern.quote(entry.getKey()) + "}",
+                    java.util.regex.Matcher.quoteReplacement(val));
+            }
+        }
+
+        // ── Step 2: PlaceholderAPI for remaining {neoessentials_*} etc. ─────────
+        result = com.zerog.neoessentials.api.PlaceholderAPI.setPlaceholders(player, result);
+
+        // ── Step 3: debug — log any {TOKEN} tokens still unresolved ─────────────
+        if (debugMode) {
+            java.util.regex.Matcher m = NAMED_PLACEHOLDER_PATTERN.matcher(result);
+            java.util.List<String> unresolved = new java.util.ArrayList<>();
+            while (m.find()) unresolved.add(m.group(0));
+            if (!unresolved.isEmpty()) {
+                LOGGER.warn("[NeoEssentials] Unresolved placeholders in template '{}': {}",
+                    template.length() > 80 ? template.substring(0, 77) + "..." : template,
+                    unresolved);
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Apply positional arguments to a template string.
+     *
+     * <p>Substitution rules (in order):
+     * <ol>
+     *   <li>{@code ''} → literal {@code '} (MessageFormat-style escaped single-quote, kept for
+     *       backward-compat with existing translation files).</li>
+     *   <li>{@code %s} → first argument (legacy shorthand).</li>
+     *   <li>{@code {0}}, {@code {1}}, … → corresponding element of {@code args}.</li>
+     * </ol>
+     * Named tokens such as {@code {HOME}}, {@code {MESSAGE}}, or
+     * {@code {neoessentials_displayname}} are left untouched for later resolution by
+     * {@link com.zerog.neoessentials.api.PlaceholderAPI} or
+     * {@link #resolveTemplate}.
+     * </p>
+     */
+    private static String applyArgs(String template, Object... args) {
+        if (template == null) return "";
+        // MessageFormat-style double-single-quote escape: '' → '
+        String result = template.replace("''", "'");
+        // Legacy %s → first arg
+        if (args != null && args.length > 0) {
+            result = result.replace("%s", args[0] != null ? args[0].toString() : "");
+        }
+        // Older generated language files (and 3 bundled upstream en_us values) carry a
+        // literal "\\n" instead of a JSON newline escape. Normalize it at render time so
+        // existing servers gain real chat line breaks without deleting their lang files.
+        result = result.replace("\\n", "\n");
+        // Positional {0}, {1}, {2}, … substitution
+        if (args != null) {
+            for (int i = 0; i < args.length; i++) {
+                result = result.replace("{" + i + "}", args[i] != null ? args[i].toString() : "");
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Get a localized string with optional arguments.
+     * Falls back to a human-readable form of the key if the key is not found.
+     *
+     * <p>Named placeholders (e.g. {@code {neoessentials_displayname}}, {@code {MESSAGE}}) are
+     * preserved verbatim so callers can resolve them via
+     * {@link com.zerog.neoessentials.api.PlaceholderAPI} after this call.
+     * Positional placeholders {@code {0}}, {@code {1}}, … are replaced by the supplied
+     * {@code args}.  Legacy {@code %s} tokens are treated as {@code {0}}.</p>
      */
     public static String localize(String key, Object... args) {
         loadTranslations();
-        String template = translations.getOrDefault(key, key);
-        
-        if (debugMode && !translations.containsKey(key)) {
-            LOGGER.warn("Missing translation key: {} (total keys loaded: {})", key, translations.size());
-        }
-        
-        try {
-            String result = MessageFormat.format(template.replace("%s", "{0}"), args);
-            // Older generated language files may contain a literal "\\n" sequence instead of
-            // a JSON newline escape. Normalize it at render time so existing server configs gain
-            // real chat line breaks without requiring administrators to delete their lang files.
-            result = result.replace("\\n", "\n");
+        String template = translations.get(key);
+
+        if (template == null) {
             if (debugMode) {
-                LOGGER.info("MessageFormat success - Key: {}, Template: '{}', Args: {}, Result: '{}'", 
+                LOGGER.warn("Missing translation key: {} (total keys loaded: {})", key, translations.size());
+            }
+            // Generate human-readable fallback from the key name instead of showing the raw key
+            template = humanizeKey(key);
+        }
+
+        try {
+            String result = applyArgs(template, args);
+            if (debugMode) {
+                NeoLog.info(LOGGER, LogCategory.GENERAL, "localize success - Key: {}, Template: '{}', Args: {}, Result: '{}'",
                     key, template, java.util.Arrays.toString(args), result);
             }
             return result;
         } catch (Exception e) {
-            LOGGER.error("Failed to format message - Key: {}, Template: '{}', Args: {}, Error: {}", 
+            LOGGER.error("Failed to format message - Key: {}, Template: '{}', Args: {}, Error: {}",
                 key, template, java.util.Arrays.toString(args), e.getMessage(), e);
             return template.replace("\\n", "\n");
         }
     }
+
+    /**
+     * Get a localized string with an explicit English fallback text.
+     * Use this when you know what the English text should be in case the key is missing.
+     *
+     * <p><b>Deliberately NOT an overload of {@link #localize(String, Object...)}.</b> It used
+     * to be named {@code localize(String, String, Object...)}, but that created a silent,
+     * near-impossible-to-spot bug: any ordinary call like {@code localize(key, someName)} where
+     * {@code someName} is a plain {@code String} — which describes the overwhelming majority of
+     * call sites, since player names/reasons/jail names are all Strings — is MORE SPECIFIC as a
+     * match for {@code (String key, String fallback, Object... args)} than for
+     * {@code (String key, Object... args)}, per Java's overload-resolution rules (a fixed
+     * {@code String} parameter beats a variable-arity {@code Object} parameter). The compiler
+     * would silently bind such calls to THIS method instead, swallowing the caller's intended
+     * first substitution argument as an unused fallback and shifting every argument after it
+     * down by one position — with no compile error, since both overloads are valid Java. This
+     * single ambiguity was responsible for jail/ban/freeze/etc. messages showing missing or
+     * shifted {@code {n}} placeholders in production despite the lang file and every call site's
+     * arguments individually looking correct in isolation. Renaming this method removes the
+     * ambiguity permanently — {@code localize(key, args...)} can now only ever match the
+     * varargs-only overload.</p>
+     *
+     * <p>Named placeholders are preserved verbatim (see {@link #localize(String, Object...)}).</p>
+     */
+    public static String localizeOrDefault(String key, String fallback, Object... args) {
+        loadTranslations();
+        String template = translations.getOrDefault(key, fallback);
+
+        if (debugMode && !translations.containsKey(key)) {
+            LOGGER.warn("Missing translation key: {} — using provided fallback: '{}'", key, fallback);
+        }
+
+        try {
+            return applyArgs(template, args);
+        } catch (Exception e) {
+            LOGGER.error("Failed to format message with fallback - Key: {}, Template: '{}', Error: {}",
+                key, template, e.getMessage(), e);
+            return template;
+        }
+    }
+
+    /**
+     * Convert a dotted translation key into a human-readable English string.
+     * E.g. "commands.neoessentials.home.not_found" → "Home not found"
+     */
+    private static String humanizeKey(String key) {
+        if (key == null || key.isEmpty()) return "";
+        // Strip common prefixes
+        String stripped = key;
+        if (stripped.startsWith("commands.neoessentials.")) {
+            stripped = stripped.substring("commands.neoessentials.".length());
+        } else if (stripped.startsWith("neoessentials.")) {
+            stripped = stripped.substring("neoessentials.".length());
+        }
+        // Replace dots and underscores with spaces, capitalize first letter
+        String readable = stripped.replace('.', ' ').replace('_', ' ');
+        if (!readable.isEmpty()) {
+            readable = Character.toUpperCase(readable.charAt(0)) + readable.substring(1);
+        }
+        return readable;
+    }
+
+    /**
+     * Short branded tag prefixed onto every success/error/warning/info command-feedback
+     * message so players can tell at a glance which mod a message came from, especially on
+     * servers running several plugins/mods with similarly-colored chat output. Plain "§"
+     * codes (not routed through coloredText()) — same convention as every localized template,
+     * which the client's text renderer already honors for raw literal Component text.
+     */
+    private static final String TAG_PREFIX = "§8[§bNE§8] §r";
 
     /**
      * Create a Component from a localized message (standard approach)
@@ -339,42 +750,58 @@ public class MessageUtil {
     public static Component component(String key, Object... args) {
         String message = localize(key, args);
         if (debugMode) {
-            LOGGER.debug("Component created - Key: {}, Message: '{}'", key, message);
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Component created - Key: {}, Message: '{}'", key, message);
         }
-        return Component.literal(message);
+        // Template args (e.g. a crate/kit/board display name from config, which routinely
+        // carries its own "&"-coded color, {animation:NAME} token, or <gradient:...>) need the
+        // same resolution as the rest of the template text — a plain Component.literal() left
+        // colors showing up as raw "&7" in chat, and resolveDynamicTags() (added alongside the
+        // other four builders below) covers {animation:...}/gradients/rainbow the same way.
+        return com.zerog.neoessentials.util.ChatComponentUtil.parseColorCodes(
+            com.zerog.neoessentials.chat.RichTextFormatter.resolveDynamicTags(message));
     }
 
     /**
-     * Create a success message component (green text)
+     * Create a success message component (soft green, vanilla-matching — same RGB as §a).
      */
     public static Component success(String key, Object... args) {
-        return Component.literal(localize(key, args)).withStyle(Style.EMPTY.withColor(TextColor.fromRgb(0x00FF00)));
+        return com.zerog.neoessentials.util.ChatComponentUtil.parseColorCodes(
+            TAG_PREFIX + com.zerog.neoessentials.chat.RichTextFormatter.resolveDynamicTags(localize(key, args)),
+            Style.EMPTY.withColor(TextColor.fromRgb(0x55FF55)));
     }
 
     /**
-     * Create an error message component (red text)
+     * Create an error message component (soft red, vanilla-matching — same RGB as §c).
      */
     public static Component error(String key, Object... args) {
-        return Component.literal(localize(key, args)).withStyle(Style.EMPTY.withColor(TextColor.fromRgb(0xFF0000)));
+        return com.zerog.neoessentials.util.ChatComponentUtil.parseColorCodes(
+            TAG_PREFIX + com.zerog.neoessentials.chat.RichTextFormatter.resolveDynamicTags(localize(key, args)),
+            Style.EMPTY.withColor(TextColor.fromRgb(0xFF5555)));
     }
 
     /**
-     * Create a warning message component (yellow text)
+     * Create a warning message component (soft yellow, vanilla-matching — same RGB as §e).
      */
     public static Component warning(String key, Object... args) {
-        return Component.literal(localize(key, args)).withStyle(Style.EMPTY.withColor(TextColor.fromRgb(0xFFFF00)));
+        return com.zerog.neoessentials.util.ChatComponentUtil.parseColorCodes(
+            TAG_PREFIX + com.zerog.neoessentials.chat.RichTextFormatter.resolveDynamicTags(localize(key, args)),
+            Style.EMPTY.withColor(TextColor.fromRgb(0xFFFF55)));
     }
 
     /**
-     * Create an info message component (aqua text)
+     * Create an info message component (soft aqua, vanilla-matching — same RGB as §b).
      */
     public static Component info(String key, Object... args) {
-        return Component.literal(localize(key, args)).withStyle(Style.EMPTY.withColor(TextColor.fromRgb(0x00FFFF)));
+        return com.zerog.neoessentials.util.ChatComponentUtil.parseColorCodes(
+            TAG_PREFIX + com.zerog.neoessentials.chat.RichTextFormatter.resolveDynamicTags(localize(key, args)),
+            Style.EMPTY.withColor(TextColor.fromRgb(0x55FFFF)));
     }
 
     /**
      * Get debug information about loaded translations
      */
+    //noinspection unused
+    @SuppressWarnings("unused")
     public static String getDebugInfo() {
     loadTranslations();
     syncDebugModeFromConfig();
@@ -386,8 +813,8 @@ public class MessageUtil {
      */
     public static void debugKey(String key) {
         loadTranslations();
-        LOGGER.info("Debug key '{}': exists={}, value='{}'", key, translations.containsKey(key), translations.get(key));
-        LOGGER.info("Total translations loaded: {}, Sample keys: {}", translations.size(), 
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "Debug key '{}': exists={}, value='{}'", key, translations.containsKey(key), translations.get(key));
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "Total translations loaded: {}, Sample keys: {}", translations.size(), 
             translations.keySet().stream().limit(3).toArray());
     }
 
@@ -406,40 +833,63 @@ public class MessageUtil {
         loaded = false;
         translations.clear();
         loadTranslations();
-        LOGGER.info("Forced translation reload completed, {} keys loaded", translations.size());
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "Forced translation reload completed, {} keys loaded", translations.size());
     }
     
     /**
-     * Force update/merge the language file if config version is updated.
-     * Ensures all keys from the JAR are present in the server language file.
+     * Merge any new JAR keys into the deployed server language file without overwriting
+     * existing user edits. Called after a config version bump to ensure all translation
+     * keys added in a new mod build are present on disk.
+     *
+     * <p>Strategy:
+     * <ul>
+     *   <li>Keys present in the JAR but missing from the server file → added.</li>
+     *   <li>Keys already on disk → left unchanged (user edits are preserved).</li>
+     *   <li>File missing entirely → written fresh from the JAR.</li>
+     * </ul>
      */
     public static void ensureLanguageFileUpToDate() {
-        File serverLangFile = ResourceUtil.getLanguageFile("en_us");
-        Map<String, String> jarTranslations = loadJarTranslations();
-        Map<String, String> serverTranslations = loadServerTranslations(serverLangFile);
-        boolean needsUpdate = false;
+        String langCode = getConfiguredLanguage();
+        File serverLangFile = new File(getNeoEssentialsLangCustomDir(), langCode + ".json");
+        Map<String, String> jarTranslations = buildJarTranslationsWithFallback(langCode);
         if (jarTranslations == null) {
             LOGGER.error("JAR translations are null, cannot update language file.");
             return;
         }
+
+        Map<String, String> serverTranslations = loadServerTranslations(serverLangFile);
         if (serverTranslations == null) {
-            needsUpdate = true;
+            // File missing — write from JAR (no user edits to preserve)
+            updateServerLanguageFile(serverLangFile, jarTranslations);
+            NeoLog.info(LOGGER, LogCategory.GENERAL, "Language file created from JAR (was missing).");
         } else {
-            // Check for missing keys
-            for (String key : jarTranslations.keySet()) {
-                if (!serverTranslations.containsKey(key)) {
-                    needsUpdate = true;
-                    break;
+            // Merge: only add keys that are absent from the server file
+            int added = 0;
+            for (Map.Entry<String, String> entry : jarTranslations.entrySet()) {
+                if (!serverTranslations.containsKey(entry.getKey())) {
+                    serverTranslations.put(entry.getKey(), entry.getValue());
+                    added++;
                 }
             }
+            if (added > 0) {
+                // Bump the version so loadTranslations() doesn't re-merge on the same boot
+                serverTranslations.put(LANG_VERSION_KEY, String.valueOf(CURRENT_LANG_VERSION));
+                try (FileWriter fw = new FileWriter(serverLangFile, StandardCharsets.UTF_8)) {
+                    new com.google.gson.GsonBuilder().setPrettyPrinting()
+                        .disableHtmlEscaping().create().toJson(serverTranslations, fw);
+                    NeoLog.info(LOGGER, LogCategory.GENERAL, "Language file merged: {} new key(s) added (user edits preserved).", added);
+                } catch (Exception ex) {
+                    LOGGER.warn("Could not save merged language file: {}", ex.getMessage());
+                }
+            } else {
+                NeoLog.debug(LOGGER, LogCategory.GENERAL, "Language file is already up to date, no merge needed.");
+            }
         }
-        if (needsUpdate) {
-            updateServerLanguageFile(serverLangFile, jarTranslations);
-            translations.clear();
-            loaded = false;
-            loadTranslations();
-            LOGGER.info("Language file updated/merged due to config version update.");
-        }
+
+        // Invalidate the in-memory cache so the next call to localize() picks up the updated file
+        translations.clear();
+        loaded = false;
+        loadTranslations();
     }
 
     /**
@@ -460,20 +910,27 @@ public class MessageUtil {
      * If missing, generates it from the JAR resource and logs all steps.
      */
     public static void ensureCustomLanguageFile() {
+        String langCode = getConfiguredLanguage();
         File configRoot = getNeoEssentialsConfigRoot();
         File langDir = new File(configRoot, "neoessentials/languages/custom");
-        File langFile = new File(langDir, "en_us.json");
+        File langFile = new File(langDir, langCode + ".json");
         logInfo("[Lang] Working directory: " + System.getProperty("user.dir"));
+        logInfo("[Lang] Active language: " + langCode);
         logInfo("[Lang] Resolved language file path: " + langFile.getAbsolutePath());
         if (!langFile.exists() || langFile.length() == 0) {
             logInfo("Custom language file not found or empty: " + langFile.getAbsolutePath());
-            try (InputStream in = ResourceUtil.getJarLangResource("en_us.json")) {
-                if (in == null) {
+            try (InputStream in = ResourceUtil.getJarLangResource(langCode + ".json")) {
+                InputStream source = in;
+                if (source == null) {
+                    logInfo("Language '" + langCode + "' not bundled, falling back to en_us");
+                    source = ResourceUtil.getJarLangResource("en_us.json");
+                }
+                if (source == null) {
                     logError("Default language resource not found in JAR: data/lang/en_us.json");
                     return;
                 }
                 Files.createDirectories(langFile.getParentFile().toPath());
-                Files.copy(in, langFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                Files.copy(source, langFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
                 logInfo("Generated custom language file from JAR resource: " + langFile.getAbsolutePath());
             } catch (Exception e) {
                 logError("Failed to generate custom language file: " + e.getMessage());
@@ -502,6 +959,8 @@ public class MessageUtil {
     /**
      * Create a clickable suggestion component
      */
+    //noinspection unused
+    @SuppressWarnings("unused")
     public static Component clickableSuggestion(String text, String command, String hoverText) {
         return ChatComponentUtil.createClickableSuggestion(text, command, hoverText);
     }
@@ -509,6 +968,8 @@ public class MessageUtil {
     /**
      * Create formatted balance display with interaction
      */
+    //noinspection unused
+    @SuppressWarnings("unused")
     public static Component balanceComponent(String playerName, double balance, String currency) {
         return ChatComponentUtil.createBalanceComponent(playerName, balance, currency);
     }
@@ -516,6 +977,8 @@ public class MessageUtil {
     /**
      * Create formatted player name with interaction
      */
+    //noinspection unused
+    @SuppressWarnings("unused")
     public static Component playerComponent(String playerName) {
         return ChatComponentUtil.createPlayerComponent(playerName);
     }
@@ -523,6 +986,8 @@ public class MessageUtil {
     /**
      * Create formatted permission with copy functionality
      */
+    //noinspection unused
+    @SuppressWarnings("unused")
     public static Component permissionComponent(String permission) {
         return ChatComponentUtil.createPermissionComponent(permission);
     }
@@ -546,6 +1011,8 @@ public class MessageUtil {
     /**
      * Create a separator line
      */
+    //noinspection unused
+    @SuppressWarnings("unused") // public API
     public static Component separator(int length, char character, net.minecraft.ChatFormatting color) {
         return ChatComponentUtil.createSeparator(length, character, color);
     }
@@ -553,50 +1020,36 @@ public class MessageUtil {
     /**
      * Create a progress bar
      */
+    //noinspection unused
+    @SuppressWarnings("unused")
     public static Component progressBar(double current, double max, int width) {
         return ChatComponentUtil.createProgressBar(current, max, width);
     }
     
     /**
-     * Get the version of a language file from its translations map
-     */
-    private static int getLanguageVersion(Map<String, String> translations) {
-        if (translations == null || !translations.containsKey(LANG_VERSION_KEY)) {
-            return 0; // Default version for files without version key
-        }
-        try {
-            return Integer.parseInt(translations.get(LANG_VERSION_KEY));
-        } catch (NumberFormatException e) {
-            LOGGER.warn("Invalid language version format, defaulting to 0");
-            return 0;
-        }
-    }
-
-    /**
      * Create a clickable confirmation message for home actions
      */
     public static MutableComponent homeConfirmComponent(String homeName, String action, String commandConfirm, String commandDeny) {
-        MutableComponent confirm = Component.literal(localize("commands.neoessentials.home.confirm.button_confirm"))
+        MutableComponent confirm = Component.literal(localize("commands.neoessentials.util.confirm_button"))
             .withStyle(style -> style.withColor(TextColor.fromRgb(0x4CAF50)))
-            .withStyle(style -> style.withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, commandConfirm)))
-            .withStyle(style -> style.withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(localize("commands.neoessentials.home.confirm.hover_confirm", action, homeName)))));
-        MutableComponent deny = Component.literal(localize("commands.neoessentials.home.confirm.button_deny"))
+            .withStyle(style -> style.withClickEvent(com.zerog.neoessentials.util.ClickEventCompat.create(ClickEvent.Action.RUN_COMMAND, commandConfirm)))
+            .withStyle(style -> style.withHoverEvent(com.zerog.neoessentials.util.HoverEventCompat.create(HoverEvent.Action.SHOW_TEXT, Component.literal(localize("commands.neoessentials.util.home_action_confirm_hover", action, homeName)))));
+        MutableComponent deny = Component.literal(localize("commands.neoessentials.util.deny_button"))
             .withStyle(style -> style.withColor(TextColor.fromRgb(0xF44336)))
-            .withStyle(style -> style.withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, commandDeny)))
-            .withStyle(style -> style.withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(localize("commands.neoessentials.home.confirm.hover_cancel", action, homeName)))));
+            .withStyle(style -> style.withClickEvent(com.zerog.neoessentials.util.ClickEventCompat.create(ClickEvent.Action.RUN_COMMAND, commandDeny)))
+            .withStyle(style -> style.withHoverEvent(com.zerog.neoessentials.util.HoverEventCompat.create(HoverEvent.Action.SHOW_TEXT, Component.literal(localize("commands.neoessentials.util.home_action_deny_hover", action, homeName)))));
         return Component.literal("")
-            .append(Component.literal(localize("commands.neoessentials.home.confirm.question_prefix", action)).withStyle(style -> style.withColor(TextColor.fromRgb(0xFFD600))))
+            .append(Component.literal(localize("commands.neoessentials.util.home_action_confirm_prefix", action)).withStyle(style -> style.withColor(TextColor.fromRgb(0xFFD600))))
             .append(Component.literal(homeName).withStyle(style -> style.withColor(TextColor.fromRgb(0xFF9800))))
-            .append(Component.literal(localize("commands.neoessentials.home.confirm.question_suffix")))
+            .append(Component.literal(localize("commands.neoessentials.util.home_action_confirm_suffix")))
             .append(confirm)
             .append(Component.literal(" "))
             .append(deny);
     }
 
     /**
-     * Utility to get the NeoEssentials custom language directory (matches CustomLanguageManager)
-     *
-     * This version also removes the legacy 'lang' directory if it exists in the server root.
+     * Utility to get the NeoEssentials custom language directory (matches CustomLanguageManager).
+     * <p>Also removes the legacy 'lang' directory if it exists in the server root.
      */
     private static File getNeoEssentialsLangCustomDir() {
         // Use FMLPaths.GAMEDIR if available, else fallback to user.dir
@@ -604,6 +1057,8 @@ public class MessageUtil {
         try {
             // Try to use FMLPaths if available (Forge/NeoForge)
             Class<?> fmlPathsClass = Class.forName("net.neoforged.fml.loading.FMLPaths");
+            // FMLPaths.GAMEDIR is an enum constant; we access it reflectively as a field
+            //noinspection JavaReflectionMemberAccess
             java.lang.reflect.Method gamedirMethod = fmlPathsClass.getMethod("GAMEDIR");
             Object gamedirPath = gamedirMethod.invoke(null);
             java.nio.file.Path serverRoot = (java.nio.file.Path) gamedirPath.getClass().getMethod("get").invoke(gamedirPath);
@@ -612,7 +1067,7 @@ public class MessageUtil {
             File legacyLangDir = serverRoot.resolve("neoessentials").resolve("lang").toFile();
             if (legacyLangDir.exists() && legacyLangDir.isDirectory()) {
                 deleteDirectoryRecursively(legacyLangDir);
-                LOGGER.info("Removed legacy language directory: {}", legacyLangDir.getAbsolutePath());
+                NeoLog.info(LOGGER, LogCategory.GENERAL, "Removed legacy language directory: {}", legacyLangDir.getAbsolutePath());
             }
         } catch (Exception e) {
             // Fallback: use user.dir
@@ -622,7 +1077,7 @@ public class MessageUtil {
             File legacyLangDir = new File(fallbackRoot, "lang");
             if (legacyLangDir.exists() && legacyLangDir.isDirectory()) {
                 deleteDirectoryRecursively(legacyLangDir);
-                LOGGER.info("Removed legacy language directory: {}", legacyLangDir.getAbsolutePath());
+                NeoLog.info(LOGGER, LogCategory.GENERAL, "Removed legacy language directory: {}", legacyLangDir.getAbsolutePath());
             }
         }
         return langDir;
@@ -640,7 +1095,9 @@ public class MessageUtil {
                 }
             }
         }
-        dir.delete();
+        if (!dir.delete()) {
+            LOGGER.warn("MessageUtil: failed to delete: {}", dir.getAbsolutePath());
+        }
     }
 
     /**
@@ -651,19 +1108,16 @@ public class MessageUtil {
      */
     public static Map<String, String> loadCustomLanguageFile(String languageCode) {
         // Always use the NeoEssentials data directory for custom languages
-        File customLangFile = new File("neoessentials/languages/custom/" + languageCode + ".json");
+        File customLangFile = ResourceUtil.getDataFile("languages/custom/" + languageCode + ".json");
         if (!customLangFile.exists()) {
             return null;
         }
-        try (FileReader reader = new FileReader(customLangFile)) {
+        try (FileReader reader = new FileReader(customLangFile, StandardCharsets.UTF_8)) {
             Gson gson = new Gson();
             Type type = new TypeToken<Map<String, String>>() {}.getType();
             return gson.fromJson(reader, type);
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-            return null;
         } catch (Exception e) {
-            e.printStackTrace();
+            LOGGER.error("Failed to load custom language file '{}': {}", languageCode, e.getMessage(), e);
             return null;
         }
     }
@@ -671,9 +1125,11 @@ public class MessageUtil {
     /**
      * Loads all available custom language files from the NeoEssentials data directory.
      */
+    //noinspection unused
+    @SuppressWarnings("unused")
     public static Map<String, Map<String, String>> loadAllCustomLanguages() {
         Map<String, Map<String, String>> languages = new HashMap<>();
-        File langDir = new File("neoessentials/languages/custom");
+        File langDir = ResourceUtil.getDataFile("languages/custom");
         if (langDir.exists() && langDir.isDirectory()) {
             File[] files = langDir.listFiles((dir, name) -> name.endsWith(".json"));
             if (files != null) {

@@ -12,6 +12,8 @@ import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 
 /**
  * /kitreset <kit> [player]
@@ -26,6 +28,7 @@ public class KitResetCommand {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         if (!com.zerog.neoessentials.config.ConfigManager.isKitSystemEnabled()) return;
+        if (!com.zerog.neoessentials.config.ConfigManager.getInstance().isCommandEnabled("kitreset")) return;
 
         dispatcher.register(Commands.literal("kitreset")
             .requires(src -> {
@@ -84,8 +87,12 @@ public class KitResetCommand {
             target = sender;
         }
 
-        // Reset cooldown (Essentials: target.setKitTimestamp(kitName, 0))
+        // Reset cooldown (Essentials: target.setKitTimestamp(kitName, 0)) AND use count —
+        // previously only the cooldown was cleared, so a player who'd hit a kit's maxUses cap
+        // stayed permanently blocked afterward with no command able to clear it. "/kitreset"
+        // conceptually means "let them use it again", which requires clearing both blockers.
         KitManager.getInstance().resetCooldown(target.getUUID(), kitName);
+        KitManager.getInstance().resetUsage(target.getUUID(), kitName);
 
         final String tName = target.getName().getString();
         if (sender != null && target.getUUID().equals(sender.getUUID())) {
@@ -100,7 +107,7 @@ public class KitResetCommand {
                 "commands.neoessentials.kits.reset_notify", kitName));
         }
 
-        LOGGER.info("{} reset kit cooldown '{}' for {}",
+        NeoLog.info(LOGGER, LogCategory.KITS, "{} reset kit cooldown '{}' for {}",
             sender != null ? sender.getName().getString() : "Console",
             kitName, tName);
         return 1;

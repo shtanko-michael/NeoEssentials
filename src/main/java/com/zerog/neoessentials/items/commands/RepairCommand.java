@@ -9,6 +9,8 @@ import com.zerog.neoessentials.util.MessageUtil;
 import com.zerog.neoessentials.util.PermissionValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 
 /**
  * Provides item repair functionality allowing players to instantly repair damaged items.
@@ -45,12 +47,12 @@ public class RepairCommand {
      */
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         // Note: Item commands use general commandsEnabled module (if implemented) + individual command check
-        if (!ConfigManager.getInstance().isCommandEnabled("repair")) return;
+        if (ConfigManager.getInstance().isCommandEnabled("repair")) {
         dispatcher.register(
             Commands.literal("repair")
                 .requires(cs -> cs.getEntity() instanceof ServerPlayer)
                 .executes(ctx -> {
-                    PermissionValidator.PermissionResult permResult = 
+                    PermissionValidator.PermissionResult permResult =
                         PermissionValidator.validatePermission(ctx.getSource(), "neoessentials.item.repair");
                     if (!permResult.hasPermission()) {
                         ctx.getSource().sendFailure(MessageUtil.error(permResult.getErrorMessage()));
@@ -61,11 +63,13 @@ public class RepairCommand {
                     return 1;
                 })
         );
+        }
+        if (ConfigManager.getInstance().isCommandEnabled("fix")) {
         dispatcher.register(
             Commands.literal("fix")
                 .requires(cs -> cs.getEntity() instanceof ServerPlayer)
                 .executes(ctx -> {
-                    PermissionValidator.PermissionResult permResult = 
+                    PermissionValidator.PermissionResult permResult =
                         PermissionValidator.validatePermission(ctx.getSource(), "neoessentials.item.repair");
                     if (!permResult.hasPermission()) {
                         ctx.getSource().sendFailure(MessageUtil.error(permResult.getErrorMessage()));
@@ -76,6 +80,7 @@ public class RepairCommand {
                     return 1;
                 })
         );
+        }
     }
 
     /**
@@ -93,7 +98,7 @@ public class RepairCommand {
             stack.setDamageValue(0);
             
             // Log repair action for audit trail
-            LOGGER.info("Player {} repaired item: {} (damage: {} -> 0)", 
+            NeoLog.info(LOGGER, LogCategory.GENERAL, "Player {} repaired item: {} (damage: {} -> 0)", 
                 player.getName().getString(), 
                 itemName,
                 damageBefore);

@@ -5,6 +5,8 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import com.zerog.neoessentials.util.MessageUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
@@ -16,7 +18,6 @@ import com.zerog.neoessentials.util.InputValidator;
 
 import java.io.File;
 import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -34,9 +35,10 @@ import java.util.concurrent.ConcurrentHashMap;
 public class FreezeManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(FreezeManager.class);
     private static FreezeManager instance;
-    private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
-    private final File freezeFile;
-    
+    private final Gson gson = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
+    private static final String COLLECTION = "freezes";
+    private final com.zerog.neoessentials.storage.DataStore store;
+
     // In-memory cache for quick lookups
     private final Map<UUID, FreezeEntry> frozenPlayers = new ConcurrentHashMap<>();
     
@@ -62,15 +64,8 @@ public class FreezeManager {
     }
     
     private FreezeManager() {
-        // Create moderation directory if it doesn't exist
-        File moderationDir = new File(com.zerog.neoessentials.util.ResourceUtil.DATA_DIR + "moderation");
-        if (!moderationDir.exists()) {
-            if (!moderationDir.mkdirs()) {
-                LOGGER.error("Failed to create moderation directory: {}", moderationDir.getAbsolutePath());
-            }
-        }
-        
-        this.freezeFile = new File(moderationDir, "frozen_players.json");
+        this.store = com.zerog.neoessentials.storage.StorageManager.getInstance().getStore();
+        migrateLegacyFilesIfNeeded();
         loadData();
     }
     
@@ -99,30 +94,24 @@ public class FreezeManager {
 
         FreezeEntry freeze = new FreezeEntry(playerName, playerId, reason, frozenBy);
 
-        // Store current position if online
+        // Store current position if online — notification is the command's responsibility
         MinecraftServer server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
         if (server != null) {
             ServerPlayer player = server.getPlayerList().getPlayer(playerId);
             if (player != null) {
                 freeze.frozenPosition = player.blockPosition();
-
-                // Get freeze message from config, fallback to localization
-                String template = com.zerog.neoessentials.config.ConfigManager.getFreezeMessage();
-                String message;
-                if (template.equals("neoessentials.moderation.frozen_message")) {
-                    message = MessageUtil.localize(template, reason, frozenBy);
-                } else {
-                    message = template.replace("{reason}", reason != null ? reason : "")
-                                     .replace("{freezer}", frozenBy != null ? frozenBy : "");
-                }
-                player.sendSystemMessage(MessageUtil.warning(message));
+                // NOTE: do NOT send the frozen message here.
+                // FreezeCommand.executeFreeze() and executeFreezeAll() handle player
+                // notification to avoid the player receiving duplicate messages.
             }
         }
 
         frozenPlayers.put(playerId, freeze);
-        saveData();
+        store.put(COLLECTION, playerId.toString(), toJson(freeze));
 
-        LOGGER.info("Player {} ({}) frozen by {} for: {}", playerName, playerId, frozenBy, reason);
+        NeoLog.debug(LOGGER, LogCategory.MODERATION, "Applying freeze: player={} ({}) reason={} by={}",
+            playerName, playerId, reason, frozenBy);
+        NeoLog.info(LOGGER, LogCategory.MODERATION, "Player {} ({}) frozen by {} for: {}", playerName, playerId, frozenBy, reason);
         return true;
     }
     
@@ -132,8 +121,9 @@ public class FreezeManager {
     public boolean unfreezePlayer(UUID playerId) {
         FreezeEntry removed = frozenPlayers.remove(playerId);
         if (removed != null) {
-            saveData();
-            
+            store.delete(COLLECTION, playerId.toString());
+            NeoLog.debug(LOGGER, LogCategory.MODERATION, "Removing freeze for player {} ({})", removed.playerName, playerId);
+
             // Notify player if online
             MinecraftServer server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
             if (server != null) {
@@ -148,11 +138,11 @@ public class FreezeManager {
                         // Try to get the unfreezer's name if possible (not always available here)
                         message = template.replace("{unfreezer}", "Staff");
                     }
-                    player.sendSystemMessage(MessageUtil.success(message));
+                    player.sendSystemMessage(MessageUtil.coloredText(message));
                 }
             }
             
-            LOGGER.info("Player {} ({}) unfrozen", removed.playerName, playerId);
+            NeoLog.info(LOGGER, LogCategory.MODERATION, "Player {} ({}) unfrozen", removed.playerName, playerId);
             return true;
         }
         return false;
@@ -172,7 +162,7 @@ public class FreezeManager {
             }
         }
         
-        LOGGER.info("Froze {} players by {}", count, frozenBy);
+        NeoLog.info(LOGGER, LogCategory.MODERATION, "Froze {} players by {}", count, frozenBy);
         return count;
     }
     
@@ -189,15 +179,17 @@ public class FreezeManager {
                 ServerPlayer player = server.getPlayerList().getPlayer(playerId);
                 if (player != null) {
                     String message = MessageUtil.localize("neoessentials.moderation.unfrozen_message");
-                    player.sendSystemMessage(MessageUtil.success(message));
+                    player.sendSystemMessage(MessageUtil.coloredText(message));
                 }
             }
         }
         
+        for (UUID playerId : new ArrayList<>(frozenPlayers.keySet())) {
+            store.delete(COLLECTION, playerId.toString());
+        }
         frozenPlayers.clear();
-        saveData();
-        
-        LOGGER.info("Unfroze {} players", count);
+
+        NeoLog.info(LOGGER, LogCategory.MODERATION, "Unfroze {} players", count);
         return count;
     }
     
@@ -294,7 +286,7 @@ public class FreezeManager {
             );
             
             String message = MessageUtil.localize("neoessentials.moderation.freeze_movement_blocked");
-            player.sendSystemMessage(MessageUtil.warning(message));
+            player.sendSystemMessage(MessageUtil.coloredText(message));
         }
     }
     
@@ -309,7 +301,7 @@ public class FreezeManager {
             // Update frozen position to current position if not set
             if (freeze.frozenPosition == null) {
                 freeze.frozenPosition = player.blockPosition();
-                saveData();
+                store.put(COLLECTION, playerId.toString(), toJson(freeze));
             }
             // Get freeze reminder from config, fallback to localization
             String template = com.zerog.neoessentials.config.ConfigManager.getFreezeReminder();
@@ -319,7 +311,7 @@ public class FreezeManager {
             } else {
                 message = template.replace("{reason}", freeze.reason != null ? freeze.reason : "");
             }
-            player.sendSystemMessage(MessageUtil.warning(message));
+            player.sendSystemMessage(MessageUtil.coloredText(message));
         }
     }
     
@@ -332,73 +324,83 @@ public class FreezeManager {
     }
     
     /**
-     * Load data from file
+     * Load frozen players from the active {@link com.zerog.neoessentials.storage.DataStore}.
      */
     private void loadData() {
-        if (!freezeFile.exists()) return;
-        
-        try (FileReader reader = new FileReader(freezeFile)) {
-            JsonObject root = gson.fromJson(reader, JsonObject.class);
-            if (root != null && root.has("frozen")) {
-                JsonArray frozenArray = root.getAsJsonArray("frozen");
-                for (JsonElement element : frozenArray) {
-                    JsonObject freezeObj = element.getAsJsonObject();
-                    FreezeEntry freeze = new FreezeEntry(
-                        freezeObj.get("playerName").getAsString(),
-                        UUID.fromString(freezeObj.get("playerId").getAsString()),
-                        freezeObj.get("reason").getAsString(),
-                        freezeObj.get("frozenBy").getAsString()
-                    );
-                    freeze.freezeTime = freezeObj.get("freezeTime").getAsLong();
-                    
-                    if (freezeObj.has("frozenPosition")) {
-                        JsonObject posObj = freezeObj.getAsJsonObject("frozenPosition");
-                        freeze.frozenPosition = new BlockPos(
-                            posObj.get("x").getAsInt(),
-                            posObj.get("y").getAsInt(),
-                            posObj.get("z").getAsInt()
-                        );
-                    }
-                    
-                    frozenPlayers.put(freeze.playerId, freeze);
-                }
-            }
-        } catch (IOException e) {
-            LOGGER.error("Failed to load freeze data", e);
+        for (JsonObject obj : store.getAll(COLLECTION).values()) {
+            FreezeEntry freeze = fromJson(obj);
+            frozenPlayers.put(freeze.playerId, freeze);
         }
     }
-    
+
+    private FreezeEntry fromJson(JsonObject freezeObj) {
+        FreezeEntry freeze = new FreezeEntry(
+            freezeObj.get("playerName").getAsString(),
+            UUID.fromString(freezeObj.get("playerId").getAsString()),
+            freezeObj.get("reason").getAsString(),
+            freezeObj.get("frozenBy").getAsString()
+        );
+        freeze.freezeTime = freezeObj.get("freezeTime").getAsLong();
+
+        if (freezeObj.has("frozenPosition") && !freezeObj.get("frozenPosition").isJsonNull()) {
+            JsonObject posObj = freezeObj.getAsJsonObject("frozenPosition");
+            freeze.frozenPosition = new BlockPos(
+                posObj.get("x").getAsInt(),
+                posObj.get("y").getAsInt(),
+                posObj.get("z").getAsInt()
+            );
+        }
+        return freeze;
+    }
+
+    private JsonObject toJson(FreezeEntry freeze) {
+        JsonObject freezeObj = new JsonObject();
+        freezeObj.addProperty("playerName", freeze.playerName);
+        freezeObj.addProperty("playerId", freeze.playerId.toString());
+        freezeObj.addProperty("reason", freeze.reason);
+        freezeObj.addProperty("frozenBy", freeze.frozenBy);
+        freezeObj.addProperty("freezeTime", freeze.freezeTime);
+
+        if (freeze.frozenPosition != null) {
+            JsonObject posObj = new JsonObject();
+            posObj.addProperty("x", freeze.frozenPosition.getX());
+            posObj.addProperty("y", freeze.frozenPosition.getY());
+            posObj.addProperty("z", freeze.frozenPosition.getZ());
+            freezeObj.add("frozenPosition", posObj);
+        }
+
+        return freezeObj;
+    }
+
     /**
-     * Save data to file
+     * One-time import of the legacy frozen_players.json file into the active DataStore, if
+     * it's still empty and storage.autoMigrate is enabled.
      */
-    private void saveData() {
-        try (FileWriter writer = new FileWriter(freezeFile)) {
-            JsonObject root = new JsonObject();
-            JsonArray frozenArray = new JsonArray();
-            
-            for (FreezeEntry freeze : frozenPlayers.values()) {
-                JsonObject freezeObj = new JsonObject();
-                freezeObj.addProperty("playerName", freeze.playerName);
-                freezeObj.addProperty("playerId", freeze.playerId.toString());
-                freezeObj.addProperty("reason", freeze.reason);
-                freezeObj.addProperty("frozenBy", freeze.frozenBy);
-                freezeObj.addProperty("freezeTime", freeze.freezeTime);
-                
-                if (freeze.frozenPosition != null) {
-                    JsonObject posObj = new JsonObject();
-                    posObj.addProperty("x", freeze.frozenPosition.getX());
-                    posObj.addProperty("y", freeze.frozenPosition.getY());
-                    posObj.addProperty("z", freeze.frozenPosition.getZ());
-                    freezeObj.add("frozenPosition", posObj);
+    private void migrateLegacyFilesIfNeeded() {
+        if (store.hasAnyData(COLLECTION)) return;
+        if (!com.zerog.neoessentials.config.ConfigManager.getInstance().isStorageAutoMigrateEnabled()) return;
+
+        File file = new File(com.zerog.neoessentials.util.ResourceUtil.DATA_DIR + "moderation", "frozen_players.json");
+        if (!file.exists()) return;
+
+        int migrated = 0;
+        try (FileReader reader = new FileReader(file)) {
+            JsonObject root = gson.fromJson(reader, JsonObject.class);
+            if (root != null && root.has("frozen")) {
+                for (JsonElement element : root.getAsJsonArray("frozen")) {
+                    JsonObject obj = element.getAsJsonObject();
+                    String id = obj.get("playerId").getAsString();
+                    store.put(COLLECTION, id, obj.deepCopy());
+                    migrated++;
                 }
-                
-                frozenArray.add(freezeObj);
             }
-            
-            root.add("frozen", frozenArray);
-            gson.toJson(root, writer);
         } catch (IOException e) {
-            LOGGER.error("Failed to save freeze data", e);
+            LOGGER.error("Failed to migrate legacy frozen_players.json: {}", e.getMessage());
+        }
+
+        if (migrated > 0) {
+            NeoLog.info(LOGGER, LogCategory.MODERATION, "FreezeManager: migrated {} freeze record(s) from legacy file into the '{}' storage backend.",
+                migrated, com.zerog.neoessentials.storage.StorageManager.getInstance().getActiveType());
         }
     }
 }

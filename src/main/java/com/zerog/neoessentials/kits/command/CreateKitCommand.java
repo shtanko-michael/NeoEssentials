@@ -18,6 +18,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 
 /**
  * Handles the /createkit command for creating kits from a player's inventory.
@@ -31,6 +33,10 @@ public class CreateKitCommand {
             return; // Don't register kit commands if module is disabled
         }
         
+        if (!com.zerog.neoessentials.config.ConfigManager.getInstance().isCommandEnabled("createkit")) {
+            return;
+        }
+
         registerCreateKitCommand(dispatcher, "createkit");
         registerCreateKitCommand(dispatcher, "makekit");
         registerCreateKitCommand(dispatcher, "addkit");
@@ -151,9 +157,10 @@ public class CreateKitCommand {
                 // Simulate Pastebin upload (replace with real API if needed)
                 String kitJson = kitToJsonString(kitName, displayName, description, items, cooldownMillis, permission);
                 String pastebinUrl = uploadToPastebin(kitJson);
+                //noinspection ConstantConditions (mock always returns non-null; real impl may return null)
                 if (pastebinUrl != null) {
                     source.sendSuccess(() -> MessageUtil.success("commands.neoessentials.createkit.pastebin_success", pastebinUrl), false);
-                    LOGGER.info("Kit '{}' exported to Pastebin by {}: {}", kitName, player.getName().getString(), pastebinUrl);
+                    NeoLog.info(LOGGER, LogCategory.KITS, "Kit '{}' exported to Pastebin by {}: {}", kitName, player.getName().getString(), pastebinUrl);
                     return 1;
                 } else {
                     source.sendFailure(MessageUtil.error("commands.neoessentials.createkit.pastebin_failed"));
@@ -168,7 +175,7 @@ public class CreateKitCommand {
                         source.sendSuccess(() -> MessageUtil.success("commands.neoessentials.createkit.created", kitName, items.size(), formatCooldown(cooldownMillis)), false);
                     }
                     source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.createkit.permission_hint", permission), false);
-                    LOGGER.info("Kit '{}' {} by {}", kitName, isUpdate ? "updated" : "created", player.getName().getString());
+                    NeoLog.info(LOGGER, LogCategory.KITS, "Kit '{}' {} by {}", kitName, isUpdate ? "updated" : "created", player.getName().getString());
                     return 1;
                 } else {
                     source.sendFailure(MessageUtil.error("commands.neoessentials.createkit.failed"));
@@ -191,8 +198,9 @@ public class CreateKitCommand {
         if (name.length() > 32) {
             return false;
         }
-        // Check characters (alphanumeric, underscore, dash)
-        return name.matches("^[a-zA-Z0-9_-]+$");
+        // Only allow lowercase letters, digits, and underscore — matches Kit constructor sanitization.
+        // Hyphens are intentionally excluded: Kit() strips them which would cause a silent name mismatch.
+        return name.matches("^[a-zA-Z0-9_]+$");
     }
 
     // Helper method to format cooldown duration
@@ -216,23 +224,12 @@ public class CreateKitCommand {
         }
     }
 
-    // Helper to serialize kit to JSON string (minimal, for Pastebin)
+    // Helper to serialize kit to JSON string, for Pastebin export.
+    // Delegates to Kit.toJson() (rather than hand-rolling item serialization here) so this
+    // export path gets full item DataComponents — enchantments, custom names, etc. — instead
+    // of just item id + count, which used to drop all item data on export.
     private static String kitToJsonString(String kitName, String displayName, String description, List<ItemStack> items, long cooldownMillis, String permission) {
-        com.google.gson.JsonObject json = new com.google.gson.JsonObject();
-        json.addProperty("name", kitName);
-        json.addProperty("displayName", displayName);
-        json.addProperty("description", description);
-        json.addProperty("cooldownMillis", cooldownMillis);
-        json.addProperty("permission", permission);
-        com.google.gson.JsonArray itemsArray = new com.google.gson.JsonArray();
-        for (ItemStack item : items) {
-            com.google.gson.JsonObject itemJson = new com.google.gson.JsonObject();
-            itemJson.addProperty("item", item.getItem().toString());
-            itemJson.addProperty("count", item.getCount());
-            itemsArray.add(itemJson);
-        }
-        json.add("items", itemsArray);
-        return json.toString();
+        return new Kit(kitName, displayName, description, items, cooldownMillis, permission, -1, true).toJson().toString();
     }
 
     // Simulate Pastebin upload (replace with real API call if needed)

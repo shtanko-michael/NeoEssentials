@@ -16,6 +16,8 @@ import org.slf4j.LoggerFactory;
 import com.zerog.neoessentials.util.InputValidator;
 
 import java.util.UUID;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 
 /**
  * Kick commands: /kick, /kickall
@@ -24,8 +26,14 @@ public class KickCommand {
     private static final Logger LOGGER = LoggerFactory.getLogger(KickCommand.class);
     
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        
+        // Check if moderation commands are enabled
+        if (!com.zerog.neoessentials.config.ConfigManager.isModerationEnabled()) {
+            NeoLog.debug(LOGGER, LogCategory.MODERATION, "Moderation module is disabled, skipping kick command registration");
+            return;
+        }
+
         // /kick <player> [reason]
+        if (com.zerog.neoessentials.config.ConfigManager.getInstance().isCommandEnabled("kick")) {
         dispatcher.register(Commands.literal("kick")
             .requires(source -> PermissionValidator.validatePermission(source, "neoessentials.moderation.kick").hasPermission())
             .then(Commands.argument("player", StringArgumentType.word())
@@ -33,18 +41,21 @@ public class KickCommand {
                     ctx.getSource().getServer().getPlayerNames(), builder))
                 .executes(ctx -> executeKick(ctx, StringArgumentType.getString(ctx, "player"), "Kicked by an operator"))
                 .then(Commands.argument("reason", StringArgumentType.greedyString())
-                    .executes(ctx -> executeKick(ctx, 
+                    .executes(ctx -> executeKick(ctx,
                         StringArgumentType.getString(ctx, "player"),
                         StringArgumentType.getString(ctx, "reason")))))
         );
-        
+        }
+
         // /kickall [reason]
+        if (com.zerog.neoessentials.config.ConfigManager.getInstance().isCommandEnabled("kickall")) {
         dispatcher.register(Commands.literal("kickall")
             .requires(source -> PermissionValidator.validatePermission(source, "neoessentials.moderation.kickall").hasPermission())
             .executes(ctx -> executeKickAll(ctx, "Server maintenance"))
             .then(Commands.argument("reason", StringArgumentType.greedyString())
                 .executes(ctx -> executeKickAll(ctx, StringArgumentType.getString(ctx, "reason"))))
         );
+        }
     }
     
     private static int executeKick(CommandContext<CommandSourceStack> ctx, String playerName, String reason) {
@@ -94,8 +105,11 @@ public class KickCommand {
                 .replace("{kicker}", kickedBy);
             targetPlayer.connection.disconnect(Component.literal(kickMessage));
 
+            com.zerog.neoessentials.moderation.KickManager.getInstance()
+                .recordKick(playerDisplayName, targetPlayer.getUUID(), reason, kickedBy);
+
             String confirmMessage = MessageUtil.localize("neoessentials.moderation.kick_success", playerDisplayName, reason);
-            source.sendSuccess(() -> MessageUtil.success(confirmMessage), true);
+            source.sendSuccess(() -> MessageUtil.coloredText(confirmMessage), false);
 
 
 
@@ -104,16 +118,16 @@ public class KickCommand {
                 playerDisplayName, kickedBy, reason);
             if (com.zerog.neoessentials.config.ConfigManager.isBroadcastKicksEnabled()) {
                 for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-                    player.sendSystemMessage(MessageUtil.info(broadcastMsg));
+                    player.sendSystemMessage(MessageUtil.coloredText(broadcastMsg));
                 }
             }
             // Notify staff if enabled (independent of broadcastKicks)
             if (com.zerog.neoessentials.config.ConfigManager.isNotifyStaffOnKickEnabled()) {
-                broadcastToStaff(server, broadcastMsg);
+                broadcastToStaff(server, broadcastMsg, senderId(source));
             }
 
             if (com.zerog.neoessentials.config.ConfigManager.isLogKickActionsEnabled()) {
-                LOGGER.info("Player {} kicked by {} for: {}", playerDisplayName, kickedBy, reason);
+                NeoLog.info(LOGGER, LogCategory.MODERATION, "Player {} kicked by {} for: {}", playerDisplayName, kickedBy, reason);
             }
             return 1;
 
@@ -138,7 +152,10 @@ public class KickCommand {
             
             if (playersToKick.isEmpty()) {
                 String message = MessageUtil.localize("neoessentials.moderation.kickall_no_players");
-                source.sendSuccess(() -> MessageUtil.info(message), false);
+                // No paired broadcastToStaff() call here, so no duplicate to avoid — left as
+                // `true` (unlike the other confirmations in this file that were changed to
+                // `false` to fix a real double-message bug).
+                source.sendSuccess(() -> MessageUtil.coloredText(message), true);
                 return 1;
             }
             
@@ -148,15 +165,18 @@ public class KickCommand {
             String kickAllMessage = kickAllMessageTemplate
                 .replace("{reason}", reason)
                 .replace("{kicker}", kickedBy);
+            com.zerog.neoessentials.moderation.KickManager kickManager = com.zerog.neoessentials.moderation.KickManager.getInstance();
             for (ServerPlayer player : playersToKick) {
                 player.connection.disconnect(Component.literal(kickAllMessage));
+                kickManager.recordKick(player.getName().getString(), player.getUUID(), reason, kickedBy);
             }
-            
+
             String confirmMessage = MessageUtil.localize("neoessentials.moderation.kickall_success", playersToKick.size(), reason);
-            source.sendSuccess(() -> MessageUtil.success(confirmMessage), true);
+            // No paired broadcastToStaff() call here either — left as `true`, see comment above.
+            source.sendSuccess(() -> MessageUtil.coloredText(confirmMessage), true);
             
             if (com.zerog.neoessentials.config.ConfigManager.isLogKickActionsEnabled()) {
-                LOGGER.info("Kicked {} players by {} for: {}", playersToKick.size(), kickedBy, reason);
+                NeoLog.info(LOGGER, LogCategory.MODERATION, "Kicked {} players by {} for: {}", playersToKick.size(), kickedBy, reason);
             }
             return 1;
             
@@ -167,11 +187,26 @@ public class KickCommand {
         }
     }
     
+    /** The command sender's player UUID, or {@code null} if run from console/command block. */
+    private static java.util.UUID senderId(CommandSourceStack source) {
+        return source.getEntity() instanceof ServerPlayer player ? player.getUUID() : null;
+    }
+
     private static void broadcastToStaff(MinecraftServer server, String message) {
+        broadcastToStaff(server, message, null);
+    }
+
+    /**
+     * @param excludeId skipped if non-null — used so the command sender, who already got
+     *                  their own personal confirmation message, does not also get this
+     *                  near-duplicate staff-wide broadcast just because they also qualify.
+     */
+    private static void broadcastToStaff(MinecraftServer server, String message, java.util.UUID excludeId) {
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (excludeId != null && player.getUUID().equals(excludeId)) continue;
             if (com.zerog.neoessentials.api.permissions.PermissionAPI.hasPermission(
                     player.getUUID(), "neoessentials.moderation.notifications")) {
-                player.sendSystemMessage(MessageUtil.info(message));
+                player.sendSystemMessage(MessageUtil.coloredText(message));
             }
         }
     }

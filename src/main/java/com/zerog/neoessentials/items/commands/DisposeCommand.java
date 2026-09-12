@@ -17,6 +17,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 
 /**
  * Provides item disposal functionality through a temporary trash GUI.
@@ -72,7 +74,7 @@ public class DisposeCommand {
             player.sendSystemMessage(MessageUtil.info("commands.neoessentials.dispose.restored"));
             
             // Log restoration for audit trail
-            LOGGER.debug("Restored {} pending disposal items for player {} (disconnect/cancel)", 
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Restored {} pending disposal items for player {} (disconnect/cancel)", 
                 itemCount, player.getName().getString());
         }
     }
@@ -81,7 +83,7 @@ public class DisposeCommand {
      * Register the /dispose and /trash commands.
      */
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        if (!ConfigManager.getInstance().isCommandEnabled("dispose")) return;
+        if (ConfigManager.getInstance().isCommandEnabled("dispose")) {
         dispatcher.register(
             Commands.literal("dispose")
                 .requires(cs -> cs.getEntity() instanceof ServerPlayer)
@@ -105,7 +107,7 @@ public class DisposeCommand {
                             }
                             
                             // Log disposal confirmation for audit trail
-                            LOGGER.info("Player {} confirmed disposal of {} items", 
+                            NeoLog.info(LOGGER, LogCategory.GENERAL, "Player {} confirmed disposal of {} items", 
                                 player.getName().getString(), itemCount);
                             
                             ctx.getSource().sendSuccess(() -> MessageUtil.success("commands.neoessentials.dispose.confirmed"), false);
@@ -136,7 +138,7 @@ public class DisposeCommand {
                             }
                             
                             // Log cancellation for audit trail
-                            LOGGER.debug("Player {} cancelled disposal and restored {} items", 
+                            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Player {} cancelled disposal and restored {} items", 
                                 player.getName().getString(), itemCount);
                             
                             ctx.getSource().sendSuccess(() -> MessageUtil.success("commands.neoessentials.dispose.restored"), false);
@@ -158,11 +160,13 @@ public class DisposeCommand {
                     return 1;
                 })
         );
+        }
+        if (ConfigManager.getInstance().isCommandEnabled("trash")) {
         dispatcher.register(
             Commands.literal("trash")
                 .requires(cs -> cs.getEntity() instanceof ServerPlayer)
                 .executes(ctx -> {
-                    PermissionValidator.PermissionResult permResult = 
+                    PermissionValidator.PermissionResult permResult =
                         PermissionValidator.validatePermission(ctx.getSource(), "neoessentials.item.dispose");
                     if (!permResult.hasPermission()) {
                         ctx.getSource().sendFailure(MessageUtil.error(permResult.getErrorMessage()));
@@ -173,6 +177,7 @@ public class DisposeCommand {
                     return 1;
                 })
         );
+        }
     }
 
     /**

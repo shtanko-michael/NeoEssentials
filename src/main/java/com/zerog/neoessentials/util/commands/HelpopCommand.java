@@ -6,6 +6,7 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.core.BlockPos;
@@ -30,10 +31,10 @@ public class HelpopCommand {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         if (!ConfigManager.getInstance().isCommandEnabled("helpop")) return;
         
-        // Register main command and aliases
+        // Register main command and aliases matching the registry entries
         registerHelpopCommand(dispatcher, "helpop");
-        registerHelpopCommand(dispatcher, "adminhelp");
-        registerHelpopCommand(dispatcher, "request");
+        registerHelpopCommand(dispatcher, "ac");    // admin chat alias
+        registerHelpopCommand(dispatcher, "amsg");  // admin message alias
     }
     
     private static void registerHelpopCommand(CommandDispatcher<CommandSourceStack> dispatcher, String commandName) {
@@ -50,7 +51,14 @@ public class HelpopCommand {
                             ctx.getSource().sendFailure(MessageUtil.error(permResult.getErrorMessage()));
                             return 0;
                         }
-                        
+
+                        // Unlike main chat/mail/msg/reply, /helpop had no mute check at all — a
+                        // muted player could still broadcast messages to every online staff member.
+                        if (com.zerog.neoessentials.chat.MuteManager.isMuted(player)) {
+                            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.helpop.muted"));
+                            return 0;
+                        }
+
                         String message = StringArgumentType.getString(ctx, "message");
                         
                         return sendHelpRequest(player, message);
@@ -126,9 +134,9 @@ public class HelpopCommand {
             
             locationComponent = Component.literal("§e" + location)
                 .withStyle(style -> style
-                    .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, tpCommand))
-                    .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
-                        Component.literal(MessageUtil.localize("commands.neoessentials.helpop.hover_teleport", playerName))))
+                    .withClickEvent(com.zerog.neoessentials.util.ClickEventCompat.create(ClickEvent.Action.SUGGEST_COMMAND, tpCommand))
+                    .withHoverEvent(com.zerog.neoessentials.util.HoverEventCompat.create(HoverEvent.Action.SHOW_TEXT,
+                        MessageUtil.component("commands.neoessentials.helpop.tp_hover", playerName)))
                 );
         } else {
             locationComponent = Component.literal("§e" + location);
@@ -136,22 +144,49 @@ public class HelpopCommand {
         
         // Create message component
         Component messageComponent = Component.literal("§f" + message);
-        
+
         // Create reply component with click-to-reply
         String replyCommand = "/msg " + playerName + " ";
-        Component replyComponent = Component.literal(MessageUtil.localize("commands.neoessentials.helpop.reply_button"))
+        Component replyComponent = ((MutableComponent) MessageUtil.component("commands.neoessentials.helpop.reply_button"))
             .withStyle(style -> style
-                .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, replyCommand))
-                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
-                    Component.literal(MessageUtil.localize("commands.neoessentials.helpop.hover_reply", playerName))))
+                .withClickEvent(com.zerog.neoessentials.util.ClickEventCompat.create(ClickEvent.Action.SUGGEST_COMMAND, replyCommand))
+                .withHoverEvent(com.zerog.neoessentials.util.HoverEventCompat.create(HoverEvent.Action.SHOW_TEXT,
+                    MessageUtil.component("commands.neoessentials.helpop.reply_hover", playerName)))
             );
-        
+
+        // Build the actions line: [Reply] plus optional teleport shortcuts, gated by
+        // the same permission nodes /tpo and /tpohere themselves require.
+        net.minecraft.network.chat.MutableComponent actionsLine = Component.literal(MessageUtil.localize("commands.neoessentials.helpop.actions"))
+            .append(replyComponent);
+
+        if (PermissionValidator.validatePermission(staff.createCommandSourceStack(), "neoessentials.teleport.admin.tp").hasPermission()) {
+            String tpToThemCommand = "/tp " + playerName;
+            Component tpToThemComponent = ((MutableComponent) MessageUtil.component("commands.neoessentials.helpop.tp_them_button"))
+                .withStyle(style -> style
+                    .withClickEvent(com.zerog.neoessentials.util.ClickEventCompat.create(ClickEvent.Action.RUN_COMMAND, tpToThemCommand))
+                    .withHoverEvent(com.zerog.neoessentials.util.HoverEventCompat.create(HoverEvent.Action.SHOW_TEXT,
+                        MessageUtil.component("commands.neoessentials.helpop.tp_hover", playerName)))
+                );
+            actionsLine.append(tpToThemComponent);
+        }
+
+        if (PermissionValidator.validatePermission(staff.createCommandSourceStack(), "neoessentials.teleport.admin.tphere").hasPermission()) {
+            String tpToMeCommand = "/tphere " + playerName;
+            Component tpToMeComponent = ((MutableComponent) MessageUtil.component("commands.neoessentials.helpop.tp_me_button"))
+                .withStyle(style -> style
+                    .withClickEvent(com.zerog.neoessentials.util.ClickEventCompat.create(ClickEvent.Action.RUN_COMMAND, tpToMeCommand))
+                    .withHoverEvent(com.zerog.neoessentials.util.HoverEventCompat.create(HoverEvent.Action.SHOW_TEXT,
+                        MessageUtil.component("commands.neoessentials.helpop.tp_me_hover", playerName)))
+                );
+            actionsLine.append(tpToMeComponent);
+        }
+
         // Send all components to staff member
         staff.sendSystemMessage(MessageUtil.component("commands.neoessentials.helpop.header"));
         staff.sendSystemMessage(header);
         staff.sendSystemMessage(Component.literal(MessageUtil.localize("commands.neoessentials.helpop.location")).append(locationComponent));
         staff.sendSystemMessage(Component.literal(MessageUtil.localize("commands.neoessentials.helpop.message")).append(messageComponent));
-        staff.sendSystemMessage(Component.literal(MessageUtil.localize("commands.neoessentials.helpop.actions")).append(replyComponent));
+        staff.sendSystemMessage(actionsLine);
         staff.sendSystemMessage(MessageUtil.component("commands.neoessentials.helpop.footer"));
     }
 }

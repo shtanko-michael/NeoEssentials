@@ -2,12 +2,12 @@ package com.zerog.neoessentials.vault.command;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.zerog.neoessentials.util.MessageUtil;
 import com.zerog.neoessentials.vault.api.VaultEconomy;
 import com.zerog.neoessentials.vault.api.VaultServiceRegistry;
 import com.zerog.neoessentials.util.MessageUtil;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
-import net.minecraft.network.chat.Component;
 
 import java.util.Collection;
 import java.util.Optional;
@@ -25,6 +25,13 @@ import java.util.Optional;
 public class VaultCommand {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
+        if (!com.zerog.neoessentials.config.ConfigManager.isVaultModuleEnabled()) {
+            return;
+        }
+        if (!com.zerog.neoessentials.config.ConfigManager.getInstance().isCommandEnabled("vault")) {
+            return;
+        }
+
         dispatcher.register(Commands.literal("vault")
             .requires(src -> src.hasPermission(3) ||
                 com.zerog.neoessentials.api.permissions.PermissionAPI.hasPermission(
@@ -34,7 +41,13 @@ public class VaultCommand {
                 .executes(ctx -> executeInfo(ctx.getSource())))
             .then(Commands.literal("convert")
                 .then(Commands.argument("from", StringArgumentType.word())
+                    .suggests((ctx, b) -> net.minecraft.commands.SharedSuggestionProvider.suggest(
+                        VaultServiceRegistry.getInstance().getEconomyProviders().stream()
+                            .map(r -> r.provider.getName().replace(" ", "")), b))
                     .then(Commands.argument("to", StringArgumentType.word())
+                        .suggests((ctx, b) -> net.minecraft.commands.SharedSuggestionProvider.suggest(
+                            VaultServiceRegistry.getInstance().getEconomyProviders().stream()
+                                .map(r -> r.provider.getName().replace(" ", "")), b))
                         .executes(ctx -> executeConvert(
                             ctx.getSource(),
                             StringArgumentType.getString(ctx, "from"),
@@ -48,32 +61,29 @@ public class VaultCommand {
     private static int executeInfo(CommandSourceStack src) {
         VaultServiceRegistry reg = VaultServiceRegistry.getInstance();
 
-        src.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.vault.info_header")), false);
+        src.sendSuccess(() -> MessageUtil.component("commands.neoessentials.vault.header"), false);
 
         // Economy
         String econList = buildProviderList(reg.getEconomyProviders(),
             r -> r.provider.getName() + " [" + r.registeredBy + "]");
         Optional<VaultEconomy> eco = reg.getEconomy();
-        src.sendSuccess(() -> Component.literal(MessageUtil.localize(
-            "commands.neoessentials.vault.info_economy",
-            eco.map(VaultEconomy::getName).orElse("§cnone"),
-            econList.isEmpty() ? "none" : econList)), false);
+        final String econName = eco.map(VaultEconomy::getName).orElse("§cnone");
+        final String econAll = econList.isEmpty() ? "none" : econList;
+        src.sendSuccess(() -> MessageUtil.component("commands.neoessentials.vault.economy_line", econName, econAll), false);
 
         // Permission
         String permList = buildProviderList(reg.getPermissionProviders(),
             r -> r.provider.getName() + " [" + r.registeredBy + "]");
-        src.sendSuccess(() -> Component.literal(MessageUtil.localize(
-            "commands.neoessentials.vault.info_permission",
-            reg.getPermission().map(p -> p.getName()).orElse("§cnone"),
-            permList.isEmpty() ? "none" : permList)), false);
+        final String permName = reg.getPermission().map(p -> p.getName()).orElse("§cnone");
+        final String permAll = permList.isEmpty() ? "none" : permList;
+        src.sendSuccess(() -> MessageUtil.component("commands.neoessentials.vault.permission_line", permName, permAll), false);
 
         // Chat
         String chatList = buildProviderList(reg.getChatProviders(),
             r -> r.provider.getName() + " [" + r.registeredBy + "]");
-        src.sendSuccess(() -> Component.literal(MessageUtil.localize(
-            "commands.neoessentials.vault.info_chat",
-            reg.getChat().map(c -> c.getName()).orElse("§cnone"),
-            chatList.isEmpty() ? "none" : chatList)), false);
+        final String chatName = reg.getChat().map(c -> c.getName()).orElse("§cnone");
+        final String chatAll = chatList.isEmpty() ? "none" : chatList;
+        src.sendSuccess(() -> MessageUtil.component("commands.neoessentials.vault.chat_line", chatName, chatAll), false);
 
         return 1;
     }
@@ -84,7 +94,7 @@ public class VaultCommand {
         var providers = VaultServiceRegistry.getInstance().getEconomyProviders();
 
         if (providers.size() < 2) {
-            src.sendFailure(Component.literal(MessageUtil.localize("commands.neoessentials.vault.convert_need_two")));
+            src.sendFailure(MessageUtil.component("commands.neoessentials.vault.convert_need_two"));
             return 0;
         }
 
@@ -99,19 +109,21 @@ public class VaultCommand {
         }
 
         if (from == null) {
-            src.sendFailure(Component.literal(MessageUtil.localize("commands.neoessentials.vault.convert_from_not_found", fromName, nameList)));
+            final String fFromName = fromName, fNameList = nameList.toString();
+            src.sendFailure(MessageUtil.component("commands.neoessentials.vault.convert_economy_not_found", fFromName, fNameList));
             return 0;
         }
         if (to == null) {
-            src.sendFailure(Component.literal(MessageUtil.localize("commands.neoessentials.vault.convert_to_not_found", toName, nameList)));
+            final String fToName = toName, fNameList = nameList.toString();
+            src.sendFailure(MessageUtil.component("commands.neoessentials.vault.convert_economy_not_found", fToName, fNameList));
             return 0;
         }
 
         final VaultEconomy fromFinal = from;
         final VaultEconomy toFinal   = to;
 
-        src.sendSuccess(() -> Component.literal(MessageUtil.localize(
-            "commands.neoessentials.vault.convert_start", fromFinal.getName(), toFinal.getName())), false);
+        src.sendSuccess(() -> MessageUtil.component("commands.neoessentials.vault.convert_progress",
+            fromFinal.getName(), toFinal.getName()), false);
 
         // Run on server thread — no offline player scanning needed in NeoForge
         // We iterate all known accounts from the economy
@@ -131,13 +143,13 @@ public class VaultCommand {
                 }
             }
         } catch (Exception e) {
-            src.sendFailure(Component.literal(MessageUtil.localize("commands.neoessentials.vault.convert_failed", e.getMessage())));
+            final String errMsg = e.getMessage();
+            src.sendFailure(MessageUtil.component("commands.neoessentials.vault.convert_failed", errMsg));
             return 0;
         }
 
         final int converted = count[0];
-        src.sendSuccess(() -> Component.literal(MessageUtil.localize(
-            "commands.neoessentials.vault.convert_complete", converted)), false);
+        src.sendSuccess(() -> MessageUtil.component("commands.neoessentials.vault.convert_complete", converted), false);
         return 1;
     }
 

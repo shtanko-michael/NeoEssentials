@@ -29,17 +29,22 @@ bin/
 # gradle
 build
 .gradle
+.gradle/buildOutputCleanup
 
 # other
 eclipse
 run
 runs
 run-data
+run-26.1-port
 
 repo
 
-# build number (local builds only, GitHub Actions uses its own)
-build_number.txt
+# copyBuildNumber (build.gradle) copies the tracked root build_number.txt in here on every
+# build purely so it's bundled into the jar as a resource — this copy itself is a generated
+# artifact, not the source of truth, so it stays ignored even though the root file is tracked.
+src/main/resources/build_number.txt
+
 LANGUAGE_AUDIT_INDEX.txt
 language_keys_audit.txt
 language_keys_comprehensive_audit.txt
@@ -59,3 +64,13 @@ fix_todo_translations.py
 docs/DASHBOARD_TODO_IMPLEMENTATION.md
 docs/DASHBOARD_V2_REDESIGN.md
 Issues_Discovered.md
+
+*.zip
+/build/
+/dist/
+
+# webdashboard-ui/ — the bundled internal dashboard's frontend source (see build.gradle's
+# buildDashboardUI/copyDashboardUI tasks). Its own build output isn't committed either;
+# Gradle builds it fresh into build/generated/dashboardUiResources/ every time.
+webdashboard-ui/node_modules/
+webdashboard-ui/dist/

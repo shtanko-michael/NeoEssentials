@@ -12,6 +12,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.entity.living.LivingChangeTargetEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
@@ -20,6 +21,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.UUID;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 
 /**
  * Event handler for moderation system integration.
@@ -47,6 +50,26 @@ public class ModerationEventHandler {
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
+
+        // Vanish on-join: restore tab-list hiding and show vanish reminder if applicable
+        try {
+            if (ConfigManager.getInstance().isVanishSystemEnabled()) {
+                VanishManager.getInstance().onPlayerJoin(player);
+            }
+        } catch (Exception e) {
+            LOGGER.error("Error handling vanish on player login", e);
+        }
+
+        // Freeze on-join: remind the player they are frozen and lock their position
+        try {
+            if (ConfigManager.isFreezeSystemEnabled()) {
+                FreezeManager.getInstance().onPlayerJoin(player);
+            }
+        } catch (Exception e) {
+            LOGGER.error("Error handling freeze on player login", e);
+        }
+
+        // Jail on-join: check expiry and teleport to jail if still jailed
         try {
             if (!JailManager.isJailSystemEnabled()) return;
             JailManager jailManager = JailManager.getInstance();
@@ -108,8 +131,11 @@ public class ModerationEventHandler {
             if (jailLevel == null) return;
 
             // Schedule 1-tick delayed teleport so respawn completes first
-            server.tell(new net.minecraft.server.TickTask(server.getTickCount() + 1, () -> {
-                if (player.isAlive()) {
+            com.zerog.neoessentials.scheduler.DelayedTaskScheduler.schedule(1, () -> {
+                // isAlive() alone doesn't catch a logout in this 1-tick window — a
+                // disconnected ServerPlayer still reports isAlive()==true, so without
+                // hasDisconnected() this would teleport/message a connection that's gone.
+                if (player.isAlive() && !player.hasDisconnected()) {
                     player.teleportTo(jailLevel,
                         jailLoc.position.getX() + 0.5,
                         jailLoc.position.getY() + 1,
@@ -117,7 +143,7 @@ public class ModerationEventHandler {
                         player.getYRot(), player.getXRot());
                     player.sendSystemMessage(MessageUtil.warning("commands.neoessentials.jail.message"));
                 }
-            }));
+            });
         } catch (Exception e) {
             LOGGER.error("Error redirecting jailed player respawn", e);
         }
@@ -150,14 +176,14 @@ public class ModerationEventHandler {
                 return;
             }
 
-            // Vanish interact check
-            if (ConfigManager.isVanishPreventInteractionEnabled()) {
+            // Vanish interact check — neoessentials.vanish.interact (or the .* wildcard) is
+            // opt-in; by default a vanished player can't interact with anything.
+            if (ConfigManager.getInstance().isVanishSystemEnabled()
+                    && ConfigManager.isVanishPreventInteractionEnabled()) {
                 VanishManager vanishManager = VanishManager.getInstance();
-                if (vanishManager.isPlayerVanished(playerId)) {
-                    String seePerm = ConfigManager.getInstance().getSeeVanishedPermission();
-                    if (!PermissionAPI.hasPermission(playerId, seePerm)) {
-                        event.setCanceled(true);
-                    }
+                if (vanishManager.isPlayerVanished(playerId)
+                        && !PermissionAPI.hasPermission(playerId, "neoessentials.vanish.interact")) {
+                    event.setCanceled(true);
                 }
             }
         } catch (Exception e) {
@@ -195,13 +221,80 @@ public class ModerationEventHandler {
     public static void onLivingAttack(LivingDamageEvent.Pre event) {
         if (!(event.getSource().getEntity() instanceof ServerPlayer attacker)) return;
         try {
-            if (!JailManager.isJailSystemEnabled()) return;
-            if (JailManager.getInstance().isPlayerJailed(attacker.getUUID())
+            if (JailManager.isJailSystemEnabled()
+                    && JailManager.getInstance().isPlayerJailed(attacker.getUUID())
                     && !PermissionAPI.hasPermission(attacker.getUUID(), "neoessentials.jail.allow-attack")) {
+                event.setNewDamage(0f);
+                return;
+            }
+            // FreezeManager.canPlayerAttack() existed but was never actually called anywhere —
+            // a frozen player could still attack and damage other players.
+            if (!FreezeManager.getInstance().canPlayerAttack(attacker)) {
+                event.setNewDamage(0f);
+                return;
+            }
+            // Vanished players hitting other players (mobs are unaffected — vanish is about not
+            // revealing yourself to other players, not a general combat lock) previously had no
+            // restriction at all. neoessentials.vanish.hurt is opt-in, same pattern as
+            // .interact/.build below; neoessentials.vanish.* wildcard covers all three.
+            if (ConfigManager.getInstance().isVanishSystemEnabled()
+                    && event.getEntity() instanceof ServerPlayer
+                    && VanishManager.getInstance().isPlayerVanished(attacker.getUUID())
+                    && !PermissionAPI.hasPermission(attacker.getUUID(), "neoessentials.vanish.hurt")) {
                 event.setNewDamage(0f);
             }
         } catch (Exception e) {
-            LOGGER.error("Error handling attack for jailed player", e);
+            LOGGER.error("Error handling attack for jailed/frozen player", e);
+        }
+    }
+
+    // ── Mob Targeting ─────────────────────────────────────────────────────────
+    /**
+     * Vanish previously only hid a player from other PLAYERS' clients — hostile mobs could
+     * still notice, target, and attack a vanished player normally, since vanilla's targeting AI
+     * has nothing to do with the packet-level hide/show this mod does. Cancelling here stops
+     * any mob from newly acquiring a vanished player as its target; existing targets acquired
+     * before vanishing are cleared separately in {@link VanishManager#vanishPlayer}.
+     */
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    public static void onMobChangeTarget(LivingChangeTargetEvent event) {
+        try {
+            if (!ConfigManager.getInstance().isVanishSystemEnabled()) return;
+            if (event.getNewAboutToBeSetTarget() instanceof ServerPlayer target
+                    && VanishManager.getInstance().isPlayerVanished(target.getUUID())) {
+                event.setCanceled(true);
+            }
+        } catch (Exception e) {
+            LOGGER.error("Error handling mob target change for vanished player", e);
+        }
+    }
+
+    // ── Item Pickup / Drop ────────────────────────────────────────────────────
+    /**
+     * FreezeManager.canPlayerPickupItems()/canPlayerDropItems() existed but were never
+     * actually called anywhere — a frozen player could still pick up and drop items freely.
+     */
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public static void onItemPickup(net.neoforged.neoforge.event.entity.player.ItemEntityPickupEvent.Pre event) {
+        if (!(event.getPlayer() instanceof ServerPlayer player)) return;
+        try {
+            if (!FreezeManager.getInstance().canPlayerPickupItems(player)) {
+                event.setCanPickup(net.neoforged.neoforge.common.util.TriState.FALSE);
+            }
+        } catch (Exception e) {
+            LOGGER.error("Error handling item pickup for frozen player", e);
+        }
+    }
+
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public static void onItemToss(net.neoforged.neoforge.event.entity.item.ItemTossEvent event) {
+        if (!(event.getPlayer() instanceof ServerPlayer player)) return;
+        try {
+            if (!FreezeManager.getInstance().canPlayerDropItems(player)) {
+                event.setCanceled(true);
+            }
+        } catch (Exception e) {
+            LOGGER.error("Error handling item drop for frozen player", e);
         }
     }
 
@@ -225,13 +318,26 @@ public class ModerationEventHandler {
                 return;
             }
 
-            if (ConfigManager.isVanishPreventInteractionEnabled()) {
+            // Region-wide protection: a jail cell's blocks can't be broken by ANYONE, jailed or
+            // not — the check above only stops the JAILED occupant, so someone standing outside
+            // the cell (or a jailed player targeting the cell from a neighboring one) could
+            // still dig into it. neoessentials.jail.bypass exempts staff doing maintenance.
+            if (JailManager.isJailSystemEnabled()
+                    && !PermissionAPI.hasPermission(playerId, "neoessentials.jail.bypass")
+                    && JailManager.getInstance().isInsideAnyJail(event.getPos(),
+                        player.level().dimension().location().toString())) {
+                event.setCanceled(true);
+                return;
+            }
+
+            // neoessentials.vanish.build (or .* wildcard) is opt-in; by default a vanished
+            // player can't break blocks either.
+            if (ConfigManager.getInstance().isVanishSystemEnabled()
+                    && ConfigManager.isVanishPreventInteractionEnabled()) {
                 VanishManager vanishManager = VanishManager.getInstance();
-                if (vanishManager.isPlayerVanished(playerId)) {
-                    String seePerm = ConfigManager.getInstance().getSeeVanishedPermission();
-                    if (!PermissionAPI.hasPermission(playerId, seePerm)) {
-                        event.setCanceled(true);
-                    }
+                if (vanishManager.isPlayerVanished(playerId)
+                        && !PermissionAPI.hasPermission(playerId, "neoessentials.vanish.build")) {
+                    event.setCanceled(true);
                 }
             }
         } catch (Exception e) {
@@ -258,13 +364,23 @@ public class ModerationEventHandler {
                 return;
             }
 
-            if (ConfigManager.isVanishPreventInteractionEnabled()) {
+            // Region-wide protection — see matching comment in onBlockBreak above.
+            if (JailManager.isJailSystemEnabled()
+                    && !PermissionAPI.hasPermission(playerId, "neoessentials.jail.bypass")
+                    && JailManager.getInstance().isInsideAnyJail(event.getPos(),
+                        player.level().dimension().location().toString())) {
+                event.setCanceled(true);
+                return;
+            }
+
+            // neoessentials.vanish.build (or .* wildcard) is opt-in; by default a vanished
+            // player can't place blocks either.
+            if (ConfigManager.getInstance().isVanishSystemEnabled()
+                    && ConfigManager.isVanishPreventInteractionEnabled()) {
                 VanishManager vanishManager = VanishManager.getInstance();
-                if (vanishManager.isPlayerVanished(playerId)) {
-                    String seePerm = ConfigManager.getInstance().getSeeVanishedPermission();
-                    if (!PermissionAPI.hasPermission(playerId, seePerm)) {
-                        event.setCanceled(true);
-                    }
+                if (vanishManager.isPlayerVanished(playerId)
+                        && !PermissionAPI.hasPermission(playerId, "neoessentials.vanish.build")) {
+                    event.setCanceled(true);
                 }
             }
         } catch (Exception e) {
@@ -285,6 +401,22 @@ public class ModerationEventHandler {
         if (++tickCounter < 20) return;
         tickCounter = 0;
 
+        // ── Freeze enforcement ────────────────────────────────────────────────
+        // Must run independently of jail so it works even when jail is disabled.
+        if (ConfigManager.isFreezeSystemEnabled()) {
+            FreezeManager freezeManager = FreezeManager.getInstance();
+            for (ServerPlayer player : event.getServer().getPlayerList().getPlayers()) {
+                try {
+                    if (freezeManager.isPlayerFrozen(player.getUUID())) {
+                        freezeManager.enforceFreezePosition(player);
+                    }
+                } catch (Exception e) {
+                    LOGGER.error("Error enforcing freeze for player {}", player.getName().getString(), e);
+                }
+            }
+        }
+
+        // ── Jail enforcement ──────────────────────────────────────────────────
         if (!JailManager.isJailSystemEnabled()) return;
         JailManager jailManager = JailManager.getInstance();
 
@@ -341,7 +473,7 @@ public class ModerationEventHandler {
                 player.getYRot(), player.getXRot());
 
             player.sendSystemMessage(MessageUtil.warning("commands.neoessentials.jail.escape_prevented"));
-            LOGGER.debug("Jailed player {} redirected back to jail ({}).", player.getName().getString(), reason);
+            NeoLog.debug(LOGGER, LogCategory.MODERATION, "Jailed player {} redirected back to jail ({}).", player.getName().getString(), reason);
         } catch (Exception e) {
             LOGGER.error("Error redirecting jailed player", e);
         }

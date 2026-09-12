@@ -3,6 +3,8 @@ package com.zerog.neoessentials.teleportation.DirectTeleport;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.zerog.neoessentials.config.ConfigManager;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import com.zerog.neoessentials.teleportation.TeleportLocation;
 import com.zerog.neoessentials.teleportation.TeleportUtil;
 import com.zerog.neoessentials.util.MessageUtil;
@@ -11,6 +13,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
@@ -65,6 +68,8 @@ public class RandomTeleportManager {
      * Returns a future that completes with true on success.
      */
     public CompletableFuture<Boolean> randomTeleport(ServerPlayer player, String locationName) {
+        NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "randomTeleport request: player={} locationName={}",
+            player.getName().getString(), locationName);
         // Cooldown check
         int cooldownSecs = getTprCooldown();
         if (cooldownSecs > 0) {
@@ -72,6 +77,7 @@ public class RandomTeleportManager {
             long remaining = (last + cooldownSecs * 1000L) - System.currentTimeMillis();
             if (remaining > 0) {
                 long secs = (remaining / 1000) + 1;
+                NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "randomTeleport: {} blocked by cooldown, {}s remaining", player.getName().getString(), secs);
                 player.sendSystemMessage(MessageUtil.error(
                         "commands.neoessentials.teleport.misc.tpr_cooldown",
                         String.valueOf(secs)));
@@ -83,9 +89,11 @@ public class RandomTeleportManager {
         player.sendSystemMessage(MessageUtil.info("commands.neoessentials.teleport.misc.tpr_searching"));
 
         CompletableFuture<Boolean> result = new CompletableFuture<>();
-        getRandomLocation(player.serverLevel(), name)
+        getRandomLocation(com.zerog.neoessentials.util.LevelCompat.of(player), name)
                 .thenAccept(loc -> {
                     if (loc == null) {
+                        NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "randomTeleport: no safe location found for {} (location={})",
+                            player.getName().getString(), name);
                         player.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.misc.tpr_no_safe_location"));
                         result.complete(false);
                         return;
@@ -95,7 +103,15 @@ public class RandomTeleportManager {
                     com.zerog.neoessentials.teleportation.Misc.MiscTeleportManager.getInstance()
                             .saveBackLocation(player);
 
-                    int delayTicks = getTeleportDelaySecs() * 20;
+                    int delaySecs = getTeleportDelaySecs();
+                    if (delaySecs > 0) {
+                        // Neither this warmup nor its move-to-cancel behavior was ever
+                        // announced — players had no visible indication /tpr could be
+                        // cancelled at all, reported as "no way of escaping it".
+                        player.sendSystemMessage(MessageUtil.info(
+                                "commands.neoessentials.teleport.misc.tpr_warmup", String.valueOf(delaySecs)));
+                    }
+                    int delayTicks = delaySecs * 20;
                     TeleportUtil.teleportPlayer(player, loc, delayTicks, false /* we already ensured safety */)
                             .thenAccept(tpResult -> {
                                 if (tpResult.isSuccess()) {
@@ -105,14 +121,14 @@ public class RandomTeleportManager {
                                             String.valueOf((int) loc.getX()),
                                             String.valueOf((int) loc.getY()),
                                             String.valueOf((int) loc.getZ())));
-                                    LOGGER.info("Player {} randomly teleported to ({}, {}, {}) in {}",
+                                    NeoLog.info(LOGGER, LogCategory.TELEPORTATION, "Player {} randomly teleported to ({}, {}, {}) in {}",
                                             player.getName().getString(),
                                             (int) loc.getX(), (int) loc.getY(), (int) loc.getZ(),
                                             loc.getWorldName());
                                     result.complete(true);
 
                                     // Pre-warm cache in background
-                                    prewarmCache(player.serverLevel(), name);
+                                    prewarmCache(com.zerog.neoessentials.util.LevelCompat.of(player), name);
                                 } else {
                                     player.sendSystemMessage(MessageUtil.error(
                                             "commands.neoessentials.teleport.misc.tpr_failed",
@@ -129,6 +145,121 @@ public class RandomTeleportManager {
                 });
 
         return result;
+    }
+
+    /**
+     * Biome-targeted variant of {@link #randomTeleport} — used by the RTP GUI (see
+     * {@code RandomTeleportMenu}) when a player picks a specific biome instead of "any". Same
+     * cooldown/back-location/teleport-delay handling as the plain path; only the search step
+     * differs — it uses vanilla's own {@code ServerLevel.findClosestBiome3d} (the same engine
+     * {@code /locate biome} uses) instead of an unconstrained random offset.
+     */
+    public CompletableFuture<Boolean> randomTeleportToBiome(ServerPlayer player, ResourceKey<Biome> biomeKey) {
+        NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "randomTeleportToBiome request: player={} biome={}",
+            player.getName().getString(), biomeKey.location());
+
+        int cooldownSecs = getTprCooldown();
+        if (cooldownSecs > 0) {
+            long last = cooldowns.getOrDefault(player.getUUID(), 0L);
+            long remaining = (last + cooldownSecs * 1000L) - System.currentTimeMillis();
+            if (remaining > 0) {
+                long secs = (remaining / 1000) + 1;
+                player.sendSystemMessage(MessageUtil.error(
+                        "commands.neoessentials.teleport.misc.tpr_cooldown", String.valueOf(secs)));
+                return CompletableFuture.completedFuture(false);
+            }
+        }
+
+        ServerLevel level = com.zerog.neoessentials.util.LevelCompat.of(player);
+        String name = resolveDefaultName(player);
+        player.sendSystemMessage(MessageUtil.info("commands.neoessentials.teleport.misc.tpr_searching"));
+
+        CompletableFuture<Boolean> result = new CompletableFuture<>();
+        CompletableFuture.supplyAsync(() -> findBiomeSafeLocation(level, name, biomeKey), level.getServer())
+                .thenAccept(loc -> {
+                    if (loc == null) {
+                        player.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.misc.tpr_biome_not_found"));
+                        result.complete(false);
+                        return;
+                    }
+
+                    com.zerog.neoessentials.teleportation.Misc.MiscTeleportManager.getInstance().saveBackLocation(player);
+
+                    int delaySecs = getTeleportDelaySecs();
+                    if (delaySecs > 0) {
+                        // Neither this warmup nor its move-to-cancel behavior was ever
+                        // announced — players had no visible indication /tpr could be
+                        // cancelled at all, reported as "no way of escaping it".
+                        player.sendSystemMessage(MessageUtil.info(
+                                "commands.neoessentials.teleport.misc.tpr_warmup", String.valueOf(delaySecs)));
+                    }
+                    int delayTicks = delaySecs * 20;
+                    TeleportUtil.teleportPlayer(player, loc, delayTicks, false)
+                            .thenAccept(tpResult -> {
+                                if (tpResult.isSuccess()) {
+                                    cooldowns.put(player.getUUID(), System.currentTimeMillis());
+                                    player.sendSystemMessage(MessageUtil.success(
+                                            "commands.neoessentials.teleport.misc.tpr_success",
+                                            String.valueOf((int) loc.getX()),
+                                            String.valueOf((int) loc.getY()),
+                                            String.valueOf((int) loc.getZ())));
+                                    NeoLog.info(LOGGER, LogCategory.TELEPORTATION, "Player {} randomly teleported into biome {} at ({}, {}, {})",
+                                            player.getName().getString(), biomeKey.location(),
+                                            (int) loc.getX(), (int) loc.getY(), (int) loc.getZ());
+                                    result.complete(true);
+                                } else {
+                                    player.sendSystemMessage(MessageUtil.error(
+                                            "commands.neoessentials.teleport.misc.tpr_failed", tpResult.getMessage()));
+                                    result.complete(false);
+                                }
+                            });
+                })
+                .exceptionally(ex -> {
+                    LOGGER.error("randomTeleportToBiome error for {}: {}", player.getName().getString(), ex.getMessage(), ex);
+                    player.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.misc.tpr_failed", ex.getMessage()));
+                    result.complete(false);
+                    return null;
+                });
+
+        return result;
+    }
+
+    /** Runs on the server thread (chunk/biome sampling requires it) — same jittered-center
+     *  approach as {@link #attemptFind}, but each attempt searches for the target biome via
+     *  vanilla's own biome-search engine instead of accepting whatever biome it lands on. */
+    private TeleportLocation findBiomeSafeLocation(ServerLevel level, String name, ResourceKey<Biome> biomeKey) {
+        double[] center = getCenter(level, name);
+        double minRange = getMinRange(name);
+        double maxRange = getMaxRange(level, name);
+        int attempts = getFindAttempts();
+        int radius = getBiomeSearchRadius();
+        int step = getBiomeSearchStep();
+
+        for (int i = 0; i < attempts; i++) {
+            double[] offset = randomOffset(minRange, maxRange);
+            double cx = clampToWorldBorder(level, center[0] + offset[0], true);
+            double cz = clampToWorldBorder(level, center[2] + offset[1], false);
+            BlockPos searchOrigin = new BlockPos((int) cx, (int) center[1], (int) cz);
+
+            var pair = level.findClosestBiome3d(holder -> holder.is(biomeKey), searchOrigin, radius, step, 64);
+            if (pair == null) continue;
+
+            BlockPos found = pair.getFirst();
+            if (!level.getWorldBorder().isWithinBounds(found)) continue;
+
+            TeleportLocation loc = findSafeY(level, found.getX(), found.getZ(), name);
+            if (loc != null) return loc;
+        }
+        return null;
+    }
+
+    /** Every biome the current dimension's generator can actually produce — used by the RTP
+     *  GUI to build its biome list (already correctly scoped per-dimension, and includes any
+     *  biome a mod registers into that dimension's generation, no extra plumbing needed). */
+    public List<net.minecraft.core.Holder<Biome>> getPossibleBiomes(ServerLevel level) {
+        return level.getChunkSource().getGenerator().getBiomeSource().possibleBiomes().stream()
+                .sorted(Comparator.comparing(h -> h.unwrapKey().map(k -> k.location().toString()).orElse("")))
+                .toList();
     }
 
     // -----------------------------------------------------------------------
@@ -218,7 +349,7 @@ public class RandomTeleportManager {
                         ix, iz);
             }
 
-            if (y <= level.getMinBuildHeight()) {
+            if (y <= com.zerog.neoessentials.util.LevelHeightCompat.minBuildHeight(level)) {
                 return null;
             }
 
@@ -243,7 +374,7 @@ public class RandomTeleportManager {
                     "RandomTeleport");
 
         } catch (Exception e) {
-            LOGGER.debug("findSafeY error at ({},{}): {}", x, z, e.getMessage());
+            NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "findSafeY error at ({},{}): {}", x, z, e.getMessage());
             return null;
         }
     }
@@ -252,7 +383,7 @@ public class RandomTeleportManager {
      * Nether Y scan: scan up from y=32 to find an air gap below the bedrock ceiling.
      */
     private int findNetherY(ServerLevel level, int x, int z) {
-        int maxScan = level.getMaxBuildHeight() - 1;
+        int maxScan = com.zerog.neoessentials.util.LevelHeightCompat.maxBuildHeight(level) - 1;
         for (int y = 32; y < maxScan; y++) {
             BlockPos pos = new BlockPos(x, y, z);
             BlockState state = level.getBlockState(pos);
@@ -331,7 +462,7 @@ public class RandomTeleportManager {
     private boolean isValid(TeleportLocation loc, String locationName) {
         ServerLevel level = loc.getLevel();
         if (level == null) return false;
-        if (loc.getY() <= level.getMinBuildHeight()) return false;
+        if (loc.getY() <= com.zerog.neoessentials.util.LevelHeightCompat.minBuildHeight(level)) return false;
 
         // Excluded biomes check
         if (locationName != null) {
@@ -354,6 +485,7 @@ public class RandomTeleportManager {
                     .map(key -> key.location().toString())
                     .orElse(null);
         } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "getBiomeName failed at {}: {}", pos, e.getMessage());
             return null;
         }
     }
@@ -366,12 +498,22 @@ public class RandomTeleportManager {
         return locationCache.computeIfAbsent(name, k -> new ConcurrentLinkedQueue<>());
     }
 
+    /**
+     * Each fill attempt force-generates a full chunk on the main thread if the candidate
+     * spot isn't already loaded (there's no cheap way to check "generated but not currently
+     * loaded" — {@code ServerLevel.hasChunk}/{@code getChunkNow} only see chunks with an
+     * active in-memory ticket, not on-disk chunks near-nobody). Firing every missing slot
+     * (up to {@code cacheThreshold}, e.g. 10) as one burst right after a successful RTP was
+     * causing a second lag spike stacked directly after the teleport's own chunk-load cost —
+     * capping how many NEW fills one call kicks off spreads that cost across the next several
+     * {@code /tpr} calls instead of paying it all at once.
+     */
     private void prewarmCache(ServerLevel level, String name) {
         int threshold = getCacheThreshold();
         int current = getCache(name).size();
         if (current >= threshold) return;
 
-        int toFill = threshold - current;
+        int toFill = Math.min(threshold - current, getPrewarmBatchSize());
         double[] center = getCenter(level, name);
         double minRange = getMinRange(name);
         double maxRange = getMaxRange(level, name);
@@ -462,8 +604,27 @@ public class RandomTeleportManager {
         return (int) getConfigDouble("cacheThreshold", 10);
     }
 
+    private int getPrewarmBatchSize() {
+        return Math.max(1, (int) getConfigDouble("prewarmBatchSize", 2));
+    }
+
     private int getTprCooldown() {
         return (int) getConfigDouble("cooldown", 60);
+    }
+
+    /** Whether bare {@code /rtp} (no explicit location argument) should open the biome-select
+     *  GUI instead of instantly teleporting — off ("command") by default, byte-for-byte the
+     *  original behavior. */
+    public boolean isGuiMode() {
+        return "gui".equalsIgnoreCase(getConfigString("mode", "command"));
+    }
+
+    private int getBiomeSearchRadius() {
+        return (int) getConfigDouble("biomeSearchRadius", 6400);
+    }
+
+    private int getBiomeSearchStep() {
+        return (int) getConfigDouble("biomeSearchStep", 32);
     }
 
     private int getTeleportDelaySecs() {
@@ -476,7 +637,10 @@ public class RandomTeleportManager {
                     if (gs.has("teleportDelay")) return gs.get("teleportDelay").getAsInt();
                 }
             }
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, com.zerog.neoessentials.logging.LogCategory.TELEPORTATION,
+                "Failed to read teleportation.generalSettings.teleportDelay, defaulting to 3", e);
+        }
         return 3;
     }
 
@@ -512,7 +676,10 @@ public class RandomTeleportManager {
                     return tp.getAsJsonObject("randomTeleportSettings");
                 }
             }
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, com.zerog.neoessentials.logging.LogCategory.TELEPORTATION,
+                "Failed to read teleportation.randomTeleportSettings", e);
+        }
         return null;
     }
 

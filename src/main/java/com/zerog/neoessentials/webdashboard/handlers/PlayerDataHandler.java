@@ -5,7 +5,11 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import net.minecraft.nbt.CompoundTag;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.util.Map;
 import java.util.HashMap;
@@ -21,7 +25,8 @@ import java.nio.charset.StandardCharsets;
  * Returns all player .dat NBT data as JSON keyed by UUID
  */
 public class PlayerDataHandler implements HttpHandler {
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final Logger LOGGER = LoggerFactory.getLogger(PlayerDataHandler.class);
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
 
     @Override
     public void handle(HttpExchange exchange) throws IOException {
@@ -38,6 +43,7 @@ public class PlayerDataHandler implements HttpHandler {
         }
 
         String path = exchange.getRequestURI().getPath();
+        NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "PlayerDataHandler handling request: {}", path);
         // Robust path parsing for /api/playerdata/{uuid} (handles trailing slashes)
         String[] parts = path.replaceAll("^/+|/+$", "").split("/");
         if (parts.length >= 3 && parts[0].equals("api") && parts[1].equals("playerdata")) {
@@ -69,6 +75,7 @@ public class PlayerDataHandler implements HttpHandler {
                 try {
                     tag = net.minecraft.nbt.NbtIo.readCompressed(fis, net.minecraft.nbt.NbtAccounter.create(Long.MAX_VALUE));
                 } catch (Exception e) {
+                    NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "NBT parse error for file: " + foundFile.getAbsolutePath(), e);
                     sendJsonResponse(exchange, 500, createErrorResponse("NBT parse error for file: " + foundFile.getAbsolutePath() + ", reason: " + e));
                     return;
                 }
@@ -80,6 +87,7 @@ public class PlayerDataHandler implements HttpHandler {
                     sendJsonResponse(exchange, 500, createErrorResponse("NBT tag is null for file: " + foundFile.getAbsolutePath()));
                 }
             } catch (Exception e) {
+                NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Error reading file: " + foundFile.getAbsolutePath(), e);
                 sendJsonResponse(exchange, 500, createErrorResponse("Error reading file: " + foundFile.getAbsolutePath() + ", reason: " + e));
             }
             return;
@@ -90,6 +98,7 @@ public class PlayerDataHandler implements HttpHandler {
             JsonObject response = getAllPlayerNBTData();
             sendJsonResponse(exchange, 200, response);
         } catch (Exception e) {
+            NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Internal error collecting all player NBT data", e);
             sendJsonResponse(exchange, 500, createErrorResponse("Internal error: " + e.getMessage()));
         }
     }
@@ -103,14 +112,14 @@ public class PlayerDataHandler implements HttpHandler {
                 try {
                     tag = net.minecraft.nbt.NbtIo.readCompressed(fis, net.minecraft.nbt.NbtAccounter.create(Long.MAX_VALUE));
                 } catch (Exception e) {
-                    System.err.println("[PlayerDataHandler] Failed to parse NBT for file: " + file.getName() + " - " + e);
+                    NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Failed to parse NBT for file: " + file.getName(), e);
                     return null;
                 }
                 if (tag != null) {
                     return nbtToJson(tag);
                 }
             } catch (Exception e) {
-                System.err.println("[PlayerDataHandler] Error reading file: " + file.getName() + " - " + e);
+                NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Error reading file: " + file.getName(), e);
             }
         }
         return null;
@@ -133,7 +142,7 @@ public class PlayerDataHandler implements HttpHandler {
                 }
             }
         } catch (Exception e) {
-            System.err.println("[PlayerDataHandler] Failed to load usercache.json: " + e);
+            NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Failed to load usercache.json", e);
         }
         // Load usernamecache.json
         try {
@@ -147,7 +156,7 @@ public class PlayerDataHandler implements HttpHandler {
                 }
             }
         } catch (Exception e) {
-            System.err.println("[PlayerDataHandler] Failed to load usernamecache.json: " + e);
+            NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Failed to load usernamecache.json", e);
         }
         // Scan all playerdata .dat files as before
         Set<String> allUuids = new HashSet<>(uuidToName.keySet());
@@ -168,7 +177,7 @@ public class PlayerDataHandler implements HttpHandler {
                                     try {
                                         tag = net.minecraft.nbt.NbtIo.readCompressed(fis, net.minecraft.nbt.NbtAccounter.create(Long.MAX_VALUE));
                                     } catch (Exception e) {
-                                        System.err.println("[PlayerDataHandler] Failed to parse NBT for file: " + file.getName() + " - " + e);
+                                        NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Failed to parse NBT for file: " + file.getName(), e);
                                         continue;
                                     }
                                     if (tag != null) {
@@ -176,9 +185,9 @@ public class PlayerDataHandler implements HttpHandler {
                                         playerJson.addProperty("_world", worldDir.getName());
                                         String playerName = uuidToName.getOrDefault(uuid, uuid);
                                         if (tag.contains("Name")) {
-                                            playerName = tag.getString("Name");
+                                            playerName = com.zerog.neoessentials.util.CompoundTagCompat.getString(tag, "Name");
                                         } else if (tag.contains("name")) {
-                                            playerName = tag.getString("name");
+                                            playerName = com.zerog.neoessentials.util.CompoundTagCompat.getString(tag, "name");
                                         } else if (playerJson.has("Name")) {
                                             playerName = playerJson.get("Name").getAsString();
                                         } else if (playerJson.has("name")) {
@@ -190,10 +199,10 @@ public class PlayerDataHandler implements HttpHandler {
                                         entry.add("data", playerJson);
                                         allPlayers.add(uuid, entry);
                                     } else {
-                                        System.err.println("[PlayerDataHandler] NBT tag is null for file: " + file.getName());
+                                        NeoLog.warn(LOGGER, LogCategory.WEB_DASHBOARD, "NBT tag is null for file: {}", file.getName());
                                     }
                                 } catch (Exception e) {
-                                    System.err.println("[PlayerDataHandler] Error reading file: " + file.getName() + " - " + e);
+                                    NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Error reading file: " + file.getName(), e);
                                 }
                             }
                         }
@@ -227,31 +236,32 @@ public class PlayerDataHandler implements HttpHandler {
                 int typeId = nbtValue.getId();
                 switch (typeId) {
                     case net.minecraft.nbt.Tag.TAG_INT:
-                        obj.addProperty(key, tag.getInt(key));
+                        obj.addProperty(key, com.zerog.neoessentials.util.CompoundTagCompat.getInt(tag, key));
                         break;
                     case net.minecraft.nbt.Tag.TAG_FLOAT:
-                        obj.addProperty(key, tag.getFloat(key));
+                        obj.addProperty(key, com.zerog.neoessentials.util.CompoundTagCompat.getFloat(tag, key));
                         break;
                     case net.minecraft.nbt.Tag.TAG_STRING:
-                        obj.addProperty(key, tag.getString(key));
+                        obj.addProperty(key, com.zerog.neoessentials.util.CompoundTagCompat.getString(tag, key));
                         break;
                     case net.minecraft.nbt.Tag.TAG_DOUBLE:
-                        obj.addProperty(key, tag.getDouble(key));
+                        obj.addProperty(key, com.zerog.neoessentials.util.CompoundTagCompat.getDouble(tag, key));
                         break;
                     case net.minecraft.nbt.Tag.TAG_LONG:
-                        obj.addProperty(key, tag.getLong(key));
+                        obj.addProperty(key, com.zerog.neoessentials.util.CompoundTagCompat.getLong(tag, key));
                         break;
                     case net.minecraft.nbt.Tag.TAG_BYTE:
-                        obj.addProperty(key, tag.getByte(key));
+                        obj.addProperty(key, com.zerog.neoessentials.util.CompoundTagCompat.getByte(tag, key));
                         break;
                     case net.minecraft.nbt.Tag.TAG_SHORT:
-                        obj.addProperty(key, tag.getShort(key));
+                        obj.addProperty(key, com.zerog.neoessentials.util.CompoundTagCompat.getShort(tag, key));
                         break;
                     default:
                         // Null-safe toString for NBT values
                         try {
                             obj.addProperty(key, nbtValue != null ? nbtValue.toString() : "null");
                         } catch (Exception e) {
+                            NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Could not stringify NBT value for key '{}': {}", key, e.getMessage());
                             obj.addProperty(key, "null");
                         }
                         break;

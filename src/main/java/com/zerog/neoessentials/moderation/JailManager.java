@@ -5,6 +5,8 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import com.zerog.neoessentials.util.MessageUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -19,7 +21,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -38,9 +39,10 @@ public class JailManager {
     private static boolean jailSystemEnabledCache = true;
     private static final Logger LOGGER = LoggerFactory.getLogger(JailManager.class);
     private static JailManager instance;
-    private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
-    private final File jailFile;
-    private final File jailLocationFile;
+    private final Gson gson = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
+    private static final String JAIL_COLLECTION = "jails";
+    private static final String JAIL_LOCATION_COLLECTION = "jail_locations";
+    private final com.zerog.neoessentials.storage.DataStore store;
     // Track number of times each player has been jailed
     private final Map<UUID, Integer> jailCounts = new ConcurrentHashMap<>();
     
@@ -87,21 +89,91 @@ public class JailManager {
         }
     }
     
+    /** Shape a jail cell's boundary is defined by. */
+    public enum JailShape {
+        SPHERE,
+        CUBOID
+    }
+
     public static class JailLocation {
         public String name;
+        /** Representative point — sphere center, or cuboid midpoint. Used for teleport-to-jail
+         *  and for anything (older code, external integrations) that only needs one point. */
         public BlockPos position;
         public String dimension;
         public String createdBy;
         public long createdTime;
-        
+
+        public JailShape shape = JailShape.SPHERE;
+        /** SPHERE only. */
+        public double radius = 10.0;
+        /** CUBOID only — min/max corners are normalized (min <= max on every axis) at
+         *  construction time so containment checks never need to re-sort them. */
+        public BlockPos corner1;
+        public BlockPos corner2;
+
+        /** Legacy constructor — always creates a SPHERE jail, preserving old behavior for
+         *  existing callers/save files that predate the shape system. */
         public JailLocation(String name, BlockPos position, String dimension, String createdBy) {
             this.name = name;
             this.position = position;
             this.dimension = dimension;
             this.createdBy = createdBy;
             this.createdTime = System.currentTimeMillis();
+            this.shape = JailShape.SPHERE;
+            this.radius = com.zerog.neoessentials.config.ConfigManager.getDefaultJailSphereRadius();
         }
-        
+
+        /** Explicit sphere constructor. */
+        public static JailLocation sphere(String name, BlockPos center, double radius, String dimension, String createdBy) {
+            JailLocation loc = new JailLocation(name, center, dimension, createdBy);
+            loc.shape = JailShape.SPHERE;
+            loc.radius = radius;
+            return loc;
+        }
+
+        /** Explicit cuboid constructor — corners are normalized so corner1 is always the min
+         *  and corner2 is always the max on every axis. */
+        public static JailLocation cuboid(String name, BlockPos posA, BlockPos posB, String dimension, String createdBy) {
+            BlockPos min = new BlockPos(
+                Math.min(posA.getX(), posB.getX()),
+                Math.min(posA.getY(), posB.getY()),
+                Math.min(posA.getZ(), posB.getZ()));
+            BlockPos max = new BlockPos(
+                Math.max(posA.getX(), posB.getX()),
+                Math.max(posA.getY(), posB.getY()),
+                Math.max(posA.getZ(), posB.getZ()));
+            BlockPos center = new BlockPos(
+                (min.getX() + max.getX()) / 2,
+                (min.getY() + max.getY()) / 2,
+                (min.getZ() + max.getZ()) / 2);
+            JailLocation loc = new JailLocation(name, center, dimension, createdBy);
+            loc.shape = JailShape.CUBOID;
+            loc.corner1 = min;
+            loc.corner2 = max;
+            return loc;
+        }
+
+        /**
+         * Whether {@code pos} in {@code posDimension} falls within this jail cell's bounds.
+         * Used both for jailed-player containment (redirect-back enforcement) and for the
+         * region-wide block break/place protection that applies to EVERYONE, not just the
+         * jailed player.
+         */
+        public boolean contains(BlockPos pos, String posDimension) {
+            if (dimension != null && !dimension.isEmpty()
+                    && posDimension != null && !dimension.equals(posDimension)) {
+                return false;
+            }
+            if (shape == JailShape.CUBOID && corner1 != null && corner2 != null) {
+                return pos.getX() >= corner1.getX() && pos.getX() <= corner2.getX()
+                    && pos.getY() >= corner1.getY() && pos.getY() <= corner2.getY()
+                    && pos.getZ() >= corner1.getZ() && pos.getZ() <= corner2.getZ();
+            }
+            // SPHERE (also the fallback if a CUBOID jail is somehow missing its corners)
+            return pos.distSqr(position) <= radius * radius;
+        }
+
         public String getFormattedCreatedTime() {
             return formatTime(createdTime);
         }
@@ -111,18 +183,11 @@ public class JailManager {
         // Check config for jail system enabled
         jailSystemEnabledCache = com.zerog.neoessentials.config.ConfigManager.isJailSystemEnabled();
         if (!jailSystemEnabledCache) {
-            LOGGER.info("Jail system is disabled via config. All jail features will be inactive.");
+            NeoLog.info(LOGGER, LogCategory.MODERATION, "Jail system is disabled via config. All jail features will be inactive.");
         }
-        // Create moderation directory if it doesn't exist
-        File moderationDir = new File(com.zerog.neoessentials.util.ResourceUtil.DATA_DIR + "moderation");
-        if (!moderationDir.exists()) {
-            if (!moderationDir.mkdirs()) {
-                LOGGER.error("Failed to create moderation directory: {}", moderationDir.getAbsolutePath());
-            }
-        }
-        
-        this.jailFile = new File(moderationDir, "jailed_players.json");
-        this.jailLocationFile = new File(moderationDir, "jail_locations.json");
+
+        this.store = com.zerog.neoessentials.storage.StorageManager.getInstance().getStore();
+        migrateLegacyFilesIfNeeded();
         loadData();
     }
 
@@ -136,7 +201,25 @@ public class JailManager {
         }
         return instance;
     }
-    
+
+    /**
+     * Best-effort direct notice to whoever issued the /jail(for) that just triggered an
+     * auto-ban — previously this only reached a LOGGER.info line (gated behind
+     * isLogJailActionsEnabled), completely invisible to the admin who ran the command unless
+     * they went looking in the server log afterward. No-ops silently if {@code jailedBy}
+     * isn't a currently-online player (e.g. "Console", or the admin has since logged off) —
+     * the log line is still the fallback of record for those cases.
+     */
+    private void notifyJailer(String jailedBy, net.minecraft.network.chat.Component message) {
+        if (jailedBy == null) return;
+        MinecraftServer server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
+        if (server == null) return;
+        ServerPlayer jailer = server.getPlayerList().getPlayerByName(jailedBy);
+        if (jailer != null) {
+            jailer.sendSystemMessage(message);
+        }
+    }
+
     /**
      * Jail a player indefinitely (no expiry).
      */
@@ -149,15 +232,34 @@ public class JailManager {
      * Ported from Essentials: checkJailTimeout pattern.
      */
     public boolean jailPlayer(String playerName, UUID playerId, String reason, String jailedBy, String jailName, long durationMillis) {
-        // ConcurrentHashMap forbids null values, so no putIfAbsent placeholder here;
-        // all writers run on the server thread, a plain containsKey check is safe
-        if (jailedPlayers.containsKey(playerId)) {
+        // Enforce config: check maxJailReason
+        int maxReason = com.zerog.neoessentials.config.ConfigManager.getInstance().getMaxJailReasonLength();
+        if (reason != null && reason.length() > maxReason) {
+            LOGGER.warn("Jail reason too long ({} > {}). Cannot jail player {}.", reason.length(), maxReason, playerName);
+            return false;
+        }
+        // Build the real entry up front — ConcurrentHashMap disallows null VALUES (not just
+        // keys), so the previous "reserve the slot with putIfAbsent(playerId, null) then
+        // replace it later" pattern threw an NPE on every single call, before ever reaching
+        // the rest of this method. Constructing the real entry first and using it as the one
+        // atomic putIfAbsent value is both NPE-safe and more genuinely atomic than the old
+        // two-step reserve/replace dance.
+        JailEntry jail = new JailEntry(playerName, playerId, reason, jailedBy, jailName);
+        if (durationMillis > 0) {
+            jail.expireAt = System.currentTimeMillis() + durationMillis;
+        }
+        NeoLog.debug(LOGGER, LogCategory.MODERATION, "Applying jail: player={} ({}) jail={} reason={} by={} durationMs={}",
+            playerName, playerId, jailName, reason, jailedBy, durationMillis);
+
+        // Check if already jailed atomically using putIfAbsent
+        if (jailedPlayers.putIfAbsent(playerId, jail) != null) {
             // Already jailed
             return false;
         }
 
         JailLocation jailLoc = jailLocations.get(jailName);
         if (jailLoc == null) {
+            jailedPlayers.remove(playerId, jail); // Clean up
             return false; // Jail doesn't exist
         }
 
@@ -173,27 +275,27 @@ public class JailManager {
 
         if (jailCount >= permBanThreshold) {
             // Issue permanent ban
+            jailedPlayers.remove(playerId, jail); // Clean up
             BanManager banManager = BanManager.getInstance();
             banManager.banPlayer(playerName, playerId, "Exceeded maximum jailings (permanent ban)", "System");
             jailCounts.put(playerId, 0); // Reset count
             if (com.zerog.neoessentials.config.ConfigManager.getInstance().isLogJailActionsEnabled()) {
-                LOGGER.info("Player {} ({}) permanently banned after {} jailings.", playerName, playerId, jailCount);
+                NeoLog.info(LOGGER, LogCategory.MODERATION, "Player {} ({}) permanently banned after {} jailings.", playerName, playerId, jailCount);
             }
+            notifyJailer(jailedBy, MessageUtil.error("commands.neoessentials.jail.auto_permban_notice",
+                playerName, jailCount));
             return false;
         } else if (jailCount >= tempBanThreshold) {
             // Issue temp ban
+            jailedPlayers.remove(playerId, jail); // Clean up
             BanManager banManager = BanManager.getInstance();
             banManager.tempBanPlayer(playerName, playerId, "Exceeded maximum jailings (temporary ban)", "System", tempBanDuration * 60 * 1000L);
             if (com.zerog.neoessentials.config.ConfigManager.getInstance().isLogJailActionsEnabled()) {
-                LOGGER.info("Player {} ({}) temp-banned for {} minutes after {} jailings.", playerName, playerId, tempBanDuration, jailCount);
+                NeoLog.info(LOGGER, LogCategory.MODERATION, "Player {} ({}) temp-banned for {} minutes after {} jailings.", playerName, playerId, tempBanDuration, jailCount);
             }
+            notifyJailer(jailedBy, MessageUtil.error("commands.neoessentials.jail.auto_tempban_notice",
+                playerName, jailCount, tempBanDuration));
             return false;
-        }
-
-        // Create jail entry
-        JailEntry jail = new JailEntry(playerName, playerId, reason, jailedBy, jailName);
-        if (durationMillis > 0) {
-            jail.expireAt = System.currentTimeMillis() + durationMillis;
         }
 
         // Store original location
@@ -204,18 +306,24 @@ public class JailManager {
                 jail.originalLocation = player.blockPosition();
                 jail.originalDimension = player.level().dimension().location().toString();
 
-                jailedPlayers.put(playerId, jail);
                 saveJailedPlayers();
 
                 // Teleport to jail
                 teleportToJail(player, jailLoc);
 
+                // coloredText(), not warning(message) — `message` is already the fully
+                // resolved, localized text (with its own §-codes from the template), not a
+                // translation KEY. Passing it back into warning()/success()/etc re-runs it
+                // through localize(), which fails the key lookup and falls back to
+                // humanizeKey() — silently mangling the already-correct text (e.g. stripping
+                // periods) instead of just applying styling to it.
+                // Third arg is this fork's "Duration:" line ({2}) for timed jails.
                 String message = MessageUtil.localize("neoessentials.moderation.jailed_message",
                     reason, jailedBy, getJailDurationDescription(jail));
-                player.sendSystemMessage(MessageUtil.warning(message));
+                player.sendSystemMessage(MessageUtil.coloredText(message));
 
         if (com.zerog.neoessentials.config.ConfigManager.getInstance().isLogJailActionsEnabled()) {
-            LOGGER.info("Player {} ({}) jailed by {} in {} for: {}", 
+            NeoLog.info(LOGGER, LogCategory.MODERATION, "Player {} ({}) jailed by {} in {} for: {}", 
                 playerName, playerId, jailedBy, jailName, reason);
         }
                 return true;
@@ -227,7 +335,7 @@ public class JailManager {
         saveJailedPlayers();
 
     if (com.zerog.neoessentials.config.ConfigManager.getInstance().isLogJailActionsEnabled()) {
-        LOGGER.info("Player {} ({}) jailed while offline by {} in {} for: {}", 
+        NeoLog.info(LOGGER, LogCategory.MODERATION, "Player {} ({}) jailed while offline by {} in {} for: {}", 
             playerName, playerId, jailedBy, jailName, reason);
     }
         return true;
@@ -239,6 +347,8 @@ public class JailManager {
     public boolean unjailPlayer(UUID playerId) {
         JailEntry jail = jailedPlayers.remove(playerId);
         if (jail != null) {
+            NeoLog.debug(LOGGER, LogCategory.MODERATION, "Removing jail for player {} ({}) from jail={}",
+                jail.playerName, playerId, jail.jailName);
             saveJailedPlayers();
             
             // Teleport back to original location if online
@@ -251,12 +361,12 @@ public class JailManager {
                     }
                     
                     String message = MessageUtil.localize("neoessentials.moderation.unjailed_message");
-                    player.sendSystemMessage(MessageUtil.success(message));
+                    player.sendSystemMessage(MessageUtil.coloredText(message));
                 }
             }
             
             if (com.zerog.neoessentials.config.ConfigManager.getInstance().isLogJailActionsEnabled()) {
-                LOGGER.info("Player {} ({}) unjailed", jail.playerName, playerId);
+                NeoLog.info(LOGGER, LogCategory.MODERATION, "Player {} ({}) unjailed", jail.playerName, playerId);
             }
             return true;
         }
@@ -264,17 +374,56 @@ public class JailManager {
     }
     
     /**
-     * Set a jail location
+     * Set a jail location as a sphere (legacy point-only behavior, kept for backward
+     * compatibility with existing callers — uses the configured default radius).
      */
     public boolean setJailLocation(String jailName, BlockPos position, String dimension, String createdBy) {
         JailLocation jail = new JailLocation(jailName, position, dimension, createdBy);
         jailLocations.put(jailName, jail);
         saveJailLocations();
-        
-        LOGGER.info("Jail location '{}' set at {} in {} by {}", jailName, position, dimension, createdBy);
+
+        NeoLog.info(LOGGER, LogCategory.MODERATION, "Jail location '{}' set at {} in {} by {}", jailName, position, dimension, createdBy);
         return true;
     }
-    
+
+    /**
+     * Set a jail location as a sphere with an explicit radius.
+     */
+    public boolean setJailLocationSphere(String jailName, BlockPos center, double radius, String dimension, String createdBy) {
+        JailLocation jail = JailLocation.sphere(jailName, center, radius, dimension, createdBy);
+        jailLocations.put(jailName, jail);
+        saveJailLocations();
+
+        NeoLog.info(LOGGER, LogCategory.MODERATION, "Jail location '{}' set as sphere at {} (radius {}) in {} by {}", jailName, center, radius, dimension, createdBy);
+        return true;
+    }
+
+    /**
+     * Set a jail location as a cuboid between two corners.
+     */
+    public boolean setJailLocationCuboid(String jailName, BlockPos corner1, BlockPos corner2, String dimension, String createdBy) {
+        JailLocation jail = JailLocation.cuboid(jailName, corner1, corner2, dimension, createdBy);
+        jailLocations.put(jailName, jail);
+        saveJailLocations();
+
+        NeoLog.info(LOGGER, LogCategory.MODERATION, "Jail location '{}' set as cuboid {} to {} in {} by {}", jailName, jail.corner1, jail.corner2, dimension, createdBy);
+        return true;
+    }
+
+    /**
+     * Returns whether {@code pos} in {@code dimension} falls within ANY jail cell's bounds —
+     * used by the region-wide block break/place protection that applies to everyone, not just
+     * the jailed player occupying that specific cell.
+     */
+    public boolean isInsideAnyJail(BlockPos pos, String dimension) {
+        for (JailLocation loc : jailLocations.values()) {
+            if (loc.contains(pos, dimension)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * Remove a jail location
      */
@@ -282,7 +431,7 @@ public class JailManager {
         JailLocation removed = jailLocations.remove(jailName);
         if (removed != null) {
             saveJailLocations();
-            LOGGER.info("Jail location '{}' removed", jailName);
+            NeoLog.info(LOGGER, LogCategory.MODERATION, "Jail location '{}' removed", jailName);
             return true;
         }
         return false;
@@ -341,10 +490,12 @@ public class JailManager {
         if (jailLoc == null) {
             return true; // Jail doesn't exist anymore
         }
-        
-        // Check if within jail bounds (simple distance check)
-        double distance = newPos.distSqr(jailLoc.position);
-        return distance <= 100; // 10 block radius squared
+
+        // JailLocation.contains() handles both the dimension check and the shape-specific
+        // (sphere/cuboid) bounds check in one place, shared with the region-wide block
+        // break/place protection so both enforce the exact same cell boundary.
+        String currentDimension = player.level().dimension().location().toString();
+        return jailLoc.contains(newPos, currentDimension);
     }
     
     /**
@@ -371,6 +522,8 @@ public class JailManager {
         boolean teleportOnLogin = com.zerog.neoessentials.config.ConfigManager.getInstance().isJailTeleportOnLoginEnabled();
         if (teleportOnLogin) {
             teleportToJail(player, jailLoc);
+            String message = MessageUtil.localize("neoessentials.moderation.jail_reminder", jail.reason);
+            player.sendSystemMessage(MessageUtil.coloredText(message));
         }
         // An offline prisoner still needs the full sentence details on their next login, even
         // when the server is configured not to teleport jailed players on login.
@@ -390,7 +543,9 @@ public class JailManager {
         if (jail == null) return false;
         if (!jail.isExpired()) return false;
 
-        LOGGER.info("Timed jail expired for player {} ({}). Auto-releasing.", jail.playerName, playerId);
+        NeoLog.debug(LOGGER, LogCategory.MODERATION, "Jail expiry check: player={} ({}) expireAt={} now={}",
+            jail.playerName, playerId, jail.expireAt, System.currentTimeMillis());
+        NeoLog.info(LOGGER, LogCategory.MODERATION, "Timed jail expired for player {} ({}). Auto-releasing.", jail.playerName, playerId);
         unjailPlayer(playerId);
         return true;
     }
@@ -504,162 +659,231 @@ public class JailManager {
         loadJailedPlayers();
         loadJailLocations();
     }
-    
-    private void loadJailedPlayers() {
-        if (!jailFile.exists()) return;
-        
-        try (FileReader reader = new FileReader(jailFile)) {
-            JsonObject root = gson.fromJson(reader, JsonObject.class);
-            if (root != null && root.has("jailed")) {
-                JsonArray jailedArray = root.getAsJsonArray("jailed");
-                for (JsonElement element : jailedArray) {
-                    JsonObject jailObj = element.getAsJsonObject();
-                    JailEntry jail = new JailEntry(
-                        jailObj.get("playerName").getAsString(),
-                        UUID.fromString(jailObj.get("playerId").getAsString()),
-                        jailObj.get("reason").getAsString(),
-                        jailObj.get("jailedBy").getAsString(),
-                        jailObj.get("jailName").getAsString()
-                    );
-                    jail.jailTime = jailObj.get("jailTime").getAsLong();
-                    jail.expireAt = jailObj.has("expireAt") ? jailObj.get("expireAt").getAsLong() : 0L;
 
-                    if (jailObj.has("originalLocation")) {
-                        JsonObject locObj = jailObj.getAsJsonObject("originalLocation");
-                        jail.originalLocation = new BlockPos(
-                            locObj.get("x").getAsInt(),
-                            locObj.get("y").getAsInt(),
-                            locObj.get("z").getAsInt()
-                        );
-                    }
-                    
-                    if (jailObj.has("originalDimension")) {
-                        jail.originalDimension = jailObj.get("originalDimension").getAsString();
-                    }
-                    
-                    jailedPlayers.put(jail.playerId, jail);
-                }
+    private void loadJailedPlayers() {
+        for (JsonObject jailObj : store.getAll(JAIL_COLLECTION).values()) {
+            JailEntry jail = new JailEntry(
+                jailObj.get("playerName").getAsString(),
+                UUID.fromString(jailObj.get("playerId").getAsString()),
+                jailObj.get("reason").getAsString(),
+                jailObj.get("jailedBy").getAsString(),
+                jailObj.get("jailName").getAsString()
+            );
+            jail.jailTime = jailObj.get("jailTime").getAsLong();
+            jail.expireAt = jailObj.has("expireAt") ? jailObj.get("expireAt").getAsLong() : 0L;
+
+            if (jailObj.has("originalLocation")) {
+                JsonObject locObj = jailObj.getAsJsonObject("originalLocation");
+                jail.originalLocation = new BlockPos(
+                    locObj.get("x").getAsInt(),
+                    locObj.get("y").getAsInt(),
+                    locObj.get("z").getAsInt()
+                );
             }
-        } catch (IOException e) {
-            LOGGER.error("Failed to load jailed players", e);
+
+            if (jailObj.has("originalDimension") && !jailObj.get("originalDimension").isJsonNull()) {
+                jail.originalDimension = jailObj.get("originalDimension").getAsString();
+            }
+
+            jailedPlayers.put(jail.playerId, jail);
         }
     }
-    
+
     private void loadJailLocations() {
-        if (!jailLocationFile.exists()) return;
-        
-        try (FileReader reader = new FileReader(jailLocationFile)) {
-            JsonObject root = gson.fromJson(reader, JsonObject.class);
-            if (root != null && root.has("jails")) {
-                JsonArray jailsArray = root.getAsJsonArray("jails");
-                for (JsonElement element : jailsArray) {
-                    JsonObject jailObj = element.getAsJsonObject();
-                    
-                    JsonObject posObj = jailObj.getAsJsonObject("position");
-                    BlockPos position = new BlockPos(
-                        posObj.get("x").getAsInt(),
-                        posObj.get("y").getAsInt(),
-                        posObj.get("z").getAsInt()
-                    );
-                    
-                    JailLocation jail = new JailLocation(
-                        jailObj.get("name").getAsString(),
-                        position,
-                        jailObj.get("dimension").getAsString(),
-                        jailObj.get("createdBy").getAsString()
-                    );
-                    jail.createdTime = jailObj.get("createdTime").getAsLong();
-                    
-                    jailLocations.put(jail.name, jail);
-                }
+        for (JsonObject jailObj : store.getAll(JAIL_LOCATION_COLLECTION).values()) {
+            JsonObject posObj = jailObj.getAsJsonObject("position");
+            BlockPos position = new BlockPos(
+                posObj.get("x").getAsInt(),
+                posObj.get("y").getAsInt(),
+                posObj.get("z").getAsInt()
+            );
+
+            String name = jailObj.get("name").getAsString();
+            String dimension = jailObj.get("dimension").getAsString();
+            String createdBy = jailObj.get("createdBy").getAsString();
+
+            // "shape" is absent on jail records saved before the shape system existed —
+            // those always default to SPHERE at the config's default radius, preserving
+            // the exact old point+fixed-radius behavior for jails set up before this.
+            JailLocation jail;
+            String shapeStr = jailObj.has("shape") ? jailObj.get("shape").getAsString() : "SPHERE";
+            if ("CUBOID".equals(shapeStr) && jailObj.has("corner1") && jailObj.has("corner2")) {
+                JsonObject c1 = jailObj.getAsJsonObject("corner1");
+                JsonObject c2 = jailObj.getAsJsonObject("corner2");
+                BlockPos corner1 = new BlockPos(c1.get("x").getAsInt(), c1.get("y").getAsInt(), c1.get("z").getAsInt());
+                BlockPos corner2 = new BlockPos(c2.get("x").getAsInt(), c2.get("y").getAsInt(), c2.get("z").getAsInt());
+                jail = JailLocation.cuboid(name, corner1, corner2, dimension, createdBy);
+            } else {
+                double radius = jailObj.has("radius")
+                    ? jailObj.get("radius").getAsDouble()
+                    : com.zerog.neoessentials.config.ConfigManager.getDefaultJailSphereRadius();
+                jail = JailLocation.sphere(name, position, radius, dimension, createdBy);
             }
-        } catch (IOException e) {
-            LOGGER.error("Failed to load jail locations", e);
+            jail.createdTime = jailObj.get("createdTime").getAsLong();
+
+            jailLocations.put(jail.name, jail);
         }
     }
-    
+
+    private JsonObject jailedPlayerToJson(JailEntry jail) {
+        JsonObject jailObj = new JsonObject();
+        jailObj.addProperty("playerName", jail.playerName);
+        jailObj.addProperty("playerId", jail.playerId.toString());
+        jailObj.addProperty("reason", jail.reason);
+        jailObj.addProperty("jailedBy", jail.jailedBy);
+        jailObj.addProperty("jailName", jail.jailName);
+        jailObj.addProperty("jailTime", jail.jailTime);
+        jailObj.addProperty("expireAt", jail.expireAt);
+
+        if (jail.originalLocation != null) {
+            JsonObject locObj = new JsonObject();
+            locObj.addProperty("x", jail.originalLocation.getX());
+            locObj.addProperty("y", jail.originalLocation.getY());
+            locObj.addProperty("z", jail.originalLocation.getZ());
+            jailObj.add("originalLocation", locObj);
+        }
+
+        if (jail.originalDimension != null) {
+            jailObj.addProperty("originalDimension", jail.originalDimension);
+        }
+        return jailObj;
+    }
+
+    private JsonObject jailLocationToJson(JailLocation jail) {
+        JsonObject jailObj = new JsonObject();
+        jailObj.addProperty("name", jail.name);
+        jailObj.addProperty("dimension", jail.dimension);
+        jailObj.addProperty("createdBy", jail.createdBy);
+        jailObj.addProperty("createdTime", jail.createdTime);
+
+        JsonObject posObj = new JsonObject();
+        posObj.addProperty("x", jail.position.getX());
+        posObj.addProperty("y", jail.position.getY());
+        posObj.addProperty("z", jail.position.getZ());
+        jailObj.add("position", posObj);
+
+        jailObj.addProperty("shape", jail.shape.name());
+        if (jail.shape == JailShape.CUBOID && jail.corner1 != null && jail.corner2 != null) {
+            JsonObject c1 = new JsonObject();
+            c1.addProperty("x", jail.corner1.getX());
+            c1.addProperty("y", jail.corner1.getY());
+            c1.addProperty("z", jail.corner1.getZ());
+            jailObj.add("corner1", c1);
+            JsonObject c2 = new JsonObject();
+            c2.addProperty("x", jail.corner2.getX());
+            c2.addProperty("y", jail.corner2.getY());
+            c2.addProperty("z", jail.corner2.getZ());
+            jailObj.add("corner2", c2);
+        } else {
+            jailObj.addProperty("radius", jail.radius);
+        }
+        return jailObj;
+    }
+
     /**
-     * Save jailed players to file
+     * Persist the full set of currently jailed players to the active DataStore
+     * (collection {@link #JAIL_COLLECTION}, id = player UUID string). Since jailed
+     * players are a small, bounded set, each call rewrites every active jail entry —
+     * simplest way to also implicitly delete entries for players removed from the
+     * in-memory map (e.g. via unjailPlayer()) since the last save.
      */
     private void saveJailedPlayers() {
-        try (FileWriter writer = new FileWriter(jailFile)) {
-            JsonObject root = new JsonObject();
-            JsonArray jailedArray = new JsonArray();
-            
-            for (JailEntry jail : jailedPlayers.values()) {
-                JsonObject jailObj = new JsonObject();
-                jailObj.addProperty("playerName", jail.playerName);
-                jailObj.addProperty("playerId", jail.playerId.toString());
-                jailObj.addProperty("reason", jail.reason);
-                jailObj.addProperty("jailedBy", jail.jailedBy);
-                jailObj.addProperty("jailName", jail.jailName);
-                jailObj.addProperty("jailTime", jail.jailTime);
-                jailObj.addProperty("expireAt", jail.expireAt);
-
-                if (jail.originalLocation != null) {
-                    JsonObject locObj = new JsonObject();
-                    locObj.addProperty("x", jail.originalLocation.getX());
-                    locObj.addProperty("y", jail.originalLocation.getY());
-                    locObj.addProperty("z", jail.originalLocation.getZ());
-                    jailObj.add("originalLocation", locObj);
-                }
-                
-                if (jail.originalDimension != null) {
-                    jailObj.addProperty("originalDimension", jail.originalDimension);
-                }
-                
-                jailedArray.add(jailObj);
+        for (JailEntry jail : jailedPlayers.values()) {
+            store.put(JAIL_COLLECTION, jail.playerId.toString(), jailedPlayerToJson(jail));
+        }
+        for (JsonObject existing : store.getAll(JAIL_COLLECTION).values()) {
+            String id = existing.get("playerId").getAsString();
+            if (!jailedPlayers.containsKey(UUID.fromString(id))) {
+                store.delete(JAIL_COLLECTION, id);
             }
-            
-            root.add("jailed", jailedArray);
-            gson.toJson(root, writer);
-        } catch (IOException e) {
-            LOGGER.error("Failed to save jailed players", e);
         }
     }
-    
+
     /**
-     * Save jail locations to file
+     * Persist the full set of jail locations to the active DataStore
+     * (collection {@link #JAIL_LOCATION_COLLECTION}, id = jail name). See
+     * {@link #saveJailedPlayers()} for why this rewrites the whole set each call.
      */
     private void saveJailLocations() {
-        try (FileWriter writer = new FileWriter(jailLocationFile)) {
-            JsonObject root = new JsonObject();
-            JsonArray jailsArray = new JsonArray();
-            
-            for (JailLocation jail : jailLocations.values()) {
-                JsonObject jailObj = new JsonObject();
-                jailObj.addProperty("name", jail.name);
-                jailObj.addProperty("dimension", jail.dimension);
-                jailObj.addProperty("createdBy", jail.createdBy);
-                jailObj.addProperty("createdTime", jail.createdTime);
-                
-                JsonObject posObj = new JsonObject();
-                posObj.addProperty("x", jail.position.getX());
-                posObj.addProperty("y", jail.position.getY());
-                posObj.addProperty("z", jail.position.getZ());
-                jailObj.add("position", posObj);
-                
-                jailsArray.add(jailObj);
+        for (JailLocation jail : jailLocations.values()) {
+            store.put(JAIL_LOCATION_COLLECTION, jail.name, jailLocationToJson(jail));
+        }
+        for (String existingName : store.getAll(JAIL_LOCATION_COLLECTION).keySet()) {
+            if (!jailLocations.containsKey(existingName)) {
+                store.delete(JAIL_LOCATION_COLLECTION, existingName);
             }
-            
-            root.add("jails", jailsArray);
-            gson.toJson(root, writer);
-        } catch (IOException e) {
-            LOGGER.error("Failed to save jail locations", e);
         }
     }
 
     /**
-     * Reload jail data from disk
+     * One-time import of the legacy jailed_players.json / jail_locations.json files into
+     * the active DataStore, if it's still empty and storage.autoMigrate is enabled.
+     */
+    private void migrateLegacyFilesIfNeeded() {
+        if (store.hasAnyData(JAIL_COLLECTION) || store.hasAnyData(JAIL_LOCATION_COLLECTION)) return;
+        if (!com.zerog.neoessentials.config.ConfigManager.getInstance().isStorageAutoMigrateEnabled()) return;
+
+        int migrated = 0;
+        migrated += migrateLegacyJailedPlayersFile();
+        migrated += migrateLegacyJailLocationsFile();
+
+        if (migrated > 0) {
+            NeoLog.info(LOGGER, LogCategory.MODERATION, "JailManager: migrated {} record(s) from legacy files into the '{}' storage backend.",
+                migrated, com.zerog.neoessentials.storage.StorageManager.getInstance().getActiveType());
+        }
+    }
+
+    private int migrateLegacyJailedPlayersFile() {
+        File file = new File(com.zerog.neoessentials.util.ResourceUtil.DATA_DIR + "moderation", "jailed_players.json");
+        if (!file.exists()) return 0;
+
+        int count = 0;
+        try (FileReader reader = new FileReader(file)) {
+            JsonObject root = gson.fromJson(reader, JsonObject.class);
+            if (root == null || !root.has("jailed")) return 0;
+            for (JsonElement element : root.getAsJsonArray("jailed")) {
+                JsonObject obj = element.getAsJsonObject().deepCopy();
+                String id = obj.get("playerId").getAsString();
+                store.put(JAIL_COLLECTION, id, obj);
+                count++;
+            }
+        } catch (IOException e) {
+            LOGGER.error("Failed to migrate legacy jailed_players.json: {}", e.getMessage());
+        }
+        return count;
+    }
+
+    private int migrateLegacyJailLocationsFile() {
+        File file = new File(com.zerog.neoessentials.util.ResourceUtil.DATA_DIR + "moderation", "jail_locations.json");
+        if (!file.exists()) return 0;
+
+        int count = 0;
+        try (FileReader reader = new FileReader(file)) {
+            JsonObject root = gson.fromJson(reader, JsonObject.class);
+            if (root == null || !root.has("jails")) return 0;
+            for (JsonElement element : root.getAsJsonArray("jails")) {
+                JsonObject obj = element.getAsJsonObject().deepCopy();
+                String id = obj.get("name").getAsString();
+                store.put(JAIL_LOCATION_COLLECTION, id, obj);
+                count++;
+            }
+        } catch (IOException e) {
+            LOGGER.error("Failed to migrate legacy jail_locations.json: {}", e.getMessage());
+        }
+        return count;
+    }
+
+    /**
+     * Reload jail data from the active DataStore.
      */
     public void reload() {
-        LOGGER.info("Reloading jail system...");
+        NeoLog.info(LOGGER, LogCategory.MODERATION, "Reloading jail system...");
         jailedPlayers.clear();
         jailLocations.clear();
         jailCounts.clear();
         loadJailedPlayers();
         loadJailLocations();
-        LOGGER.info("Jail system reloaded: {} jailed players, {} jail locations",
+        NeoLog.info(LOGGER, LogCategory.MODERATION, "Jail system reloaded: {} jailed players, {} jail locations",
             jailedPlayers.size(), jailLocations.size());
     }
 }

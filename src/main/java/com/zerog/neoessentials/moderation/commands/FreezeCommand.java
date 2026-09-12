@@ -17,7 +17,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 
 /**
  * Freeze commands: /freeze, /unfreeze, /freezeall, /unfreezeall, /freezelist
@@ -30,7 +31,7 @@ public class FreezeCommand {
         return SharedSuggestionProvider.suggest(
             freezeManager.getAllFrozenPlayers().stream()
                 .map(freeze -> freeze.playerName)
-                .collect(Collectors.toList()),
+                .toList(),
             builder
         );
     };
@@ -40,13 +41,16 @@ public class FreezeCommand {
         if (!com.zerog.neoessentials.config.ConfigManager.isModerationEnabled()) {
             return;
         }
+        var cfg = com.zerog.neoessentials.config.ConfigManager.getInstance();
+
         // /freeze <player> [reason]
+        if (cfg.isCommandEnabled("freeze")) {
         dispatcher.register(Commands.literal("freeze")
             .requires(source -> PermissionValidator.validatePermission(source, "neoessentials.moderation.freeze").hasPermission())
             .then(Commands.argument("player", StringArgumentType.word())
                 .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(
                     ctx.getSource().getServer().getPlayerNames(), builder))
-                .executes(ctx -> executeFreeze(ctx, 
+                .executes(ctx -> executeFreeze(ctx,
                     StringArgumentType.getString(ctx, "player"),
                     com.zerog.neoessentials.config.ConfigManager.getDefaultFreezeReason()))
                 .then(Commands.argument("reason", StringArgumentType.greedyString())
@@ -54,34 +58,43 @@ public class FreezeCommand {
                         StringArgumentType.getString(ctx, "player"),
                         StringArgumentType.getString(ctx, "reason")))))
         );
+        }
 
         // /unfreeze <player>
+        if (cfg.isCommandEnabled("unfreeze")) {
         dispatcher.register(Commands.literal("unfreeze")
             .requires(source -> PermissionValidator.validatePermission(source, "neoessentials.moderation.unfreeze").hasPermission())
             .then(Commands.argument("player", StringArgumentType.word())
                 .suggests(SUGGEST_FROZEN_PLAYERS)
                 .executes(ctx -> executeUnfreeze(ctx, StringArgumentType.getString(ctx, "player"))))
         );
-        
+        }
+
         // /freezeall [reason]
+        if (cfg.isCommandEnabled("freezeall")) {
         dispatcher.register(Commands.literal("freezeall")
             .requires(source -> PermissionValidator.validatePermission(source, "neoessentials.moderation.freezeall").hasPermission())
             .executes(ctx -> executeFreezeAll(ctx, com.zerog.neoessentials.config.ConfigManager.getDefaultFreezeReason()))
             .then(Commands.argument("reason", StringArgumentType.greedyString())
                 .executes(ctx -> executeFreezeAll(ctx, StringArgumentType.getString(ctx, "reason"))))
         );
-        
+        }
+
         // /unfreezeall
+        if (cfg.isCommandEnabled("unfreezeall")) {
         dispatcher.register(Commands.literal("unfreezeall")
             .requires(source -> PermissionValidator.validatePermission(source, "neoessentials.moderation.unfreezeall").hasPermission())
             .executes(ctx -> executeUnfreezeAll(ctx))
         );
-        
+        }
+
         // /freezelist
+        if (cfg.isCommandEnabled("freezelist")) {
         dispatcher.register(Commands.literal("freezelist")
             .requires(source -> PermissionValidator.validatePermission(source, "neoessentials.moderation.freezelist").hasPermission())
             .executes(ctx -> executeFreezeList(ctx))
         );
+        }
     }
     
     private static int executeFreeze(CommandContext<CommandSourceStack> ctx, String playerName, String reason) {
@@ -96,7 +109,7 @@ public class FreezeCommand {
             int maxReasonLen = com.zerog.neoessentials.config.ConfigManager.getMaxFreezeReasonLength();
             if (reason != null && reason.length() > maxReasonLen) {
                 String msg = MessageUtil.localize("neoessentials.moderation.reason_too_long", maxReasonLen);
-                source.sendFailure(MessageUtil.error(msg));
+                source.sendFailure(MessageUtil.coloredText(msg));
                 return 0;
             }
 
@@ -113,7 +126,7 @@ public class FreezeCommand {
             // Check if already frozen
             if (freezeManager.isPlayerFrozen(targetId)) {
                 String message = MessageUtil.localize("neoessentials.moderation.player_already_frozen", targetName);
-                source.sendFailure(MessageUtil.error(message));
+                source.sendFailure(MessageUtil.coloredText(message));
                 return 0;
             }
 
@@ -122,28 +135,28 @@ public class FreezeCommand {
 
             if (success) {
                 String confirmMessage = MessageUtil.localize("neoessentials.moderation.freeze_success", targetName, reason);
-                source.sendSuccess(() -> MessageUtil.success(confirmMessage), true);
+                source.sendSuccess(() -> MessageUtil.coloredText(confirmMessage), false);
 
                 // Notify the target player (config-driven message)
                 String template = com.zerog.neoessentials.config.ConfigManager.getFreezeMessage();
                 String targetMessage;
-                if (template.equals("commands.neoessentials.moderation.frozen_message")) {
+                if (template.equals("neoessentials.moderation.frozen_message")) {
                     targetMessage = MessageUtil.localize(template, reason, frozenBy);
                 } else {
                     targetMessage = template.replace("{reason}", reason != null ? reason : "")
                                          .replace("{freezer}", frozenBy != null ? frozenBy : "");
                 }
-                targetPlayer.sendSystemMessage(MessageUtil.warning(targetMessage));
+                targetPlayer.sendSystemMessage(MessageUtil.coloredText(targetMessage));
 
                 // Broadcast freeze to all online staff
                 broadcastToStaff(server, MessageUtil.localize("neoessentials.moderation.freeze_broadcast", 
-                    targetName, frozenBy, reason));
+                    targetName, frozenBy, reason), senderId(source));
 
-                LOGGER.info("Player {} frozen by {} for: {}", targetName, frozenBy, reason);
+                NeoLog.info(LOGGER, LogCategory.MODERATION, "Player {} frozen by {} for: {}", targetName, frozenBy, reason);
                 return 1;
             } else {
                 String message = MessageUtil.localize("neoessentials.moderation.freeze_failed", targetName);
-                source.sendFailure(MessageUtil.error(message));
+                source.sendFailure(MessageUtil.coloredText(message));
                 return 0;
             }
 
@@ -192,7 +205,7 @@ public class FreezeCommand {
             // Check if actually frozen
             if (!freezeManager.isPlayerFrozen(playerId)) {
                 String message = MessageUtil.localize("neoessentials.moderation.player_not_frozen", resolvedName);
-                source.sendFailure(MessageUtil.error(message));
+                source.sendFailure(MessageUtil.coloredText(message));
                 return 0;
             }
             
@@ -201,30 +214,30 @@ public class FreezeCommand {
             
             if (success) {
                 String confirmMessage = MessageUtil.localize("neoessentials.moderation.unfreeze_success", resolvedName);
-                source.sendSuccess(() -> MessageUtil.success(confirmMessage), true);
+                source.sendSuccess(() -> MessageUtil.coloredText(confirmMessage), false);
                 
                 // Notify the target player if online (config-driven message)
                 ServerPlayer targetPlayer = server.getPlayerList().getPlayer(playerId);
                 if (targetPlayer != null) {
                     String template = com.zerog.neoessentials.config.ConfigManager.getUnfreezeMessage();
                     String targetMessage;
-                    if (template.equals("commands.neoessentials.moderation.unfrozen_message")) {
+                    if (template.equals("neoessentials.moderation.unfrozen_message")) {
                         targetMessage = MessageUtil.localize(template, unfrozenBy);
                     } else {
                         targetMessage = template.replace("{unfreezer}", unfrozenBy != null ? unfrozenBy : "Staff");
                     }
-                    targetPlayer.sendSystemMessage(MessageUtil.success(targetMessage));
+                    targetPlayer.sendSystemMessage(MessageUtil.coloredText(targetMessage));
                 }
                 
                 // Broadcast unfreeze to all online staff
                 broadcastToStaff(server, MessageUtil.localize("neoessentials.moderation.unfreeze_broadcast", 
-                    resolvedName, unfrozenBy));
+                    resolvedName, unfrozenBy), senderId(source));
                 
-                LOGGER.info("Player {} unfrozen by {}", resolvedName, unfrozenBy);
+                NeoLog.info(LOGGER, LogCategory.MODERATION, "Player {} unfrozen by {}", resolvedName, unfrozenBy);
                 return 1;
             } else {
                 String message = MessageUtil.localize("neoessentials.moderation.unfreeze_failed", resolvedName);
-                source.sendFailure(MessageUtil.error(message));
+                source.sendFailure(MessageUtil.coloredText(message));
                 return 0;
             }
             
@@ -247,7 +260,7 @@ public class FreezeCommand {
             int maxReasonLen = com.zerog.neoessentials.config.ConfigManager.getMaxFreezeReasonLength();
             if (reason != null && reason.length() > maxReasonLen) {
                 String msg = MessageUtil.localize("neoessentials.moderation.reason_too_long", maxReasonLen);
-                source.sendFailure(MessageUtil.error(msg));
+                source.sendFailure(MessageUtil.coloredText(msg));
                 return 0;
             }
 
@@ -262,11 +275,11 @@ public class FreezeCommand {
                     // Don't freeze already frozen players
                     return !freezeManager.isPlayerFrozen(player.getUUID());
                 })
-                .collect(Collectors.toList());
+                .toList();
 
             if (playersToFreeze.isEmpty()) {
                 String message = MessageUtil.localize("neoessentials.moderation.freezeall_no_players");
-                source.sendSuccess(() -> MessageUtil.warning(message), false);
+                source.sendSuccess(() -> MessageUtil.coloredText(message), false);
                 return 1;
             }
 
@@ -284,18 +297,18 @@ public class FreezeCommand {
 
                     // Notify the frozen player
                     String targetMessage = MessageUtil.localize("neoessentials.moderation.freeze_notification", frozenBy, reason);
-                    player.sendSystemMessage(MessageUtil.warning(targetMessage));
+                    player.sendSystemMessage(MessageUtil.coloredText(targetMessage));
                 }
             }
 
             String confirmMessage = MessageUtil.localize("neoessentials.moderation.freezeall_success", frozenCount, reason);
-            source.sendSuccess(() -> MessageUtil.success(confirmMessage), true);
+            source.sendSuccess(() -> MessageUtil.coloredText(confirmMessage), false);
 
             // Broadcast to staff
             broadcastToStaff(server, MessageUtil.localize("neoessentials.moderation.freezeall_broadcast", 
-                frozenCount, frozenBy, reason));
+                frozenCount, frozenBy, reason), senderId(source));
 
-            LOGGER.info("{} players frozen by {} for: {}", frozenCount, frozenBy, reason);
+            NeoLog.info(LOGGER, LogCategory.MODERATION, "{} players frozen by {} for: {}", frozenCount, frozenBy, reason);
             return 1;
 
         } catch (Exception e) {
@@ -317,7 +330,7 @@ public class FreezeCommand {
             
             if (frozenPlayers.isEmpty()) {
                 String message = MessageUtil.localize("neoessentials.moderation.unfreezeall_no_players");
-                source.sendSuccess(() -> MessageUtil.warning(message), false);
+                source.sendSuccess(() -> MessageUtil.coloredText(message), false);
                 return 1;
             }
             
@@ -332,19 +345,19 @@ public class FreezeCommand {
                     ServerPlayer player = server.getPlayerList().getPlayer(freeze.playerId);
                     if (player != null) {
                         String targetMessage = MessageUtil.localize("neoessentials.moderation.unfreeze_notification", unfrozenBy);
-                        player.sendSystemMessage(MessageUtil.success(targetMessage));
+                        player.sendSystemMessage(MessageUtil.coloredText(targetMessage));
                     }
                 }
             }
             
             String confirmMessage = MessageUtil.localize("neoessentials.moderation.unfreezeall_success", unfrozenCount);
-            source.sendSuccess(() -> MessageUtil.success(confirmMessage), true);
+            source.sendSuccess(() -> MessageUtil.coloredText(confirmMessage), false);
             
             // Broadcast to staff
             broadcastToStaff(server, MessageUtil.localize("neoessentials.moderation.unfreezeall_broadcast", 
-                unfrozenCount, unfrozenBy));
+                unfrozenCount, unfrozenBy), senderId(source));
             
-            LOGGER.info("{} players unfrozen by {}", unfrozenCount, unfrozenBy);
+            NeoLog.info(LOGGER, LogCategory.MODERATION, "{} players unfrozen by {}", unfrozenCount, unfrozenBy);
             return 1;
             
         } catch (Exception e) {
@@ -363,17 +376,19 @@ public class FreezeCommand {
             
             if (frozenPlayers.isEmpty()) {
                 String message = MessageUtil.localize("neoessentials.moderation.freezelist_empty");
-                source.sendSuccess(() -> MessageUtil.info(message), false);
+                source.sendSuccess(() -> MessageUtil.coloredText(message), false);
                 return 1;
             }
             
             String header = MessageUtil.localize("neoessentials.moderation.freezelist_header", frozenPlayers.size());
-            source.sendSuccess(() -> MessageUtil.info(header), false);
+            source.sendSuccess(() -> MessageUtil.coloredText(header), false);
             
             for (FreezeManager.FreezeEntry freeze : frozenPlayers) {
+                // reason/frozenBy were swapped relative to the template ("frozen by {1}") —
+                // staff saw the freeze REASON where the freezing staff member's name belonged.
                 String freezeInfo = MessageUtil.localize("neoessentials.moderation.freezelist_entry",
-                    freeze.playerName, freeze.reason, freeze.frozenBy, freeze.getFormattedFreezeTime());
-                source.sendSuccess(() -> MessageUtil.info(freezeInfo), false);
+                    freeze.playerName, freeze.frozenBy, freeze.reason, freeze.getFormattedFreezeTime());
+                source.sendSuccess(() -> MessageUtil.coloredText(freezeInfo), false);
             }
             
             return 1;
@@ -385,11 +400,26 @@ public class FreezeCommand {
         }
     }
     
+    /** The command sender's player UUID, or {@code null} if run from console/command block. */
+    private static java.util.UUID senderId(CommandSourceStack source) {
+        return source.getEntity() instanceof ServerPlayer player ? player.getUUID() : null;
+    }
+
     private static void broadcastToStaff(MinecraftServer server, String message) {
+        broadcastToStaff(server, message, null);
+    }
+
+    /**
+     * @param excludeId skipped if non-null — used so the command sender, who already got
+     *                  their own personal confirmation message, does not also get this
+     *                  near-duplicate staff-wide broadcast just because they also qualify.
+     */
+    private static void broadcastToStaff(MinecraftServer server, String message, java.util.UUID excludeId) {
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (excludeId != null && player.getUUID().equals(excludeId)) continue;
             if (com.zerog.neoessentials.api.permissions.PermissionAPI.hasPermission(
                     player.getUUID(), "neoessentials.moderation.notifications")) {
-                player.sendSystemMessage(MessageUtil.info(message));
+                player.sendSystemMessage(MessageUtil.coloredText(message));
             }
         }
     }

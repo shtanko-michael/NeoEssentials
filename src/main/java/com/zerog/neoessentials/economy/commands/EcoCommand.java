@@ -9,14 +9,19 @@ import com.zerog.neoessentials.util.MessageUtil;
 import com.zerog.neoessentials.economy.EconomyPlayerUtil;
 import com.zerog.neoessentials.economy.EconomyTransactionLogger;
 import com.zerog.neoessentials.economy.managers.TransactionHistoryManager;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
 
 public class EcoCommand {
+    private static final Logger LOGGER = LoggerFactory.getLogger(EcoCommand.class);
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         // Register main command
         registerEcoCommand(dispatcher, "eco");
@@ -95,22 +100,44 @@ public class EcoCommand {
         }
 
         String playerName = StringArgumentType.getString(ctx, "player");
-        com.zerog.neoessentials.util.InputValidator.ValidationResult nameValidation =
-            com.zerog.neoessentials.util.InputValidator.validatePlayerName(playerName);
-        if (!nameValidation.isValid()) {
-            ctx.getSource().sendFailure(MessageUtil.error(nameValidation.getErrorMessage()));
-            return 0;
-        }
-        String validPlayerName = nameValidation.getValue(String.class);
-
-        // Resolve UUID — supports offline players via profile cache (Essentials: loopOfflinePlayersConsumer)
         MinecraftServer server = ctx.getSource().getServer();
-        Optional<UUID> uuidOpt = EconomyPlayerUtil.getUUIDByName(server, validPlayerName);
-        if (uuidOpt.isEmpty()) {
-            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.eco.player_not_found"));
-            return 0;
+
+        // Target selectors (@p, @s, @a[limit=1], @r, @n, a UUID, or a named entity) — lets
+        // quest/reward systems (FTB Quests "run command" rewards, command blocks, etc.) issue
+        // e.g. "/eco give @p 100" instead of needing the triggering player's literal name.
+        // Only usable for online targets, unlike the literal-name path below.
+        UUID uuid;
+        String validPlayerName;
+        if (playerName.startsWith("@")) {
+            try {
+                var selector = net.minecraft.commands.arguments.EntityArgument.player()
+                    .parse(new com.mojang.brigadier.StringReader(playerName));
+                ServerPlayer target = selector.findSinglePlayer(ctx.getSource());
+                uuid = target.getUUID();
+                validPlayerName = target.getGameProfile().getName();
+            } catch (com.mojang.brigadier.exceptions.CommandSyntaxException e) {
+                ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.eco.player_not_found"));
+                return 0;
+            }
+        } else {
+            com.zerog.neoessentials.util.InputValidator.ValidationResult nameValidation =
+                com.zerog.neoessentials.util.InputValidator.validatePlayerName(playerName);
+            if (!nameValidation.isValid()) {
+                ctx.getSource().sendFailure(MessageUtil.error(nameValidation.getErrorMessage()));
+                return 0;
+            }
+            validPlayerName = nameValidation.getValue(String.class);
+
+            // Resolve UUID — supports offline players via profile cache (Essentials: loopOfflinePlayersConsumer)
+            Optional<UUID> uuidOpt = EconomyPlayerUtil.getUUIDByName(server, validPlayerName);
+            if (uuidOpt.isEmpty()) {
+                ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.eco.player_not_found"));
+                return 0;
+            }
+            uuid = uuidOpt.get();
         }
-        UUID uuid = uuidOpt.get();
+        NeoLog.debug(LOGGER, LogCategory.ECONOMY, "ecoAdminAction: admin={} action={} target={} ({})",
+            ctx.getSource().getTextName(), action, validPlayerName, uuid);
 
         // "reset" uses no amount arg — sets to starting balance
         if ("reset".equals(action)) {
@@ -119,7 +146,8 @@ public class EcoCommand {
             EconomyManager.getInstance().setBalance(uuid, startBal);
             String adminName = ctx.getSource().getTextName();
             ctx.getSource().sendSuccess(() -> MessageUtil.success(
-                "commands.neoessentials.eco.reset", validPlayerName, startBal), false);
+                "commands.neoessentials.eco.reset", validPlayerName, startBal,
+                EconomyManager.getInstance().getCurrencySymbol()), false);
             EconomyTransactionLogger.log("ADMIN_RESET", adminName, validPlayerName,
                 startBal.toPlainString(), "Reset to starting balance");
             TransactionHistoryManager.getInstance().addTransaction(uuid,
@@ -135,15 +163,8 @@ public class EcoCommand {
             return 1;
         }
 
-        // All other actions need an amount — support percent suffix (Essentials: isPercent / scaleByPowerOfTen)
+        // All other actions need an amount
         double amountRaw = DoubleArgumentType.getDouble(ctx, "amount");
-        boolean isPercent = false;
-        // Percent check: if the raw string arg ends with '%'  (Brigadier already parsed the double)
-        // We detect it by checking the raw argument string
-        try {
-            String rawAmountStr = ctx.getArgument("amount", String.class);
-            isPercent = rawAmountStr != null && rawAmountStr.endsWith("%");
-        } catch (Exception ignored) {}
 
         BigDecimal amount;
         if ("set".equals(action)) {
@@ -162,20 +183,20 @@ public class EcoCommand {
             amount = amountValidation.getValue(BigDecimal.class);
         }
 
-        // If percent: multiply current balance × (amount / 100)  (Essentials: scaleByPowerOfTen(-2))
-        if (isPercent) {
-            BigDecimal current = EconomyManager.getInstance().getBalance(uuid);
-            amount = current.multiply(amount).scaleByPowerOfTen(-2);
-        }
 
         EconomyManager manager = EconomyManager.getInstance();
         String adminName = ctx.getSource().getTextName();
         final BigDecimal finalAmount = amount;
         switch (action) {
             case "give" -> {
-                manager.addBalance(uuid, finalAmount);
+                boolean ok = manager.addBalance(uuid, finalAmount);
+                if (!ok) {
+                    ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.eco.give_failed", finalAmount, validPlayerName));
+                    return 0;
+                }
                 ctx.getSource().sendSuccess(() -> MessageUtil.success(
-                    "commands.neoessentials.eco.give", finalAmount, validPlayerName), false);
+                    "commands.neoessentials.eco.give", finalAmount, validPlayerName,
+                    manager.getCurrencySymbol()), false);
                 EconomyTransactionLogger.log("ADMIN_GIVE", adminName, validPlayerName,
                     finalAmount.toPlainString(), "Admin give");
                 TransactionHistoryManager.getInstance().addTransaction(uuid,
@@ -186,18 +207,28 @@ public class EcoCommand {
                     manager.getCurrencySymbol()));
             }
             case "take" -> {
-                manager.subtractBalance(uuid, finalAmount);
+                boolean ok = manager.subtractBalance(uuid, finalAmount);
+                if (!ok) {
+                    ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.eco.take_failed", finalAmount, validPlayerName));
+                    return 0;
+                }
                 ctx.getSource().sendSuccess(() -> MessageUtil.success(
-                    "commands.neoessentials.eco.take", finalAmount, validPlayerName), false);
+                    "commands.neoessentials.eco.take", finalAmount, validPlayerName,
+                    manager.getCurrencySymbol()), false);
                 EconomyTransactionLogger.log("ADMIN_TAKE", adminName, validPlayerName,
                     finalAmount.toPlainString(), "Admin take");
                 TransactionHistoryManager.getInstance().addTransaction(uuid,
                     MessageUtil.localize("commands.neoessentials.transaction.admin_took", finalAmount));
+                var t3 = server.getPlayerList().getPlayer(uuid);
+                if (t3 != null) t3.sendSystemMessage(MessageUtil.info(
+                    "commands.neoessentials.eco.take_notify", finalAmount,
+                    manager.getCurrencySymbol()));
             }
             case "set" -> {
                 manager.setBalance(uuid, finalAmount);
                 ctx.getSource().sendSuccess(() -> MessageUtil.success(
-                    "commands.neoessentials.eco.set", validPlayerName, finalAmount), false);
+                    "commands.neoessentials.eco.set", validPlayerName, finalAmount,
+                    manager.getCurrencySymbol()), false);
                 EconomyTransactionLogger.log("ADMIN_SET", adminName, validPlayerName,
                     finalAmount.toPlainString(), "Admin set");
                 TransactionHistoryManager.getInstance().addTransaction(uuid,

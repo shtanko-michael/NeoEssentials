@@ -7,10 +7,13 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.zerog.neoessentials.api.permissions.PermissionAPI;
 import com.zerog.neoessentials.economy.managers.EconomyManager;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import com.zerog.neoessentials.util.MessageUtil;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.arguments.ResourceLocationArgument;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
@@ -39,14 +42,27 @@ public class SellCommand {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         if (!com.zerog.neoessentials.config.ConfigManager.isEconomyEnabled()) return;
+        var cfg = com.zerog.neoessentials.config.ConfigManager.getInstance();
 
         // ── /sell ─────────────────────────────────────────────────────────────
+        if (cfg.isCommandEnabled("sell")) {
         dispatcher.register(Commands.literal("sell")
             .requires(src -> {
                 var p = src.getPlayer();
                 return p == null || PermissionAPI.hasPermission(p.getUUID(), "neoessentials.sell");
             })
-            .executes(ctx -> { ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.sell.usage")); return 0; })
+            // Bare "/sell" with no sub-argument auto-detects: sells whatever's in your hand,
+            // same as "/sell hand" — still gated by neoessentials.sell.hand (not just the
+            // weaker neoessentials.sell the root node requires) so this can't be used to skip
+            // that permission.
+            .executes(ctx -> {
+                var p = ctx.getSource().getPlayer();
+                if (p != null && !PermissionAPI.hasPermission(p.getUUID(), "neoessentials.sell.hand")) {
+                    ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.sell.usage"));
+                    return 0;
+                }
+                return executeSellHand(ctx, 0);
+            })
             .then(Commands.literal("hand")
                 .requires(src -> {
                     var p = src.getPlayer();
@@ -78,6 +94,8 @@ public class SellCommand {
                 .executes(SellCommand::executeSellAll)
             )
             .then(Commands.argument("item", StringArgumentType.word())
+                .suggests((ctx, b) -> net.minecraft.commands.SharedSuggestionProvider.suggest(
+                    WorthManager.getInstance().getAllPrices().keySet(), b))
                 .executes(ctx -> executeSellItem(ctx, StringArgumentType.getString(ctx, "item"), 0))
                 .then(Commands.argument("amount", IntegerArgumentType.integer(1))
                     .executes(ctx -> executeSellItem(ctx,
@@ -85,22 +103,26 @@ public class SellCommand {
                         IntegerArgumentType.getInteger(ctx, "amount"))))
             )
         );
+        }
 
         // ── /setworth ─────────────────────────────────────────────────────────
+        if (cfg.isCommandEnabled("setworth")) {
         dispatcher.register(Commands.literal("setworth")
             .requires(src -> {
                 var p = src.getPlayer();
                 return p == null || PermissionAPI.hasPermission(p.getUUID(), "neoessentials.setworth");
             })
-            .then(Commands.argument("item", StringArgumentType.word())
+            .then(Commands.argument("item", ResourceLocationArgument.id())
                 .then(Commands.literal("remove")
-                    .executes(ctx -> executeRemoveWorth(ctx, StringArgumentType.getString(ctx, "item"))))
+                    .executes(ctx -> executeRemoveWorth(ctx,
+                        ResourceLocationArgument.getId(ctx, "item").toString())))
                 .then(Commands.argument("price", DoubleArgumentType.doubleArg(0))
                     .executes(ctx -> executeSetWorth(ctx,
-                        StringArgumentType.getString(ctx, "item"),
+                        ResourceLocationArgument.getId(ctx, "item").toString(),
                         DoubleArgumentType.getDouble(ctx, "price"))))
             )
         );
+        }
     }
 
     // ── /sell hand ────────────────────────────────────────────────────────────
@@ -121,10 +143,17 @@ public class SellCommand {
         if (player == null) { source.sendFailure(MessageUtil.error("commands.neoessentials.general.player_only")); return 0; }
 
         WorthManager wm = WorthManager.getInstance();
+        // Apply per-player sell multiplier from EconomyModifierManager
+        double modMult = com.zerog.neoessentials.economy.compat.EconomyModifierManager
+            .getInstance().getSellMultiplier(player.getUUID());
+        // modMult=0 means no override — use WorthManager global multiplier
+        BigDecimal effectiveMultiplier = wm.getSellMultiplier();
+        if (modMult > 0) effectiveMultiplier = BigDecimal.valueOf(modMult);
+
         BigDecimal total = BigDecimal.ZERO;
         int typesSold = 0;
         List<String> skippedNamed = new ArrayList<>();
-        Inventory inv = player.getInventory();
+        net.minecraft.world.entity.player.Inventory inv = player.getInventory();
 
         for (int i = 0; i < inv.getContainerSize(); i++) {
             ItemStack s = inv.getItem(i);
@@ -135,7 +164,7 @@ public class SellCommand {
             }
             BigDecimal price = wm.getPrice(s);
             if (price == null) continue;
-            BigDecimal earned = price.multiply(wm.getSellMultiplier())
+            BigDecimal earned = price.multiply(effectiveMultiplier)
                 .multiply(BigDecimal.valueOf(s.getCount()));
             total = total.add(earned);
             typesSold++;
@@ -147,8 +176,11 @@ public class SellCommand {
             return 0;
         }
         if (total.signum() > 0) {
+            NeoLog.debug(LOGGER, LogCategory.ECONOMY,
+                "executeSellAll: player={} sold {} item type(s) from inventory, crediting total={}",
+                player.getName().getString(), typesSold, total);
             EconomyManager.getInstance().addBalance(player.getUUID(), total);
-            LOGGER.info("Player {} sold inventory for {}{}", player.getName().getString(),
+            NeoLog.info(LOGGER, LogCategory.ECONOMY, "Player {} sold inventory for {}{}", player.getName().getString(),
                 WorthCommand.getCurrencySymbol(), WorthCommand.format(total));
         }
         String sym = WorthCommand.getCurrencySymbol();
@@ -169,42 +201,80 @@ public class SellCommand {
         if (player == null) { source.sendFailure(MessageUtil.error("commands.neoessentials.general.player_only")); return 0; }
         ItemStack template = WorthManager.resolveItem(itemId);
         if (template == null) { source.sendFailure(MessageUtil.error("commands.neoessentials.worth.unknown_item", itemId)); return 0; }
-        int available = countInInventory(player, template);
-        if (available == 0) { source.sendFailure(MessageUtil.error("commands.neoessentials.sell.not_in_inventory", WorthManager.getItemId(template))); return 0; }
+        // NOTE: `template` here is a bare ItemStack freshly built from the resolved item type
+        // (see WorthManager.resolveItem) — it never carries the real components of whatever's
+        // actually in the player's inventory. doSell()'s counting/removal is component-aware
+        // per-slot, so it's safe to pass this bare template through; it's only ever used to
+        // identify the item TYPE being sold, not compared directly for named-item protection.
+        WorthManager wm = WorthManager.getInstance();
+        int available = countInInventory(player, template, wm.isAllowSellNamedItems());
+        if (available == 0) {
+            // Distinguish "you don't have any" from "you only have named ones we won't sell"
+            int rawAvailable = countInInventory(player, template, true);
+            if (rawAvailable > 0) {
+                source.sendFailure(MessageUtil.error("commands.neoessentials.sell.cannot_sell_named"));
+            } else {
+                source.sendFailure(MessageUtil.error("commands.neoessentials.sell.not_in_inventory", WorthManager.getItemId(template)));
+            }
+            return 0;
+        }
         int qty = amount > 0 ? Math.min(amount, available) : available;
         return doSell(source, player, template, qty);
     }
 
     // ── core sell ─────────────────────────────────────────────────────────────
+    // `template` identifies the item TYPE to sell/price — its own component state (e.g. if it's
+    // a bare stack from WorthManager.resolveItem) is NOT trusted for named-item protection;
+    // countInInventory/removeFromInventory inspect the REAL per-slot stacks for that instead,
+    // so an enchanted/custom-named item sitting in inventory can't be silently swept up and
+    // sold at the plain-item price via /sell <item> (it used to be, since the old bare-template
+    // check could never see a name that only exists on the real inventory stack).
     private static int doSell(CommandSourceStack source, ServerPlayer player, ItemStack template, int qty) {
         WorthManager wm = WorthManager.getInstance();
-        if (!wm.isAllowSellNamedItems() && template.has(DataComponents.CUSTOM_NAME)) {
-            source.sendFailure(MessageUtil.error("commands.neoessentials.sell.cannot_sell_named"));
-            return 0;
-        }
+        boolean allowNamed = wm.isAllowSellNamedItems();
         BigDecimal price = wm.getPrice(template);
         if (price == null) {
             source.sendFailure(MessageUtil.error("commands.neoessentials.sell.no_price",
                 WorthManager.getItemId(template)));
             return 0;
         }
-        int available = countInInventory(player, template);
+        int available = countInInventory(player, template, allowNamed);
         int toSell = Math.min(qty, available);
+        NeoLog.debug(LOGGER, LogCategory.ECONOMY,
+            "doSell: player={} item={} requestedQty={} availableQty={} unitPrice={}",
+            player.getName().getString(), WorthManager.getItemId(template), qty, available, price);
         if (toSell <= 0) {
-            source.sendFailure(MessageUtil.error("commands.neoessentials.sell.not_enough_items"));
+            boolean anyNamedBlocked = !allowNamed && countInInventory(player, template, true) > available;
+            source.sendFailure(MessageUtil.error(anyNamedBlocked
+                ? "commands.neoessentials.sell.cannot_sell_named"
+                : "commands.neoessentials.sell.not_enough_items"));
             return 0;
         }
-        removeFromInventory(player, template, toSell);
-        BigDecimal earned = price.multiply(wm.getSellMultiplier())
-            .multiply(BigDecimal.valueOf(toSell));
+
+        // Apply per-player multiplier from EconomyModifierManager
+        double modMult = com.zerog.neoessentials.economy.compat.EconomyModifierManager
+            .getInstance().getSellMultiplier(player.getUUID());
+        BigDecimal multiplier = (modMult > 0) ? BigDecimal.valueOf(modMult) : wm.getSellMultiplier();
+
+        // Captured BEFORE removeFromInventory: for /sell hand, `template` IS the same live
+        // ItemStack instance sitting in the player's inventory slot (getMainHandItem() returns
+        // a direct reference, not a copy). removeFromInventory() shrinks that exact object, and
+        // once its count hits 0 vanilla's ItemStack.getItem() starts returning Items.AIR (it's
+        // isEmpty()-gated), so reading the item id from `template` afterward would log/report
+        // "minecraft:air" instead of the item actually sold.
+        String itemId = WorthManager.getItemId(template);
+        removeFromInventory(player, template, toSell, allowNamed);
+        BigDecimal earned = price.multiply(multiplier).multiply(BigDecimal.valueOf(toSell));
+        NeoLog.debug(LOGGER, LogCategory.ECONOMY,
+            "doSell: player={} removed {}x {} from inventory, crediting earned={}", player.getName().getString(), toSell, itemId, earned);
         EconomyManager.getInstance().addBalance(player.getUUID(), earned);
-        LOGGER.info("Player {} sold {}x {} for {}{}", player.getName().getString(),
-            toSell, WorthManager.getItemId(template),
-            WorthCommand.getCurrencySymbol(), WorthCommand.format(earned));
+        NeoLog.info(LOGGER, LogCategory.ECONOMY, "Player {} sold {}x {} for {}{} (x{} multiplier)", player.getName().getString(),
+            toSell, itemId,
+            WorthCommand.getCurrencySymbol(), WorthCommand.format(earned), multiplier.toPlainString());
         String sym = WorthCommand.getCurrencySymbol();
         final int fs = toSell; final BigDecimal fe = earned; final BigDecimal fp = price;
         source.sendSuccess(() -> MessageUtil.success("commands.neoessentials.sell.item_sold",
-            fs, WorthManager.getItemId(template), sym + WorthCommand.format(fe),
+            fs, itemId, sym + WorthCommand.format(fe),
             sym + WorthCommand.format(fp)), false);
         return 1;
     }
@@ -238,7 +308,11 @@ public class SellCommand {
     }
 
     private static ItemStack resolveItemOrHand(CommandSourceStack source, String itemId) {
-        if (itemId.equalsIgnoreCase("hand")) {
+        // "hand" is a special sentinel, not a real item — since /setworth's argument is now a
+        // ResourceLocationArgument (needed so "minecraft:dirt"-style full IDs parse at all, not
+        // just bare names), a bare "hand" normalizes to "minecraft:hand" by the time it gets
+        // here, so both forms need to match.
+        if (itemId.equalsIgnoreCase("hand") || itemId.equalsIgnoreCase("minecraft:hand")) {
             var p = source.getPlayer();
             if (p == null) { source.sendFailure(MessageUtil.error("commands.neoessentials.general.player_only")); return null; }
             ItemStack held = p.getMainHandItem();
@@ -251,22 +325,32 @@ public class SellCommand {
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
-    private static int countInInventory(ServerPlayer player, ItemStack template) {
+    // Worth is intentionally keyed by item TYPE, not exact components (matches EssentialsX's
+    // Worth semantics) — but named-item protection has to inspect each REAL inventory stack's
+    // own components, not the (possibly bare/synthetic) `template` passed in, since the caller
+    // may be selling "by name" via a freshly-constructed template that never carries whatever
+    // enchantments/custom name the actual inventory stack has.
+    private static boolean isSellableSlot(ItemStack slot, ItemStack template, boolean allowNamed) {
+        if (slot.isEmpty() || slot.getItem() != template.getItem()) return false;
+        return allowNamed || !slot.has(DataComponents.CUSTOM_NAME);
+    }
+
+    private static int countInInventory(ServerPlayer player, ItemStack template, boolean allowNamed) {
         int count = 0;
         Inventory inv = player.getInventory();
         for (int i = 0; i < inv.getContainerSize(); i++) {
             ItemStack s = inv.getItem(i);
-            if (!s.isEmpty() && s.getItem() == template.getItem()) count += s.getCount();
+            if (isSellableSlot(s, template, allowNamed)) count += s.getCount();
         }
         return count;
     }
 
-    private static void removeFromInventory(ServerPlayer player, ItemStack template, int amount) {
+    private static void removeFromInventory(ServerPlayer player, ItemStack template, int amount, boolean allowNamed) {
         Inventory inv = player.getInventory();
         int remaining = amount;
         for (int i = 0; i < inv.getContainerSize() && remaining > 0; i++) {
             ItemStack s = inv.getItem(i);
-            if (!s.isEmpty() && s.getItem() == template.getItem()) {
+            if (isSellableSlot(s, template, allowNamed)) {
                 int toRemove = Math.min(s.getCount(), remaining);
                 s.shrink(toRemove);
                 remaining -= toRemove;

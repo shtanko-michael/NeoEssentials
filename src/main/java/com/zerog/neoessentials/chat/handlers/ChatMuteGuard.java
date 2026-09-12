@@ -2,7 +2,8 @@ package com.zerog.neoessentials.chat.handlers;
 
 import com.zerog.neoessentials.chat.MuteManager;
 import com.zerog.neoessentials.moderation.BanManager;
-import com.zerog.neoessentials.util.ChatDebugUtil;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import com.zerog.neoessentials.util.MessageUtil;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -10,6 +11,8 @@ import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.ServerChatEvent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Enforces chat mutes at the earliest possible point in the {@link ServerChatEvent} pipeline.
@@ -31,6 +34,8 @@ import net.neoforged.neoforge.event.ServerChatEvent;
 @EventBusSubscriber(modid = "neoessentials")
 public class ChatMuteGuard {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(ChatMuteGuard.class);
+
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void onServerChat(ServerChatEvent event) {
         ServerPlayer player = event.getPlayer();
@@ -41,7 +46,7 @@ public class ChatMuteGuard {
         }
 
         event.setCanceled(true);
-        ChatDebugUtil.debug("ChatMuteGuard - blocked chat from muted player %s", playerName);
+        NeoLog.debug(LOGGER, LogCategory.CHAT, "ChatMuteGuard - blocked chat from muted player {}", playerName);
 
         player.sendSystemMessage(muteNotice(playerName));
     }

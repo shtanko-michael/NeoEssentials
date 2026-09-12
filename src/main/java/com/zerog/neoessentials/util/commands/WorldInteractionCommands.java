@@ -20,8 +20,9 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 
-import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -39,7 +40,7 @@ public class WorldInteractionCommands {
     private static final Logger LOGGER = LoggerFactory.getLogger(WorldInteractionCommands.class);
 
     /** Projectile type names → NeoForge EntityType */
-    private static final List<String> PROJECTILE_TYPES = Arrays.asList(
+    private static final List<String> PROJECTILE_TYPES = List.of(
         "fireball", "small", "large", "arrow", "skull", "egg",
         "snowball", "expbottle", "dragon", "trident", "windcharge"
     );
@@ -92,7 +93,7 @@ public class WorldInteractionCommands {
             return 0;
         }
 
-        var level = player.serverLevel();
+        var level = com.zerog.neoessentials.util.LevelCompat.of(player);
         Vec3 eyePos = player.getEyePosition();
         Vec3 dir = player.getLookAngle().scale(speed);
         Vec3 spawnPos = eyePos.add(dir);
@@ -144,7 +145,7 @@ public class WorldInteractionCommands {
                 yield df;
             }
             case "windcharge" -> {
-                var wc = net.minecraft.world.entity.EntityType.WIND_CHARGE.create(level);
+                var wc = com.zerog.neoessentials.util.EntityTypeCompat.create(net.minecraft.world.entity.EntityType.WIND_CHARGE, level);
                 if (wc != null) {
                     wc.setOwner(player);
                     wc.moveTo(spawnPos.x, spawnPos.y, spawnPos.z);
@@ -173,7 +174,7 @@ public class WorldInteractionCommands {
 
     // ── /tree <type> / /bigtree ───────────────────────────────────────────────
     // Essentials: Commandtree — grow a tree at the looked-at block.
-    private static final List<String> TREE_TYPES = Arrays.asList(
+    private static final List<String> TREE_TYPES = List.of(
         "oak", "birch", "spruce", "jungle", "acacia", "darkoak",
         "mangrove", "cherry", "azalea", "bigoak", "mega_spruce", "mega_jungle"
     );
@@ -200,7 +201,7 @@ public class WorldInteractionCommands {
         var player = src.getPlayer();
         if (player == null) { src.sendFailure(MessageUtil.error("commands.neoessentials.general.player_only")); return 0; }
 
-        var level = player.serverLevel();
+        var level = com.zerog.neoessentials.util.LevelCompat.of(player);
         // Raycast to find target block, then plant one block above
         var hit = player.pick(20, 1.0f, false);
         BlockPos target = BlockPos.containing(hit.getLocation()).above();
@@ -274,7 +275,7 @@ public class WorldInteractionCommands {
                 }
                 BlockPos bpos = BlockPos.containing(hit.getLocation());
                 @SuppressWarnings("resource") // ServerLevel is not AutoCloseable
-                var level = player.serverLevel();
+                var level = com.zerog.neoessentials.util.LevelCompat.of(player);
                 BlockState state = level.getBlockState(bpos);
 
                 if (state.isAir()) {
@@ -345,10 +346,10 @@ public class WorldInteractionCommands {
                 var player = src.getPlayer();
                 if (player == null) { src.sendFailure(MessageUtil.error("commands.neoessentials.general.player_only")); return 0; }
 
-                var level = player.serverLevel();
+                var level = com.zerog.neoessentials.util.LevelCompat.of(player);
                 int x = player.getBlockX();
                 int z = player.getBlockZ();
-                int minY = level.getMinBuildHeight();
+                int minY = com.zerog.neoessentials.util.LevelHeightCompat.minBuildHeight(level);
 
                 // Find the lowest safe Y (solid block + air above it)
                 BlockPos safePos = null;
@@ -419,7 +420,7 @@ public class WorldInteractionCommands {
 
         final int fs = sent;
         src.sendSuccess(() -> MessageUtil.success("commands.neoessentials.tpaall.sent", fs), true);
-        LOGGER.info("{} sent tpaall, {} requests sent", src.getTextName(), sent);
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "{} sent tpaall, {} requests sent", src.getTextName(), sent);
         return sent > 0 ? 1 : 0;
     }
 
@@ -433,12 +434,14 @@ public class WorldInteractionCommands {
                 .executes(ctx -> {
                     var src = ctx.getSource();
                     String msg = StringArgumentType.getString(ctx, "message");
+                    // Resolve placeholders using sender's player context (may be null for console)
+                    String resolved = com.zerog.neoessentials.api.PlaceholderAPI.setPlaceholders(src.getPlayer(), msg);
                     ServerLevel targetLevel = src.getLevel();
-                    Component broadcast = MessageUtil.coloredText("§6[World] §e" + msg);
+                    Component broadcast = MessageUtil.coloredText("§6[World] §e" + resolved);
                     int count = 0;
                     for (ServerPlayer p : src.getServer().getPlayerList().getPlayers()) {
                         @SuppressWarnings("resource") // ServerLevel is not AutoCloseable
-                        boolean sameLevel = p.serverLevel() == targetLevel;
+                        boolean sameLevel = com.zerog.neoessentials.util.LevelCompat.of(p) == targetLevel;
                         if (sameLevel) {
                             p.sendSystemMessage(broadcast);
                             count++;
@@ -447,7 +450,7 @@ public class WorldInteractionCommands {
                     final int fc = count;
                     src.sendSuccess(() -> MessageUtil.success("commands.neoessentials.broadcastworld.sent",
                         targetLevel.dimension().location().getPath(), fc), false);
-                    LOGGER.info("[BroadcastWorld:{}] {}", targetLevel.dimension().location().getPath(), msg);
+                    NeoLog.info(LOGGER, LogCategory.GENERAL, "[BroadcastWorld:{}] {}", targetLevel.dimension().location().getPath(), resolved);
                     return 1;
                 })
             )

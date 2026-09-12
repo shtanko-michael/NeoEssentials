@@ -30,6 +30,10 @@ public class ListKitsCommand {
             return; // Don't register kit commands if module is disabled
         }
         
+        if (!com.zerog.neoessentials.config.ConfigManager.getInstance().isCommandEnabled("listkits")) {
+            return;
+        }
+
         registerListKitsCommand(dispatcher, "listkits");
         registerListKitsCommand(dispatcher, "kits");
     }
@@ -118,7 +122,7 @@ public class ListKitsCommand {
             // Sort kit names for consistent display
             List<String> sortedKitNames = kitNames.stream()
                 .sorted(String.CASE_INSENSITIVE_ORDER)
-                .collect(Collectors.toList());
+                .toList();
 
             int totalKits = sortedKitNames.size();
             int maxPages = (int) Math.ceil((double) totalKits / KITS_PER_PAGE);

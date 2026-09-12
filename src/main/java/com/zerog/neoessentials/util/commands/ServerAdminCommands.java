@@ -22,9 +22,10 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.SpawnerBlockEntity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 
 import java.util.*;
-import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 /**
@@ -43,7 +44,7 @@ public class ServerAdminCommands {
     private static final Logger LOGGER = LoggerFactory.getLogger(ServerAdminCommands.class);
 
     // Named time values matching Essentials
-    private static final List<String> TIME_NAMES = Arrays.asList(
+    private static final List<String> TIME_NAMES = List.of(
         "sunrise", "day", "morning", "noon", "afternoon", "sunset", "night", "midnight"
     );
 
@@ -69,12 +70,14 @@ public class ServerAdminCommands {
                     String msg = StringArgumentType.getString(ctx, "message");
                     String senderName = ctx.getSource().getPlayer() != null
                         ? ctx.getSource().getPlayer().getName().getString() : "Console";
-                    // Broadcast to all players with color code support
-                    Component broadcast = MessageUtil.coloredText("§6[Broadcast] §f" + msg);
+                    // Resolve placeholders using sender's player context (may be null for console)
+                    net.minecraft.server.level.ServerPlayer senderPlayer = ctx.getSource().getPlayer();
+                    String resolved = com.zerog.neoessentials.api.PlaceholderAPI.setPlaceholders(senderPlayer, msg);
+                    Component broadcast = MessageUtil.coloredText("§6[Broadcast] §f" + resolved);
                     ctx.getSource().getServer().getPlayerList().getPlayers()
                         .forEach(p -> p.sendSystemMessage(broadcast));
                     ctx.getSource().getServer().sendSystemMessage(broadcast);
-                    LOGGER.info("[Broadcast] {} : {}", senderName, msg);
+                    NeoLog.info(LOGGER, LogCategory.GENERAL, "[Broadcast] {} : {}", senderName, resolved);
                     return 1;
                 })
             )
@@ -85,7 +88,9 @@ public class ServerAdminCommands {
             .then(Commands.argument("message", StringArgumentType.greedyString())
                 .executes(ctx -> {
                     String msg = StringArgumentType.getString(ctx, "message");
-                    Component broadcast = MessageUtil.coloredText("§6[Broadcast] §f" + msg);
+                    net.minecraft.server.level.ServerPlayer senderPlayer = ctx.getSource().getPlayer();
+                    String resolved = com.zerog.neoessentials.api.PlaceholderAPI.setPlaceholders(senderPlayer, msg);
+                    Component broadcast = MessageUtil.coloredText("§6[Broadcast] §f" + resolved);
                     ctx.getSource().getServer().getPlayerList().getPlayers().forEach(p -> p.sendSystemMessage(broadcast));
                     ctx.getSource().getServer().sendSystemMessage(broadcast);
                     return 1;
@@ -98,7 +103,9 @@ public class ServerAdminCommands {
             .then(Commands.argument("message", StringArgumentType.greedyString())
                 .executes(ctx -> {
                     String msg = StringArgumentType.getString(ctx, "message");
-                    Component broadcast = MessageUtil.coloredText("§6[Broadcast] §f" + msg);
+                    net.minecraft.server.level.ServerPlayer senderPlayer = ctx.getSource().getPlayer();
+                    String resolved = com.zerog.neoessentials.api.PlaceholderAPI.setPlaceholders(senderPlayer, msg);
+                    Component broadcast = MessageUtil.coloredText("§6[Broadcast] §f" + resolved);
                     ctx.getSource().getServer().getPlayerList().getPlayers().forEach(p -> p.sendSystemMessage(broadcast));
                     ctx.getSource().getServer().sendSystemMessage(broadcast);
                     return 1;
@@ -263,7 +270,7 @@ public class ServerAdminCommands {
             ? type + " for " + durationSeconds + "s"
             : type;
         src.sendSuccess(() -> MessageUtil.success("commands.neoessentials.weather.set", label), true);
-        LOGGER.info("{} set weather to {}", src.getPlayer() != null ? src.getPlayer().getName().getString() : "Console", label);
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "{} set weather to {}", src.getPlayer() != null ? src.getPlayer().getName().getString() : "Console", label);
         return 1;
     }
 
@@ -294,7 +301,7 @@ public class ServerAdminCommands {
         }
         target.hurt(target.damageSources().genericKill(), Float.MAX_VALUE);
         src.sendSuccess(() -> MessageUtil.success("commands.neoessentials.kill.success", targetName), true);
-        LOGGER.info("{} killed {}", src.getPlayer() != null ? src.getPlayer().getName().getString() : "Console", targetName);
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "{} killed {}", src.getPlayer() != null ? src.getPlayer().getName().getString() : "Console", targetName);
         return 1;
     }
 
@@ -374,7 +381,7 @@ public class ServerAdminCommands {
                     String name = StringArgumentType.getString(ctx, "target");
                     ServerPlayer target = src.getServer().getPlayerList().getPlayerByName(name);
                     if (target == null) { src.sendFailure(MessageUtil.error("commands.neoessentials.general.player_not_found", name)); return 0; }
-                    self.teleportTo(target.serverLevel(), target.getX(), target.getY(), target.getZ(), target.getYRot(), target.getXRot());
+                    self.teleportTo(com.zerog.neoessentials.util.LevelCompat.of(target), target.getX(), target.getY(), target.getZ(), target.getYRot(), target.getXRot());
                     src.sendSuccess(() -> MessageUtil.success("commands.neoessentials.teleport.tpo.success", name), false);
                     return 1;
                 })
@@ -392,7 +399,7 @@ public class ServerAdminCommands {
                     String name = StringArgumentType.getString(ctx, "target");
                     ServerPlayer target = src.getServer().getPlayerList().getPlayerByName(name);
                     if (target == null) { src.sendFailure(MessageUtil.error("commands.neoessentials.general.player_not_found", name)); return 0; }
-                    target.teleportTo(self.serverLevel(), self.getX(), self.getY(), self.getZ(), self.getYRot(), self.getXRot());
+                    target.teleportTo(com.zerog.neoessentials.util.LevelCompat.of(self), self.getX(), self.getY(), self.getZ(), self.getYRot(), self.getXRot());
                     src.sendSuccess(() -> MessageUtil.success("commands.neoessentials.teleport.tpohere.success", name), true);
                     target.sendSystemMessage(MessageUtil.info("commands.neoessentials.teleport.tpohere.notify", self.getName().getString()));
                     return 1;
@@ -417,7 +424,7 @@ public class ServerAdminCommands {
                     ServerPlayer online = src.getServer().getPlayerList().getPlayerByName(name);
                     if (online != null) {
                         // Player is online — just use tpo logic
-                        self.teleportTo(online.serverLevel(), online.getX(), online.getY(), online.getZ(), online.getYRot(), online.getXRot());
+                        self.teleportTo(com.zerog.neoessentials.util.LevelCompat.of(online), online.getX(), online.getY(), online.getZ(), online.getYRot(), online.getXRot());
                         src.sendSuccess(() -> MessageUtil.success("commands.neoessentials.teleport.tpoffline.online", name), false);
                         return 1;
                     }
@@ -446,7 +453,7 @@ public class ServerAdminCommands {
 
                     // Dimension
                     var dimKey = tag.contains("Dimension")
-                        ? ResourceLocation.tryParse(tag.getString("Dimension")) : null;
+                        ? ResourceLocation.tryParse(com.zerog.neoessentials.util.CompoundTagCompat.getString(tag, "Dimension")) : null;
                     ServerLevel level = dimKey != null
                         ? StreamSupport.stream(src.getServer().getAllLevels().spliterator(), false)
                             .filter(l -> l.dimension().location().equals(dimKey))
@@ -503,7 +510,7 @@ public class ServerAdminCommands {
             .then(Commands.argument("dimension", StringArgumentType.word())
                 .suggests((ctx, b) -> SharedSuggestionProvider.suggest(
                     StreamSupport.stream(ctx.getSource().getServer().getAllLevels().spliterator(), false)
-                        .map(l -> l.dimension().location().getPath()).collect(Collectors.toList()), b))
+                        .map(l -> l.dimension().location().getPath()).toList(), b))
                 .executes(ctx -> executeWorld(ctx, StringArgumentType.getString(ctx, "dimension"), null))
                 .then(Commands.argument("target", StringArgumentType.word())
                     .suggests((ctx, b) -> SharedSuggestionProvider.suggest(
@@ -552,7 +559,7 @@ public class ServerAdminCommands {
                 || PermissionAPI.hasPermission(src.getPlayer().getUUID(), "neoessentials.spawner"))
             .then(Commands.argument("mob", StringArgumentType.word())
                 .suggests((ctx, b) -> SharedSuggestionProvider.suggest(
-                    BuiltInRegistries.ENTITY_TYPE.keySet().stream().map(ResourceLocation::getPath).collect(Collectors.toList()), b))
+                    BuiltInRegistries.ENTITY_TYPE.keySet().stream().map(ResourceLocation::getPath).toList(), b))
                 .executes(ctx -> executeSpawner(ctx, StringArgumentType.getString(ctx, "mob")))
             )
         );
@@ -580,7 +587,7 @@ public class ServerAdminCommands {
         if (typeOpt.isEmpty()) { src.sendFailure(MessageUtil.error("commands.neoessentials.spawnmob.unknown", mobName)); return 0; }
         var hit = player.pick(6, 1.0f, false);
         BlockPos bpos = BlockPos.containing(hit.getLocation());
-        var level = player.serverLevel();
+        var level = com.zerog.neoessentials.util.LevelCompat.of(player);
         var state = level.getBlockState(bpos);
         if (!state.is(Blocks.SPAWNER) || !(level.getBlockEntity(bpos) instanceof SpawnerBlockEntity spawnerBE)) {
             src.sendFailure(MessageUtil.error("commands.neoessentials.spawner.not_looking_at_spawner")); return 0;
@@ -590,7 +597,7 @@ public class ServerAdminCommands {
         spawnerBE.setChanged();
         final String fn = mobName;
         src.sendSuccess(() -> MessageUtil.success("commands.neoessentials.spawner.changed", fn), true);
-        LOGGER.info("{} changed spawner at {} to {}", player.getName().getString(), bpos, mobName);
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "{} changed spawner at {} to {}", player.getName().getString(), bpos, mobName);
         return 1;
     }
 
@@ -603,7 +610,7 @@ public class ServerAdminCommands {
             .executes(ctx -> executeRecipe(ctx, null))
             .then(Commands.argument("item", StringArgumentType.word())
                 .suggests((ctx, b) -> SharedSuggestionProvider.suggest(
-                    BuiltInRegistries.ITEM.keySet().stream().map(ResourceLocation::getPath).collect(Collectors.toList()), b))
+                    BuiltInRegistries.ITEM.keySet().stream().map(ResourceLocation::getPath).toList(), b))
                 .executes(ctx -> executeRecipe(ctx, StringArgumentType.getString(ctx, "item")))
             )
         );
@@ -632,7 +639,10 @@ public class ServerAdminCommands {
             try {
                 if (holder.value().getResultItem(src.getServer().registryAccess()).getItem() == finalItem)
                     matching.add(holder);
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                NeoLog.debug(LOGGER, com.zerog.neoessentials.logging.LogCategory.COMMANDS,
+                    "Failed to resolve result item for recipe {}, skipping", holder.id(), e);
+            }
         }
         if (matching.isEmpty()) {
             src.sendFailure(MessageUtil.error("commands.neoessentials.recipe.no_recipe", finalItem.getDescriptionId())); return 0;

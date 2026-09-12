@@ -1,6 +1,8 @@
 package com.zerog.neoessentials.chat.handlers;
 
 import com.zerog.neoessentials.chat.AfkManager;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
@@ -51,7 +53,7 @@ public class AfkActivityHandler {
                 actionCounts.put(activityType, count);
                 if (count > REPETITIVE_ACTION_THRESHOLD) {
                     suspiciousScore += 10;
-                    com.zerog.neoessentials.util.DebugLogger.log(LOGGER, "Detected repetitive {} activity: {} times", activityType, count);
+                    NeoLog.debug(LOGGER, LogCategory.CHAT, "Detected repetitive {} activity: {} times", activityType, count);
                 }
             } else {
                 // Timeframe expired for this action type — reset its counter
@@ -85,19 +87,24 @@ public class AfkActivityHandler {
     private static void recordActivity(ServerPlayer player, String activityType) {
         if (player == null) return;
 
+        AfkManager afkManager = AfkManager.getInstance();
+        if (!afkManager.isEnableActivityTracking() || !afkManager.isTrackInteractions()) {
+            return;
+        }
+
         UUID uuid = player.getUUID();
         ActivityPattern pattern = activityPatterns.computeIfAbsent(uuid, k -> new ActivityPattern());
         pattern.recordActivity(activityType);
 
         // Only update AFK status if not suspicious
         if (!pattern.isSuspicious()) {
-            AfkManager.getInstance().updateActivity(uuid);
-            com.zerog.neoessentials.util.DebugLogger.log(LOGGER, "Activity tracked for {}: {} (score: {})",
+            afkManager.updateActivity(uuid);
+            NeoLog.debug(LOGGER, LogCategory.CHAT, "Activity tracked for {}: {} (score: {})",
                 player.getName().getString(), activityType, pattern.getSuspiciousScore());
         } else {
             // This is diagnostic information - only show when debug logging is enabled
             // Otherwise it spams the logs when players are farming/building
-            com.zerog.neoessentials.util.DebugLogger.log(LOGGER, "Suspicious activity pattern detected for {}: {} (score: {})",
+            NeoLog.debug(LOGGER, LogCategory.CHAT, "Suspicious activity pattern detected for {}: {} (score: {})",
                 player.getName().getString(), activityType, pattern.getSuspiciousScore());
         }
     }
@@ -138,7 +145,7 @@ public class AfkActivityHandler {
             UUID uuid = player.getUUID();
             activityPatterns.remove(uuid);
             AfkManager.getInstance().onPlayerLogout(uuid);
-            com.zerog.neoessentials.util.DebugLogger.log(LOGGER, "AFK tracking cleanup for: {}", player.getName().getString());
+            NeoLog.debug(LOGGER, LogCategory.CHAT, "AFK tracking cleanup for: {}", player.getName().getString());
         }
     }
 
@@ -149,7 +156,7 @@ public class AfkActivityHandler {
             // Reset activity pattern on login
             activityPatterns.put(uuid, new ActivityPattern());
             AfkManager.getInstance().updateActivity(uuid);
-            com.zerog.neoessentials.util.DebugLogger.log(LOGGER, "AFK tracking initialized for: {}", player.getName().getString());
+            NeoLog.debug(LOGGER, LogCategory.CHAT, "AFK tracking initialized for: {}", player.getName().getString());
         }
     }
 

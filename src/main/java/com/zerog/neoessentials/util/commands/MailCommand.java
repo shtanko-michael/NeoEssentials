@@ -24,6 +24,8 @@ import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -67,7 +69,7 @@ public class MailCommand {
     private static final Map<UUID, List<MailMessage>> MAIL_BOX = new ConcurrentHashMap<>();
     private static final Path MAIL_DATA_FILE =
         Paths.get("config", "neoessentials", "mail_data.json");
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
     private static final DateTimeFormatter TIME_FORMAT =
         DateTimeFormatter.ofPattern("MM/dd/yyyy HH:mm");
 
@@ -169,6 +171,7 @@ public class MailCommand {
             // /mail send <player> <message>
             .then(Commands.literal("send")
                 .then(Commands.argument("player", StringArgumentType.word())
+                    .suggests((ctx, b) -> net.minecraft.commands.SharedSuggestionProvider.suggest(ctx.getSource().getServer().getPlayerNames(), b))
                     .then(Commands.argument("message", StringArgumentType.greedyString())
                         .executes(ctx -> {
                             if (!checkPerm(ctx.getSource(), "neoessentials.mail.send")) return 0;
@@ -184,6 +187,7 @@ public class MailCommand {
             // /mail sendtemp <player> <duration> <message>
             .then(Commands.literal("sendtemp")
                 .then(Commands.argument("player", StringArgumentType.word())
+                    .suggests((ctx, b) -> net.minecraft.commands.SharedSuggestionProvider.suggest(ctx.getSource().getServer().getPlayerNames(), b))
                     .then(Commands.argument("duration", StringArgumentType.word())
                         .then(Commands.argument("message", StringArgumentType.greedyString())
                             .executes(ctx -> {
@@ -335,8 +339,7 @@ public class MailCommand {
         long unread = msgs.stream().filter(m -> !m.read && !m.isExpired()).count();
         player.sendSystemMessage(MessageUtil.info("commands.neoessentials.mail.status",
             msgs.size(), unread));
-        player.sendSystemMessage(Component.literal(
-            MessageUtil.localize("commands.neoessentials.mail.status_hint")));
+        player.sendSystemMessage(MessageUtil.component("commands.neoessentials.mail.status_hint"));
         return 1;
     }
 
@@ -362,8 +365,7 @@ public class MailCommand {
         int start = (page - 1) * ITEMS_PER_PAGE;
         int end   = Math.min(start + ITEMS_PER_PAGE, msgs.size());
 
-        player.sendSystemMessage(Component.literal(
-            MessageUtil.localize("commands.neoessentials.mail.read_header", page, totalPages)));
+        player.sendSystemMessage(MessageUtil.component("commands.neoessentials.mail.header", page, totalPages));
 
         for (int i = start; i < end; i++) {
             MailMessage mail = msgs.get(i);
@@ -373,24 +375,22 @@ public class MailCommand {
             boolean wasUnread = !mail.read;
             mail.read = true;
 
-            String unreadMarker = wasUnread ? "§e● " : "";
+            String unreadMarker = wasUnread ? MessageUtil.localize("commands.neoessentials.mail.unread_marker") : "";
             String expireInfo   = mail.timeExpire > 0
-                ? MessageUtil.localize("commands.neoessentials.mail.entry_expires", mail.formattedExpiry()) : "";
+                ? MessageUtil.localize("commands.neoessentials.mail.expire_info", mail.formattedExpiry()) : "";
 
-            MutableComponent line = Component.literal(MessageUtil.localize(
-                "commands.neoessentials.mail.entry",
-                displayIndex, unreadMarker, mail.senderName, mail.message, expireInfo
-            ));
+            MutableComponent line = (MutableComponent) MessageUtil.component("commands.neoessentials.mail.entry",
+                displayIndex, unreadMarker, mail.senderName, mail.message, expireInfo);
 
             // Hover: full details; click: suggest delete
-            MutableComponent hover = Component.literal(MessageUtil.localize("commands.neoessentials.mail.hover_sent", mail.formattedTime()) + "\n")
-                .append(Component.literal(MessageUtil.localize("commands.neoessentials.mail.hover_id", mail.id) + "\n"))
-                .append(Component.literal(MessageUtil.localize("commands.neoessentials.mail.hover_from", mail.senderName) + "\n"))
-                .append(Component.literal(MessageUtil.localize("commands.neoessentials.mail.hover_delete")));
+            MutableComponent hover = ((MutableComponent) MessageUtil.component("commands.neoessentials.mail.hover_sent", mail.formattedTime())).append("\n")
+                .append(MessageUtil.component("commands.neoessentials.mail.hover_id", mail.id)).append("\n")
+                .append(MessageUtil.component("commands.neoessentials.mail.hover_from", mail.senderName)).append("\n")
+                .append(MessageUtil.component("commands.neoessentials.mail.hover_click_delete"));
 
             line = line.withStyle(s -> s
-                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, hover))
-                .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND,
+                .withHoverEvent(com.zerog.neoessentials.util.HoverEventCompat.create(HoverEvent.Action.SHOW_TEXT, hover))
+                .withClickEvent(com.zerog.neoessentials.util.ClickEventCompat.create(ClickEvent.Action.SUGGEST_COMMAND,
                     "/mail delete " + mail.id))
             );
             player.sendSystemMessage(line);
@@ -400,21 +400,20 @@ public class MailCommand {
         if (totalPages > 1) {
             MutableComponent footer = Component.literal("§7");
             if (page > 1) {
-                footer.append(Component.literal(MessageUtil.localize("commands.neoessentials.mail.prev_button"))
-                    .withStyle(s -> s.withClickEvent(new ClickEvent(
+                footer.append(((MutableComponent) MessageUtil.component("commands.neoessentials.mail.prev_button"))
+                    .withStyle(s -> s.withClickEvent(com.zerog.neoessentials.util.ClickEventCompat.create(
                         ClickEvent.Action.RUN_COMMAND, "/mail read " + (page - 1)))));
             }
-            footer.append(Component.literal(MessageUtil.localize("commands.neoessentials.mail.page_indicator", page, totalPages)));
+            footer.append(MessageUtil.component("commands.neoessentials.mail.page_footer", page, totalPages));
             if (page < totalPages) {
-                footer.append(Component.literal(MessageUtil.localize("commands.neoessentials.mail.next_button"))
-                    .withStyle(s -> s.withClickEvent(new ClickEvent(
+                footer.append(((MutableComponent) MessageUtil.component("commands.neoessentials.mail.next_button"))
+                    .withStyle(s -> s.withClickEvent(com.zerog.neoessentials.util.ClickEventCompat.create(
                         ClickEvent.Action.RUN_COMMAND, "/mail read " + (page + 1)))));
             }
             player.sendSystemMessage(footer);
         }
 
-        player.sendSystemMessage(Component.literal(
-            MessageUtil.localize("commands.neoessentials.mail.clear_hint")));
+        player.sendSystemMessage(MessageUtil.component("commands.neoessentials.mail.clear_hint"));
 
         if (removed) saveMailData();
         else saveMailData(); // always persist read flags
@@ -505,7 +504,7 @@ public class MailCommand {
         return 1;
     }
 
-    /** /mail sendall / sendtempall — broadcast to every player's mailbox. Runs async. */
+    /** /mail sendall / sendtempall — broadcast to every player's mailbox. */
     private static int sendMailAll(CommandSourceStack source, String senderName,
                                    String senderUuid, String message, long expireAt) {
         if (message.length() > MAX_MESSAGE_LENGTH) {
@@ -514,20 +513,20 @@ public class MailCommand {
             return 0;
         }
 
-        // Run asynchronously — could touch many files
-        Thread t = new Thread(() -> {
-            // Online players first
-            source.getServer().getPlayerList().getPlayers().forEach(p -> {
-                MailMessage mail = new MailMessage(senderName, senderUuid, message, expireAt);
-                MAIL_BOX.computeIfAbsent(p.getUUID(), k -> new ArrayList<>()).add(0, mail);
-            });
-            // Also load and update offline player mailboxes from disk
-            saveMailData();
-            LOGGER.info("sendall from {} completed: {} players", senderName,
-                source.getServer().getPlayerList().getPlayerCount());
-        }, "NeoEssentials-MailSendAll");
-        t.setDaemon(true);
-        t.start();
+        var server = source.getServer();
+        // This command already runs on the main thread (brigadier dispatch), so no
+        // marshaling is needed here — the previous version spawned a raw background thread
+        // that iterated the live player list and mutated the shared mailbox lists
+        // concurrently with other /mail commands running on the main thread; that raced
+        // against MAIL_BOX's per-player ArrayLists (not thread-safe) and could throw
+        // ConcurrentModificationException against concurrent join/leave.
+        server.getPlayerList().getPlayers().forEach(p -> {
+            MailMessage mail = new MailMessage(senderName, senderUuid, message, expireAt);
+            MAIL_BOX.computeIfAbsent(p.getUUID(), k -> new java.util.concurrent.CopyOnWriteArrayList<>()).add(0, mail);
+        });
+        saveMailData();
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "sendall from {} completed: {} players", senderName,
+            server.getPlayerList().getPlayerCount());
 
         source.sendSuccess(() -> MessageUtil.success("commands.neoessentials.mail.sent_all"), false);
         return 1;
@@ -591,7 +590,7 @@ public class MailCommand {
         saveMailData();
         source.sendSuccess(() -> MessageUtil.success(
             "commands.neoessentials.mail.cleared_all", count), false);
-        LOGGER.info("[Mail] clearall executed by {}", source.getTextName());
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "[Mail] clearall executed by {}", source.getTextName());
         return 1;
     }
 
@@ -663,7 +662,10 @@ public class MailCommand {
             var cfg = ConfigManager.getInstance().getConfig("config.json");
             if (cfg.has("mail") && cfg.getAsJsonObject("mail").has("mailsPerMinute"))
                 return cfg.getAsJsonObject("mail").get("mailsPerMinute").getAsInt();
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, com.zerog.neoessentials.logging.LogCategory.COMMANDS,
+                "Failed to read mail.mailsPerMinute, using default", e);
+        }
         return DEFAULT_MAILS_PER_MINUTE;
     }
 
@@ -673,7 +675,10 @@ public class MailCommand {
         try {
             com.mojang.authlib.GameProfile p = server.getProfileCache().get(name).orElse(null);
             if (p != null) return p.getId();
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, com.zerog.neoessentials.logging.LogCategory.COMMANDS,
+                "Failed to resolve offline UUID for '{}'", name, e);
+        }
         return null;
     }
 
@@ -727,7 +732,7 @@ public class MailCommand {
                     LOGGER.warn("Skipped invalid mail entry for key '{}': {}", entry.getKey(), e.getMessage());
                 }
             }
-            LOGGER.debug("Loaded mail data for {} players", MAIL_BOX.size());
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Loaded mail data for {} players", MAIL_BOX.size());
         } catch (Exception e) {
             LOGGER.error("Failed to load mail data: {}", e.getMessage(), e);
         }
@@ -753,7 +758,11 @@ public class MailCommand {
                 data.add(entry.getKey().toString(), arr);
             }
             Files.createDirectories(MAIL_DATA_FILE.getParent());
-            Files.writeString(MAIL_DATA_FILE, GSON.toJson(data));
+            // Atomic temp-file + rename, same pattern as JsonFileDataStore — a crash mid-write
+            // must not leave every player's mailbox truncated/corrupt.
+            Path tmp = MAIL_DATA_FILE.resolveSibling(MAIL_DATA_FILE.getFileName() + ".tmp-" + System.currentTimeMillis());
+            Files.writeString(tmp, GSON.toJson(data));
+            Files.move(tmp, MAIL_DATA_FILE, java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
         } catch (Exception e) {
             LOGGER.error("Failed to save mail data: {}", e.getMessage(), e);
         }

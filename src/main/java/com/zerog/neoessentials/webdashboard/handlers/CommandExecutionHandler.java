@@ -6,6 +6,8 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import net.minecraft.commands.CommandSource;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.network.chat.Component;
@@ -29,7 +31,7 @@ import java.util.stream.Collectors;
  */
 public class CommandExecutionHandler implements HttpHandler {
     private static final Logger LOGGER = LoggerFactory.getLogger(CommandExecutionHandler.class);
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
     
     // Command history storage
     private static final List<CommandHistoryEntry> commandHistory = Collections.synchronizedList(new ArrayList<>());
@@ -58,8 +60,21 @@ public class CommandExecutionHandler implements HttpHandler {
         
         String method = exchange.getRequestMethod();
         String path = exchange.getRequestURI().getPath();
-        
+
+        NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "CommandExecutionHandler handling request: {} {}", method, path);
+
         try {
+            // This whole endpoint runs arbitrary commands at OP level 4 (see
+            // createDashboardCommandSource below) — that's not limited to the
+            // RESTRICTED_COMMANDS list (e.g. /gamemode, /give, /execute are just as
+            // dangerous), so the endpoint itself must be admin-only. Previously it had NO
+            // role check at all (only DashboardAPI.withAuth ran, which merely verifies a
+            // valid session, not its role) — any authenticated session, including a
+            // self-registered default VIEWER via /dashboardregister, could run this.
+            if (!Boolean.TRUE.equals(exchange.getAttribute("auth-admin"))) {
+                sendJsonResponse(exchange, 403, createErrorResponse("Admin access required"));
+                return;
+            }
             if ("POST".equals(method) && path.endsWith("/execute")) {
                 handleExecute(exchange);
             } else if ("GET".equals(method) && path.endsWith("/history")) {
@@ -70,7 +85,7 @@ public class CommandExecutionHandler implements HttpHandler {
                 sendJsonResponse(exchange, 400, createErrorResponse("Invalid endpoint"));
             }
         } catch (Exception e) {
-            LOGGER.error("Error handling command execution request", e);
+            NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Error handling command execution request", e);
             sendJsonResponse(exchange, 500, createErrorResponse("Internal server error: " + e.getMessage()));
         }
     }
@@ -90,16 +105,20 @@ public class CommandExecutionHandler implements HttpHandler {
         }
         
         String command = request.get("command").getAsString().trim();
-        boolean checkPermissions = request.has("checkPermissions") && request.get("checkPermissions").getAsBoolean();
-        
+
         // Remove leading slash if present
         if (command.startsWith("/")) {
             command = command.substring(1);
         }
-        
-        // Check for restricted commands
+
+        // Restricted commands are always blocked here, regardless of any client-supplied
+        // flag — this used to be gated behind a "checkPermissions" boolean read straight from
+        // the request body (defaulting to false), so a caller could just omit/falsify it to
+        // run op/whitelist/ban-ip/stop unchecked. Now that the whole endpoint is admin-only
+        // (see handle() above), this is defense-in-depth: even an admin session is nudged
+        // toward the dedicated AdminEndpoint actions for these instead of raw execution.
         String baseCommand = command.split(" ")[0];
-        if (checkPermissions && RESTRICTED_COMMANDS.contains(baseCommand.toLowerCase())) {
+        if (RESTRICTED_COMMANDS.contains(baseCommand.toLowerCase())) {
             sendJsonResponse(exchange, 403, createErrorResponse("Command '" + baseCommand + "' requires elevated permissions"));
             return;
         }
@@ -114,7 +133,11 @@ public class CommandExecutionHandler implements HttpHandler {
         String executionId = UUID.randomUUID().toString();
         List<String> output = new ArrayList<>();
         commandOutputs.put(executionId, output);
-        
+
+        Object authUsername = exchange.getAttribute("auth-username");
+        NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Executing dashboard command '{}' (by {}, executionId={})",
+            command, authUsername != null ? authUsername : "unknown", executionId);
+
         try {
             // Create command source for dashboard
             CommandSourceStack source = createDashboardCommandSource(server, output);
@@ -139,7 +162,7 @@ public class CommandExecutionHandler implements HttpHandler {
             sendJsonResponse(exchange, 200, response);
             
         } catch (Exception e) {
-            LOGGER.error("Error executing command: {}", command, e);
+            NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Error executing command: {}", command, e);
             
             addToHistory(command, false, "Error: " + e.getMessage());
             

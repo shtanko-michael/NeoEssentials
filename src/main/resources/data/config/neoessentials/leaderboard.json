@@ -1,0 +1,99 @@
+{
+  // DO NOT MODIFY: Used by NeoEssentials for automatic config updates.
+  "_configVersion": 3,
+
+  /* ================================================================
+     NeoEssentials — Leaderboard Configuration  (leaderboard.json)
+     Reload in-game: /leaderboard reload
+     View: /leaderboard [board] [page]  (alias /lb)
+  ================================================================ */
+
+  "leaderboard": {
+
+    /* Each entry is one board. Fields:
+     *   id                — used in /leaderboard <id>, /lb <id>, and placeholders
+     *   type               — "economy" | "vanilla_stat" | "custom" | "shop_sales"
+     *   displayName        — shown in the board's header
+     *   format             — "integer" | "time" | "currency"
+     *   higherIsBetter     — true for "top" boards; false ranks lowest-first
+     *   exemptPermission   — players with this permission are excluded from the ranking
+     *   refreshInterval    — seconds a cached ranking is served before rebuilding on next
+     *                        access (default 60 if omitted). Cheap boards (economy balances,
+     *                        online-only stats) can go lower; boards that scan every offline
+     *                        player's stats file or the whole shop list may want it higher to
+     *                        avoid rebuilding on every /leaderboard view.
+     *   enabled            — false hides the board without deleting its definition
+     *   entryFormat        — optional custom line template for /leaderboard's chat output AND
+     *                        the leaderboard GUI's item names. Tokens: {rank} {name} {value}
+     *                        {medal} (🥇🥈🥉 on ranks 1-3, empty otherwise) {rankColor} (a
+     *                        gold/silver/bronze color tag on ranks 1-3, empty otherwise).
+     *                        Supports the same &-codes/hex/gradient tags as tablist/scoreboard
+     *                        lines. Omit to keep the default plain line.
+     *   headerFormat       — same idea for the header line. Tokens: {displayName} {page}
+     *                        {totalPages} {age} (seconds since last refresh), plus the same
+     *                        {rank}/{name}/{value}/{medal}/{rankColor} tokens (unused on the
+     *                        header but harmless if referenced).
+     *   icon               — item id (e.g. "minecraft:emerald") used as the GUI icon for
+     *                        entries with no player (e.g. a shop). Omit to use minecraft:paper.
+     *                        Player entries always show their real head regardless of this.
+     *
+     * The same {leaderboard_<board>:<rank>:medal}/{rankcolor} tokens are also available as
+     * placeholders anywhere placeholders resolve (holograms, sidebar scoreboard, tablist) —
+     * entryFormat/headerFormat only matter for /leaderboard's own chat output and GUI.
+     *
+     * View: /leaderboard [board] [page]  (alias /lb) — /leaderboard <board> gui opens a
+     * paginated chest-GUI browser for the same board.
+     *
+     * "vanilla_stat" boards use vanilla's OWN scoreboard-objective criteria string — the
+     * exact same format "/scoreboard objectives add <name> <criteria>" accepts in-game:
+     *   <stat type>.<type path>:<value namespace>.<value path>
+     * Common stat types: minecraft.custom (kills/deaths/playtime/distance/...),
+     *   minecraft.mined (blocks broken, value = the block id), minecraft.killed
+     *   (mobs killed, value = the entity type id), minecraft.crafted / minecraft.used /
+     *   minecraft.broken / minecraft.picked_up / minecraft.dropped (value = an item id).
+     * Look up exact value ids the same way you would for a vanilla /scoreboard objective —
+     * this mod doesn't invent its own stat names.
+     *
+     * "custom" boards aren't backed by anything vanilla tracks — set values via
+     * /leaderboard admin set|add|reset <board> <player> <value>, the dashboard, or another
+     * mod calling LeaderboardAPI/CustomStatProvider directly.
+     */
+    "boards": [
+      { "id": "money", "type": "economy", "displayName": "Balance", "format": "currency",
+        "higherIsBetter": true, "exemptPermission": "neoessentials.economy.baltop.exempt",
+        "enabled": true },
+
+      { "id": "kills", "type": "vanilla_stat", "stat": "minecraft.custom:minecraft.player_kills",
+        "displayName": "Player Kills", "format": "integer", "higherIsBetter": true,
+        "exemptPermission": "neoessentials.leaderboard.kills.exempt", "enabled": true },
+
+      { "id": "mob_kills", "type": "vanilla_stat", "stat": "minecraft.custom:minecraft.mob_kills",
+        "displayName": "Mob Kills", "format": "integer", "higherIsBetter": true,
+        "exemptPermission": "neoessentials.leaderboard.mob_kills.exempt", "enabled": true },
+
+      { "id": "playtime", "type": "vanilla_stat", "stat": "minecraft.custom:minecraft.play_time",
+        "displayName": "Playtime", "format": "time", "higherIsBetter": true,
+        "exemptPermission": "neoessentials.leaderboard.playtime.exempt", "refreshInterval": 300,
+        "enabled": true },
+
+      // Examples — flip "enabled" to true (and /leaderboard reload) to turn one on.
+      { "id": "diamonds_mined", "type": "vanilla_stat", "stat": "minecraft.mined:minecraft.diamond_ore",
+        "displayName": "Diamond Ore Mined", "format": "integer", "higherIsBetter": true, "enabled": false },
+      { "id": "zombie_kills", "type": "vanilla_stat", "stat": "minecraft.killed:minecraft.zombie",
+        "displayName": "Zombie Kills", "format": "integer", "higherIsBetter": true, "enabled": false },
+      { "id": "distance_walked", "type": "vanilla_stat", "stat": "minecraft.custom:minecraft.walk_one_cm",
+        "displayName": "Distance Walked (cm)", "format": "integer", "higherIsBetter": true, "enabled": false },
+      { "id": "deaths", "type": "vanilla_stat", "stat": "minecraft.custom:minecraft.deaths",
+        "displayName": "Deaths", "format": "integer", "higherIsBetter": true, "enabled": false },
+
+      { "id": "event_points", "type": "custom", "displayName": "Event Points", "format": "integer",
+        "higherIsBetter": true, "enabled": false },
+
+      // Ranks shops (sign/chest and NPC) by total revenue. Requires no "stat"/params —
+      // the whole shop system is the data source. Shops with no sales yet are omitted.
+      { "id": "shop_sales", "type": "shop_sales", "displayName": "Top Shops", "format": "currency",
+        "higherIsBetter": true, "refreshInterval": 120, "icon": "minecraft:emerald",
+        "entryFormat": "{rankColor}{medal} #{rank} &f{name} &8- &a{value}", "enabled": true }
+    ]
+  }
+}

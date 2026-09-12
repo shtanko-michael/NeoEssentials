@@ -1,6 +1,8 @@
 package com.zerog.neoessentials.chat.handlers;
 
 import com.zerog.neoessentials.chat.AfkManager;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
@@ -46,11 +48,11 @@ public class AfkTablistHandler {
                 String prefix = afkManager.getTablistAfkPrefix();
                 String suffix = afkManager.getTablistAfkSuffix();
                 displayName = prefix + originalName + suffix;
-                com.zerog.neoessentials.util.DebugLogger.log(LOGGER, "Setting AFK tablist name for {}: {}", originalName, displayName);
+                NeoLog.debug(LOGGER, LogCategory.CHAT, "Setting AFK tablist name for {}: {}", originalName, displayName);
             } else {
                 // Player is not AFK - use original name
                 displayName = originalName;
-                com.zerog.neoessentials.util.DebugLogger.log(LOGGER, "Setting normal tablist name for {}: {}", originalName, displayName);
+                NeoLog.debug(LOGGER, LogCategory.CHAT, "Setting normal tablist name for {}: {}", originalName, displayName);
             }
             
             // Update the player's display name in the tablist
@@ -59,7 +61,7 @@ public class AfkTablistHandler {
             // player.setTabListDisplayName(nameComponent); // Method not available
             
             // Alternative: Store display name for future use
-            LOGGER.debug("Tablist display would be: {}", displayName);
+            NeoLog.debug(LOGGER, LogCategory.CHAT, "Tablist display would be: {}", displayName);
             
         } catch (Exception e) {
             LOGGER.error("Failed to update tablist name for player {}: {}", 
@@ -78,7 +80,7 @@ public class AfkTablistHandler {
                 for (ServerPlayer player : server.getPlayerList().getPlayers()) {
                     updatePlayerTablistName(player);
                 }
-                LOGGER.debug("Updated tablist names for all online players");
+                NeoLog.debug(LOGGER, LogCategory.CHAT, "Updated tablist names for all online players");
             }
         } catch (Exception e) {
             LOGGER.error("Failed to update tablist names for all players: {}", e.getMessage(), e);
@@ -90,7 +92,7 @@ public class AfkTablistHandler {
      */
     public static void onPlayerAfk(ServerPlayer player) {
         updatePlayerTablistName(player);
-        LOGGER.debug("Updated tablist for AFK player: {}", player.getName().getString());
+        NeoLog.debug(LOGGER, LogCategory.CHAT, "Updated tablist for AFK player: {}", player.getName().getString());
     }
     
     /**
@@ -98,6 +100,6 @@ public class AfkTablistHandler {
      */
     public static void onPlayerReturnFromAfk(ServerPlayer player) {
         updatePlayerTablistName(player);
-        LOGGER.debug("Updated tablist for returning player: {}", player.getName().getString());
+        NeoLog.debug(LOGGER, LogCategory.CHAT, "Updated tablist for returning player: {}", player.getName().getString());
     }
 }

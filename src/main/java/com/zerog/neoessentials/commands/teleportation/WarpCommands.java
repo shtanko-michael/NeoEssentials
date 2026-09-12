@@ -7,6 +7,8 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.zerog.neoessentials.api.permissions.PermissionAPI;
 import com.zerog.neoessentials.config.ConfigManager;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import com.zerog.neoessentials.teleportation.Warp.WarpManager;
 import com.zerog.neoessentials.util.MessageUtil;
 import net.minecraft.commands.CommandSourceStack;
@@ -16,6 +18,8 @@ import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -32,6 +36,8 @@ import java.util.UUID;
  * - /warps [page]            - Paginated warp list (Essentials: WARPS_PER_PAGE=20)
  */
 public class WarpCommands {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(WarpCommands.class);
 
     private static final String PERMISSION_WARP        = "neoessentials.teleport.warp";
     private static final String PERMISSION_WARP_LIST   = "neoessentials.teleport.warp.list";
@@ -58,6 +64,7 @@ public class WarpCommands {
         if (config.isCommandEnabled("setwarp"))  registerSetWarpCommand(dispatcher);
         if (config.isCommandEnabled("delwarp"))  registerDelWarpCommand(dispatcher);
         if (config.isCommandEnabled("listwarps")) registerWarpsCommand(dispatcher);
+        NeoLog.debug(LOGGER, LogCategory.COMMANDS, "Warp command family registered");
     }
 
     // ── /warp ─────────────────────────────────────────────────────────────────
@@ -171,6 +178,13 @@ public class WarpCommands {
 
         // Warp-others branch (Essentials: essentials.warp.others)
         if (targetName != null) {
+            // Permission is already checked in the argument node's requires(), but double-check
+            // here too — same defense-in-depth as executeDelWarp() below — so this can never be
+            // reached via some other path (e.g. a future redirect/alias) without the gate.
+            if (!PermissionAPI.hasPermission(sender.getUUID(), PERMISSION_WARP_OTHERS)) {
+                source.sendFailure(MessageUtil.error("commands.neoessentials.general.no_permission"));
+                return 0;
+            }
             ServerPlayer target = source.getServer().getPlayerList().getPlayerByName(targetName);
             if (target == null) {
                 source.sendFailure(MessageUtil.error(
@@ -184,6 +198,7 @@ public class WarpCommands {
         }
 
         wm.teleportToWarp(sender, warpName);
+        NeoLog.debug(LOGGER, LogCategory.COMMANDS, "{} warped to '{}'", sender.getName().getString(), warpName);
         return 1;
     }
 
@@ -216,9 +231,11 @@ public class WarpCommands {
         String name = StringArgumentType.getString(ctx, "name");
         try {
             BlockPos pos = BlockPosArgument.getLoadedBlockPos(ctx, "pos");
-            ServerLevel level = player.serverLevel();
+            ServerLevel level = com.zerog.neoessentials.util.LevelCompat.of(player);
             return WarpManager.getInstance().createWarp(player, name, level, pos) ? 1 : 0;
         } catch (Exception e) {
+            // Expected: player supplied coordinates that don't parse or reference an unloaded chunk.
+            NeoLog.debug(LOGGER, LogCategory.COMMANDS, "Invalid /setwarp coordinates", e);
             ctx.getSource().sendFailure(MessageUtil.error("teleport.warp.invalid_coordinates"));
             return 0;
         }

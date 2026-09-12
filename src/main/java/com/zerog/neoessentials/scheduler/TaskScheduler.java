@@ -9,6 +9,8 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 
 import java.time.ZoneId;
 import java.util.List;
@@ -80,7 +82,7 @@ public class TaskScheduler {
                     if (manager.checkConditions(task, server)) {
                         executeTask(task);
                     } else {
-                        LOGGER.debug("Task conditions not met, skipping: {}", task.getName());
+                        NeoLog.debug(LOGGER, LogCategory.GENERAL, "Task conditions not met, skipping: {}", task.getName());
                         // Still update next execution time even if conditions not met
                         CronParser parser = new CronParser(task.getCronExpression());
                         ZoneId tz = ZoneId.of(task.getTimezone());
@@ -98,7 +100,7 @@ public class TaskScheduler {
      * Execute a scheduled task
      */
     public static void executeTask(ScheduledTask task) {
-        LOGGER.info("Executing scheduled task: {}", task.getName());
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "Executing scheduled task: {}", task.getName());
         long startTime = System.currentTimeMillis();
         
         try {
@@ -128,7 +130,7 @@ public class TaskScheduler {
                 executionTime
             );
             
-            LOGGER.info("Task executed successfully: {} ({}ms)", task.getName(), executionTime);
+            NeoLog.info(LOGGER, LogCategory.GENERAL, "Task executed successfully: {} ({}ms)", task.getName(), executionTime);
             
         } catch (Exception e) {
             long executionTime = System.currentTimeMillis() - startTime;
@@ -168,7 +170,7 @@ public class TaskScheduler {
                             server.createCommandSourceStack(),
                             cmd
                         );
-                        LOGGER.debug("Executed command: {}", cmd);
+                        NeoLog.debug(LOGGER, LogCategory.GENERAL, "Executed command: {}", cmd);
                     } catch (Exception e) {
                         LOGGER.error("Failed to execute command: {}", cmd, e);
                     }
@@ -188,7 +190,7 @@ public class TaskScheduler {
             throw new RuntimeException("Server not initialized");
         }
         
-        LOGGER.info("Executing backup task: {}", task.getName());
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "Executing backup task: {}", task.getName());
         
         // Execute backup command on server thread
         server.execute(() -> {
@@ -198,7 +200,7 @@ public class TaskScheduler {
                     server.createCommandSourceStack(),
                     "save-all"
                 );
-                LOGGER.info("Backup completed: {}", task.getName());
+                NeoLog.info(LOGGER, LogCategory.GENERAL, "Backup completed: {}", task.getName());
             } catch (Exception e) {
                 LOGGER.error("Failed to execute backup", e);
             }
@@ -214,15 +216,15 @@ public class TaskScheduler {
         }
         
         LOGGER.warn("Executing server restart task: {}", task.getName());
-        
-        // Send warning to all players
-        Component message = Component.literal(MessageUtil.localize("neoessentials.scheduler.restart_scheduled", task.getName()));
-        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            player.sendSystemMessage(message);
-        }
-        
-        // Stop server on server thread
+
+        // Warn players and halt on the main thread — this can be triggered from the
+        // dashboard's manual-execute HTTP handler, so the player list must not be
+        // iterated or touched off-thread.
+        Component message = MessageUtil.component("commands.neoessentials.scheduler.restart_warning", task.getName());
         server.execute(() -> {
+            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                player.sendSystemMessage(message);
+            }
             try {
                 server.halt(false);
             } catch (Exception e) {
@@ -244,14 +246,14 @@ public class TaskScheduler {
             throw new RuntimeException("No message specified");
         }
         
-        String message = commands.get(0);
+        String message = commands.getFirst();
         Component chatMessage = Component.literal(message);
         
         server.execute(() -> {
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
                 player.sendSystemMessage(chatMessage);
             }
-            LOGGER.info("Broadcast message sent: {}", message);
+            NeoLog.info(LOGGER, LogCategory.GENERAL, "Broadcast message sent: {}", message);
         });
     }
     
@@ -259,7 +261,7 @@ public class TaskScheduler {
      * Execute custom task
      */
     private static void executeCustom(ScheduledTask task) {
-        LOGGER.info("Executing custom task: {}", task.getName());
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "Executing custom task: {}", task.getName());
         // Custom tasks can be extended by other modules
         executeCommands(task);
     }

@@ -22,6 +22,8 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 
 public class SignCommand {
     private static final Logger LOGGER = LoggerFactory.getLogger(SignCommand.class);
@@ -65,10 +67,11 @@ public class SignCommand {
             Component lineText = signBlockEntity.getFrontText().getMessage(i, false);
             String textContent = lineText.getString();
             if (textContent.isEmpty()) {
-                textContent = "§7(empty)";
+                textContent = MessageUtil.localize("commands.neoessentials.sign.empty_line");
             }
-            
-            MutableComponent lineComponent = Component.literal("§6Line " + (i + 1) + ": §f" + textContent);
+
+            MutableComponent lineComponent = (MutableComponent) MessageUtil.component(
+                "commands.neoessentials.sign.line_display", i + 1, textContent);
             context.getSource().sendSuccess(() -> lineComponent, false);
         }
         
@@ -110,13 +113,13 @@ public class SignCommand {
         BlockPos pos = signBlockEntity.getBlockPos();
         
         // Update the sign text
-        updateSignLine(signBlockEntity, line, finalText, player.serverLevel());
+        updateSignLine(signBlockEntity, line, finalText, com.zerog.neoessentials.util.LevelCompat.of(player));
         
-        LOGGER.info("Player {} edited sign at {} line {} to: {}", 
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "Player {} edited sign at {} line {} to: {}", 
             player.getName().getString(), pos, line + 1, finalText);
         
-        context.getSource().sendSuccess(() -> MessageUtil.success("commands.neoessentials.sign.updated", 
-            line + 1, finalText.isEmpty() ? "§7(empty)" : finalText), false);
+        context.getSource().sendSuccess(() -> MessageUtil.success("commands.neoessentials.sign.updated",
+            line + 1, finalText.isEmpty() ? MessageUtil.localize("commands.neoessentials.sign.empty_line") : finalText), false);
         return 1;
     }
 
@@ -133,10 +136,10 @@ public class SignCommand {
         
         // Clear all lines
         for (int i = 0; i < 4; i++) {
-            updateSignLine(signBlockEntity, i, "", player.serverLevel());
+            updateSignLine(signBlockEntity, i, "", com.zerog.neoessentials.util.LevelCompat.of(player));
         }
         
-        LOGGER.info("Player {} cleared all lines on sign at {}", player.getName().getString(), pos);
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "Player {} cleared all lines on sign at {}", player.getName().getString(), pos);
         
         context.getSource().sendSuccess(() -> MessageUtil.success("commands.neoessentials.sign.cleared_all"), false);
         return 1;
@@ -156,9 +159,9 @@ public class SignCommand {
         BlockPos pos = signBlockEntity.getBlockPos();
         
         // Clear the specific line
-        updateSignLine(signBlockEntity, line, "", player.serverLevel());
+        updateSignLine(signBlockEntity, line, "", com.zerog.neoessentials.util.LevelCompat.of(player));
         
-        LOGGER.info("Player {} cleared line {} on sign at {}", player.getName().getString(), line + 1, pos);
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "Player {} cleared line {} on sign at {}", player.getName().getString(), line + 1, pos);
         
         context.getSource().sendSuccess(() -> MessageUtil.success("commands.neoessentials.sign.cleared_line", line + 1), false);
         return 1;
@@ -174,7 +177,7 @@ public class SignCommand {
         
         BlockHitResult blockHitResult = (BlockHitResult) hitResult;
         BlockPos pos = blockHitResult.getBlockPos();
-        ServerLevel level = player.serverLevel();
+        ServerLevel level = com.zerog.neoessentials.util.LevelCompat.of(player);
         
         BlockEntity blockEntity = level.getBlockEntity(pos);
         

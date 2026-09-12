@@ -4,6 +4,8 @@ package com.zerog.neoessentials.items.commands;
 import com.zerog.neoessentials.util.MessageUtil;
 import com.zerog.neoessentials.util.InputValidator;
 import com.zerog.neoessentials.util.PermissionValidator;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import net.minecraft.commands.CommandSourceStack;
@@ -63,14 +65,31 @@ public class EnchantCommand {
      * Registers with higher priority to override vanilla command.
      */
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        if (!com.zerog.neoessentials.config.ConfigManager.getInstance().isCommandEnabled("enchant")) return;
-        
+        com.zerog.neoessentials.config.ConfigManager cfg = com.zerog.neoessentials.config.ConfigManager.getInstance();
+
         // Override vanilla enchant command with enhanced version and add aliases
-        registerEnchantCommand(dispatcher, "enchant");
-        registerEnchantCommand(dispatcher, "ench");
+        if (cfg.isCommandEnabled("enchant")) {
+            registerEnchantCommand(dispatcher, "enchant", false);
+            registerEnchantCommand(dispatcher, "ench", false);
+        }
+
+        // /enchanthand is gated independently of /enchant
+        if (cfg.isCommandEnabled("enchanthand")) {
+            registerEnchantCommand(dispatcher, "enchant", true);
+        }
     }
-    
-    private static void registerEnchantCommand(CommandDispatcher<CommandSourceStack> dispatcher, String commandName) {
+
+    /**
+     * Registers the given command literal. When {@code onlyEnchanthandAlias} is true, only the
+     * /enchanthand alias is registered (used so /enchanthand can be gated independently of
+     * /enchant); otherwise the full command (plus its /enchanthand alias registration, kept for
+     * backward-compat call sites) is registered.
+     */
+    private static void registerEnchantCommand(CommandDispatcher<CommandSourceStack> dispatcher, String commandName, boolean onlyEnchanthandAlias) {
+        if (onlyEnchanthandAlias) {
+            registerEnchanthandAlias(dispatcher);
+            return;
+        }
         dispatcher.register(
             Commands.literal(commandName)
                 .requires(cs -> cs.hasPermission(2) || // Allow ops
@@ -114,12 +133,17 @@ public class EnchantCommand {
                     return 0;
                 })
         );
-        
-        // Keep enchanthand as alias for hand-only enchanting
+    }
+
+    /**
+     * Registers /enchanthand as a standalone hand-only enchanting command.
+     * Gated independently of /enchant via its own "enchanthand" config toggle.
+     */
+    private static void registerEnchanthandAlias(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(
             Commands.literal("enchanthand")
                 .requires(cs -> cs.hasPermission(2) ||
-                    (cs.getEntity() instanceof ServerPlayer player && 
+                    (cs.getEntity() instanceof ServerPlayer player &&
                      com.zerog.neoessentials.api.permissions.PermissionAPI.hasPermission(player.getUUID(), "neoessentials.item.enchant")))
                 .then(Commands.argument("enchantment", ResourceLocationArgument.id())
                     .suggests((ctx, builder) -> {
@@ -140,7 +164,7 @@ public class EnchantCommand {
                 })
         );
     }
-    
+
     /**
      * Enchantment modes for different command contexts
      */
@@ -190,7 +214,7 @@ public class EnchantCommand {
         try {
             levelTemp = IntegerArgumentType.getInteger(ctx, "level");
         } catch (IllegalArgumentException ignored) {
-            // Use default level 1
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "No 'level' argument provided for /enchant — defaulting to level 1");
         }
         
         // Check if unsafe enchantments are allowed (or if player has override permission)
@@ -243,7 +267,7 @@ public class EnchantCommand {
         
         if (success) {
             // Log successful enchantment for audit trail
-            LOGGER.info("Player {} enchanted {} with {} level {} for player {}", 
+            NeoLog.info(LOGGER, LogCategory.GENERAL, "Player {} enchanted {} with {} level {} for player {}", 
                 executor.getName().getString(),
                 stack.getDisplayName().getString(),
                 enchantId.toString(),
@@ -260,9 +284,13 @@ public class EnchantCommand {
                     targetPlayer.getDisplayName().getString()
                 ), false);
                 
-                // Notify target player
+                // Notify target player. Template is "Your {0} has been enchanted with {1} {2}
+                // by {3}." — needs the ITEM name as {0}, which was missing entirely, shifting
+                // enchantId into {0}, level into {1}, executor name into {2}, and leaving the
+                // real {3} (executor) unresolved as a literal "{3}".
                 targetPlayer.sendSystemMessage(MessageUtil.info(
                     "commands.neoessentials.enchant.target.notified",
+                    stack.getDisplayName().getString(),
                     enchantId.toString(),
                     level,
                     executor.getDisplayName().getString()
@@ -285,24 +313,34 @@ public class EnchantCommand {
     /**
      * Check if an enchantment is compatible with an item stack
      */
+    private static volatile boolean loggedEnchantableFallback = false;
+
     private static boolean isEnchantmentCompatible(Enchantment enchantment, ItemStack stack) {
         try {
             // Check if the item is enchantable at all
             if (!stack.getItem().isEnchantable(stack)) {
                 return false;
             }
-            
+
             // For books, allow all enchantments
             if (stack.getItem().toString().contains("book")) {
                 return true;
             }
-            
+
             // Try to check enchantment category compatibility
             // This is a basic implementation - in practice you'd need more sophisticated checking
             return stack.getItem().isEnchantable(stack);
-            
-        } catch (Exception e) {
-            // Fallback: if we can't determine compatibility, allow it
+
+        } catch (Throwable e) {
+            // Item.isEnchantable(ItemStack) was reworked into a DataComponents-based check on
+            // newer Minecraft versions and can throw NoSuchMethodError here (an Error, not an
+            // Exception — must be caught explicitly). Fallback: if we can't determine
+            // compatibility, allow it.
+            if (e instanceof NoSuchMethodError && !loggedEnchantableFallback) {
+                loggedEnchantableFallback = true;
+                LOGGER.warn("Item.isEnchantable(ItemStack) is unavailable on this Minecraft version — " +
+                    "skipping item-compatibility checks for /enchant. ({})", e.getMessage());
+            }
             return true;
         }
     }
@@ -320,8 +358,14 @@ public class EnchantCommand {
 
         // Respect unsafe-enchantments config
         boolean allowUnsafeEnchants = com.zerog.neoessentials.config.ConfigManager.isUnsafeEnchantsAllowed();
-        if (!allowUnsafeEnchants && level > enchantment.getMaxLevel()) {
-            return false;
+        try {
+            if (!allowUnsafeEnchants && level > enchantment.getMaxLevel()) {
+                return false;
+            }
+        } catch (Throwable e) {
+            // If getMaxLevel() itself is unavailable on this Minecraft version, we can't enforce
+            // the max-level cap — fall through and let the enchantment apply rather than crash.
+            LOGGER.warn("Enchantment.getMaxLevel() failed — skipping unsafe-level check for /enchant.", e);
         }
 
         try {
@@ -358,7 +402,10 @@ public class EnchantCommand {
             stack.set(DataComponents.ENCHANTMENTS, builder.toImmutable());
             return true;
             
-        } catch (Exception e) {
+        } catch (Throwable e) {
+            // Catches both regular Exceptions and Errors (e.g. NoSuchMethodError from a
+            // version-drifted registry/DataComponents API) so a mismatch degrades to a
+            // failed-enchant message instead of crashing the command.
             LOGGER.error("Failed to apply enchantment to item", e);
             return false;
         }

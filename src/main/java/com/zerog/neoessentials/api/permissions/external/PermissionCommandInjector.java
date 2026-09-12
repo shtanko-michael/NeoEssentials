@@ -9,6 +9,8 @@ import net.minecraft.commands.SharedSuggestionProvider;
 import com.zerog.neoessentials.util.MessageUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 
 import java.util.List;
 
@@ -24,7 +26,7 @@ public class PermissionCommandInjector {
      * This makes PermissionsEX able to discover our permissions for tab completion.
      */
     public static void injectPermissionCommands(CommandDispatcher<CommandSourceStack> dispatcher) {
-        LOGGER.info("Injecting NeoEssentials permissions as discoverable commands for PermissionsEX...");
+        NeoLog.info(LOGGER, LogCategory.PERMISSIONS, "Injecting NeoEssentials permissions as discoverable commands for PermissionsEX...");
         
         try {
             // Get all permissions
@@ -120,7 +122,7 @@ public class PermissionCommandInjector {
             // Also try to hook into existing permission-related commands if they exist
             injectIntoExistingCommands(dispatcher, permissions);
             
-            LOGGER.info("Permission command injection completed - {} permissions now discoverable", permissions.size());
+            NeoLog.info(LOGGER, LogCategory.PERMISSIONS, "Permission command injection completed - {} permissions now discoverable", permissions.size());
             
         } catch (Exception e) {
             LOGGER.error("Failed to inject permission commands", e);
@@ -142,14 +144,14 @@ public class PermissionCommandInjector {
                 if (commandName.contains("pex") || commandName.contains("permission") || 
                     commandName.contains("perm") || commandName.contains("group") || commandName.contains("user")) {
                     
-                    LOGGER.debug("Found potential permission command to enhance: {}", commandName);
+                    NeoLog.debug(LOGGER, LogCategory.PERMISSIONS, "Found potential permission command to enhance: {}", commandName);
                     // We could potentially modify these commands, but it's risky
                     // Instead, we'll just log that we found them
                 }
             }
             
         } catch (Exception e) {
-            LOGGER.debug("Could not analyze existing commands for permission injection", e);
+            NeoLog.debug(LOGGER, LogCategory.PERMISSIONS, "Could not analyze existing commands for permission injection", e);
         }
     }
     

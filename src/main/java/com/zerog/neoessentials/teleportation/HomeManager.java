@@ -1,6 +1,8 @@
 package com.zerog.neoessentials.teleportation;
 
 import com.google.gson.JsonObject;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import com.zerog.neoessentials.util.PlayerDataStore;
 import com.zerog.neoessentials.util.PlayerDataMigration;
 import com.zerog.neoessentials.util.MessageUtil;
@@ -103,7 +105,7 @@ public class HomeManager {
 
         // Perform migration from old homes.json if needed
         if (PlayerDataMigration.needsMigration(HOMES_FILE)) {
-            LOGGER.info("Migrating homes from old storage format...");
+            NeoLog.info(LOGGER, LogCategory.TELEPORTATION, "Migrating homes from old storage format...");
             PlayerDataMigration.migrateToPlayerData(HOMES_FILE, "homes");
         }
 
@@ -127,33 +129,63 @@ public class HomeManager {
                     JsonObject tp = config.getAsJsonObject("teleportation");
                     if (tp.has("homeSettings")) {
                         JsonObject homeSettings = tp.getAsJsonObject("homeSettings");
+                        // Accept both "enableHomeTeleportSafety" (canonical) and "enableHomeSafety" (alias)
                         if (homeSettings.has("enableHomeTeleportSafety")) {
                             safe = homeSettings.get("enableHomeTeleportSafety").getAsBoolean();
+                        } else if (homeSettings.has("enableHomeSafety")) {
+                            safe = homeSettings.get("enableHomeSafety").getAsBoolean();
                         }
                         if (homeSettings.has("maxHomes")) {
                             try {
                                 maxHomes = homeSettings.get("maxHomes").getAsInt();
-                            } catch (Exception ignored) {}
+                            } catch (Exception e) {
+                                NeoLog.debug(LOGGER, com.zerog.neoessentials.logging.LogCategory.TELEPORTATION,
+                                    "Failed to parse homeSettings.maxHomes, using default", e);
+                            }
                         }
                         if (homeSettings.has("allowCrossDimensionHomes")) {
                             try {
                                 allowCrossDimensionHomes = homeSettings.get("allowCrossDimensionHomes").getAsBoolean();
-                            } catch (Exception ignored) {}
+                            } catch (Exception e) {
+                                NeoLog.debug(LOGGER, com.zerog.neoessentials.logging.LogCategory.TELEPORTATION,
+                                    "Failed to parse homeSettings.allowCrossDimensionHomes, using default", e);
+                            }
                         }
                         if (homeSettings.has("homeSetCooldown")) {
                             try {
                                 setCooldown = homeSettings.get("homeSetCooldown").getAsInt();
-                            } catch (Exception ignored) {}
+                            } catch (Exception e) {
+                                NeoLog.debug(LOGGER, com.zerog.neoessentials.logging.LogCategory.TELEPORTATION,
+                                    "Failed to parse homeSettings.homeSetCooldown, using default", e);
+                            }
                         }
                         if (homeSettings.has("homeTeleportCooldown")) {
                             try {
                                 tpCooldown = homeSettings.get("homeTeleportCooldown").getAsInt();
-                            } catch (Exception ignored) {}
+                            } catch (Exception e) {
+                                NeoLog.debug(LOGGER, com.zerog.neoessentials.logging.LogCategory.TELEPORTATION,
+                                    "Failed to parse homeSettings.homeTeleportCooldown, using default", e);
+                            }
                         }
                         if (homeSettings.has("homeDeleteCooldown")) {
                             try {
                                 delCooldown = homeSettings.get("homeDeleteCooldown").getAsInt();
-                            } catch (Exception ignored) {}
+                            } catch (Exception e) {
+                                NeoLog.debug(LOGGER, com.zerog.neoessentials.logging.LogCategory.TELEPORTATION,
+                                    "Failed to parse homeSettings.homeDeleteCooldown, using default", e);
+                            }
+                        }
+                    }
+                    // Read teleport delay (warmup) from generalSettings
+                    if (tp.has("generalSettings")) {
+                        JsonObject generalSettings = tp.getAsJsonObject("generalSettings");
+                        if (generalSettings.has("teleportDelay")) {
+                            try {
+                                teleportDelay = generalSettings.get("teleportDelay").getAsInt();
+                            } catch (Exception e) {
+                                NeoLog.debug(LOGGER, com.zerog.neoessentials.logging.LogCategory.TELEPORTATION,
+                                    "Failed to parse generalSettings.teleportDelay, using default", e);
+                            }
                         }
                     }
                 }
@@ -163,6 +195,8 @@ public class HomeManager {
             setHomeSetCooldownSeconds(setCooldown);
             setHomeTeleportCooldownSeconds(tpCooldown);
             setHomeDeleteCooldownSeconds(delCooldown);
+            NeoLog.info(LOGGER, LogCategory.TELEPORTATION, "[HomeManager] Config loaded — safetyCheck={}, maxHomes={}, warmup={}s, tpCooldown={}s, setCooldown={}s, delCooldown={}s, crossDimension={}",
+                safe, maxHomes, teleportDelay, tpCooldown, setCooldown, delCooldown, allowCrossDimensionHomes);
         } catch (Exception e) {
             LOGGER.warn("Failed to load home config, using defaults: {}", e.getMessage());
         }
@@ -183,25 +217,25 @@ public class HomeManager {
 
         // Always check config for safety at runtime
         boolean requireSafe = com.zerog.neoessentials.config.ConfigManager.getInstance().isHomeTeleportSafetyEnabled();
-        boolean debug = com.zerog.neoessentials.config.ConfigManager.isDebugModeEnabled();
-        if (debug) {
-            LOGGER.info("[DEBUG] Home set safety: {} (from config)", requireSafe);
-        }
+        NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "setHome request: player={} homeName={} requireSafe={}",
+            player.getName().getString(), homeName, requireSafe);
 
-        // Enforce set home cooldown - atomic check
-        if (homeSetCooldownSeconds > 0) {
-            long now = System.currentTimeMillis();
-            // Use putIfAbsent to atomically check and update cooldown
-            Long lastSet = lastHomeSetTimestamps.putIfAbsent(playerId, now);
+        // Check set-home cooldown (read-only) — only actually consumed once the home genuinely
+        // gets set (see below). Same fix as PayCommand/TeleportRequestManager's cooldown bugs
+        // earlier this session: consuming it here unconditionally meant an invalid name, a
+        // cross-dimension restriction, an unreachable safe spot, or the home limit all still
+        // cost the player a full cooldown for a /sethome that never took effect.
+        boolean bypassCooldown = com.zerog.neoessentials.api.permissions.PermissionAPI.hasPermission(playerId, "neoessentials.teleport.bypass.cooldown")
+            || com.zerog.neoessentials.api.permissions.PermissionAPI.hasPermission(playerId, "neoessentials.teleport.home.bypass.cooldown");
+        if (homeSetCooldownSeconds > 0 && !bypassCooldown) {
+            Long lastSet = lastHomeSetTimestamps.get(playerId);
             if (lastSet != null) {
-                long elapsed = (now - lastSet) / 1000L;
+                long elapsed = (System.currentTimeMillis() - lastSet) / 1000L;
                 if (elapsed < homeSetCooldownSeconds) {
                     long wait = homeSetCooldownSeconds - elapsed;
                     player.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.home.cooldown", wait));
                     return false;
                 }
-                // Update timestamp atomically
-                lastHomeSetTimestamps.put(playerId, now);
             }
         }
 
@@ -226,11 +260,11 @@ public class HomeManager {
                 TeleportLocation safeLocation = location.findSafeLocation();
                 if (safeLocation == null) {
                     player.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.home.unsafe_location"));
-                    if (debug) LOGGER.info("[DEBUG] Unsafe sethome location for '{}', set blocked.", homeName);
+                    NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "Unsafe sethome location for '{}', set blocked.", homeName);
                     return false;
                 }
                 location = safeLocation;
-                if (debug) LOGGER.info("[DEBUG] Sethome '{}' moved to safe location.", homeName);
+                NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "Sethome '{}' moved to safe location.", homeName);
             }
         }
         // If safety is not required, allow teleportation to unsafe locations
@@ -267,6 +301,11 @@ public class HomeManager {
         
         boolean isNew = result[1];
 
+        // Home genuinely set — now commit the cooldown.
+        if (homeSetCooldownSeconds > 0 && !bypassCooldown) {
+            lastHomeSetTimestamps.put(playerId, System.currentTimeMillis());
+        }
+
         // Save to file (per-player storage)
         savePlayerHomes(playerId);
 
@@ -276,7 +315,7 @@ public class HomeManager {
 
         // Log home set/update if enabled in config
         if (com.zerog.neoessentials.config.ConfigManager.getInstance().isLogHomeActionsEnabled()) {
-            LOGGER.info("Player {} {} home '{}' at {}", 
+            NeoLog.info(LOGGER, LogCategory.TELEPORTATION, "Player {} {} home '{}' at {}", 
                 player.getName().getString(), 
                 isNew ? "set" : "updated", 
                 homeName, 
@@ -292,20 +331,18 @@ public class HomeManager {
     public boolean deleteHome(ServerPlayer player, String homeName) {
         UUID playerId = player.getUUID();
 
-        // Enforce delete home cooldown - atomic check
+        // Check delete-home cooldown (read-only) — only actually consumed once the home
+        // genuinely gets deleted (see below); deleting a non-existent home no longer costs
+        // the cooldown, same fix as setHome/teleportToHome above.
         if (homeDeleteCooldownSeconds > 0) {
-            long now = System.currentTimeMillis();
-            // Use putIfAbsent to atomically check and update cooldown
-            Long lastDelete = lastHomeDeleteTimestamps.putIfAbsent(playerId, now);
+            Long lastDelete = lastHomeDeleteTimestamps.get(playerId);
             if (lastDelete != null) {
-                long elapsed = (now - lastDelete) / 1000L;
+                long elapsed = (System.currentTimeMillis() - lastDelete) / 1000L;
                 if (elapsed < homeDeleteCooldownSeconds) {
                     long wait = homeDeleteCooldownSeconds - elapsed;
                     player.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.home.delete_cooldown", wait));
                     return false;
                 }
-                // Update timestamp atomically
-                lastHomeDeleteTimestamps.put(playerId, now);
             }
         }
 
@@ -325,13 +362,18 @@ public class HomeManager {
             return false;
         }
 
+        // Home genuinely deleted — now commit the cooldown.
+        if (homeDeleteCooldownSeconds > 0) {
+            lastHomeDeleteTimestamps.put(playerId, System.currentTimeMillis());
+        }
+
         // Save to file (per-player storage)
         savePlayerHomes(playerId);
 
         // Success message is sent by the caller (HomeCommands) - see setHome above.
         // Log home delete if enabled in config
         if (com.zerog.neoessentials.config.ConfigManager.getInstance().isLogHomeActionsEnabled()) {
-            LOGGER.info("Player {} deleted home '{}'", player.getName().getString(), homeName);
+            NeoLog.info(LOGGER, LogCategory.TELEPORTATION, "Player {} deleted home '{}'", player.getName().getString(), homeName);
         }
 
         return true;
@@ -413,21 +455,52 @@ public class HomeManager {
         UUID playerId = player.getUUID();
         // Always check config for safety at runtime
         boolean requireSafe = com.zerog.neoessentials.config.ConfigManager.getInstance().isHomeTeleportSafetyEnabled();
-        boolean debug = com.zerog.neoessentials.config.ConfigManager.isDebugModeEnabled();
-        if (debug) {
-            LOGGER.info("[DEBUG] Home teleport safety: {} (from config)", requireSafe);
-        }
+        NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "teleportToHome request: player={} homeName={} requireSafe={}",
+            player.getName().getString(), homeName, requireSafe);
         if (home == null) {
+            NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "teleportToHome: player {} has no home named '{}'",
+                player.getName().getString(), homeName);
             player.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.home.not_found", homeName));
             return;
         }
-        // If safety is required, check for safe location
+
+        // Enforce home teleport cooldown - atomic check (skip if player has bypass permission)
+        boolean bypassTpCooldown = com.zerog.neoessentials.api.permissions.PermissionAPI.hasPermission(playerId, "neoessentials.teleport.bypass.cooldown")
+            || com.zerog.neoessentials.api.permissions.PermissionAPI.hasPermission(playerId, "neoessentials.teleport.home.bypass.cooldown");
+        if (homeTeleportCooldownSeconds > 0 && !bypassTpCooldown) {
+            long now = System.currentTimeMillis();
+            Long lastTp = lastHomeTeleportTimestamps.putIfAbsent(playerId, now);
+            if (lastTp != null) {
+                long elapsed = (now - lastTp) / 1000L;
+                if (elapsed < homeTeleportCooldownSeconds) {
+                    long wait = homeTeleportCooldownSeconds - elapsed;
+                    player.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.home.teleport_cooldown", wait));
+                    return;
+                }
+                // Update timestamp atomically
+                lastHomeTeleportTimestamps.put(playerId, now);
+            }
+        }
+
+        // Force-load the target chunk AND its 8 neighbours (3×3 grid) before any safety
+        // check or teleport.  findSafeLocation() searches up to ±16 blocks in X/Z which
+        // can cross chunk boundaries, so loading only the centre chunk is insufficient.
+        net.minecraft.server.level.ServerLevel homeLevel = home.getLevel();
+        if (homeLevel != null) {
+            net.minecraft.core.BlockPos homeBlockPos = new net.minecraft.core.BlockPos(
+                (int) home.getX(), (int) home.getY(), (int) home.getZ());
+            NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "Pre-loading 3x3 chunk grid around ({},{}) for home teleport to '{}'.",
+                homeBlockPos.getX() >> 4, homeBlockPos.getZ() >> 4, homeName);
+            TeleportUtil.preloadChunksForTeleport(homeLevel, homeBlockPos);
+        }
+
+        // If safety is required, check for safe location (chunk is now loaded)
         if (requireSafe) {
             if (!home.isSafe()) {
                 TeleportLocation safeLocation = home.findSafeLocation();
                 if (safeLocation == null) {
                     player.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.home.unsafe", homeName));
-                    if (debug) LOGGER.info("[DEBUG] Unsafe home location for '{}', teleport blocked.", homeName);
+                    NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "Unsafe home location for '{}', teleport blocked.", homeName);
                     return;
                 }
                 // Update home to safe location atomically
@@ -439,23 +512,48 @@ public class HomeManager {
                 savePlayerHomes(playerId);
                 home = safeLocation;
                 player.sendSystemMessage(MessageUtil.warning("commands.neoessentials.teleport.home.moved_to_safety", homeName));
-                if (debug) LOGGER.info("[DEBUG] Home '{}' moved to safe location.", homeName);
+                NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "Home '{}' moved to safe location.", homeName);
             }
         } else {
             // If safety is not required, allow teleportation to unsafe locations
-            if (debug) LOGGER.info("[DEBUG] Home teleport safety is disabled. Teleporting to potentially unsafe location for '{}'.", homeName);
+            NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "Home teleport safety is disabled. Teleporting to potentially unsafe location for '{}'.", homeName);
         }
         // Save current location for /back command
         com.zerog.neoessentials.teleportation.Misc.MiscTeleportManager.getInstance().saveBackLocation(player);
 
+        // Show warmup countdown message if delay is configured and warmup messages are enabled
+        // Admins with bypass permission skip the warmup entirely
+        boolean bypassWarmup = com.zerog.neoessentials.api.permissions.PermissionAPI.hasPermission(playerId, "neoessentials.teleport.bypass.warmup")
+            || com.zerog.neoessentials.api.permissions.PermissionAPI.hasPermission(playerId, "neoessentials.teleport.home.bypass.warmup");
+        int delayTicks = bypassWarmup ? 0 : teleportDelay * 20;
+        if (delayTicks > 0) {
+            boolean showWarmup = true;
+            try {
+                com.google.gson.JsonObject generalSettings = com.zerog.neoessentials.config.ConfigManager.getInstance()
+                    .getConfig(com.zerog.neoessentials.config.ConfigManager.MAIN_CONFIG)
+                    .getAsJsonObject("teleportation").getAsJsonObject("generalSettings");
+                if (generalSettings.has("enableTeleportWarmup")) {
+                    showWarmup = generalSettings.get("enableTeleportWarmup").getAsBoolean();
+                }
+            } catch (Exception e) {
+                NeoLog.debug(LOGGER, LogCategory.TELEPORTATION,
+                    "Failed to read generalSettings.enableTeleportWarmup, defaulting to shown", e);
+            }
+            if (showWarmup) {
+                player.sendSystemMessage(MessageUtil.info("commands.neoessentials.teleport.home.warmup", homeName, teleportDelay));
+            }
+        }
+
         // Perform teleportation — safety already resolved above, so pass findSafe=false
-        int delayTicks = teleportDelay * 20;
-        TeleportUtil.teleportPlayer(player, home, delayTicks, false).thenAccept(result -> {
+        TeleportLocation finalHome = home;
+        TeleportUtil.teleportPlayer(player, finalHome, delayTicks, false).thenAccept(result -> {
             if (result.isSuccess()) {
                 player.sendSystemMessage(MessageUtil.success("commands.neoessentials.teleport.home.success", homeName));
+                NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "Player {} successfully teleported to home '{}' at {}",
+                    player.getName().getString(), homeName, finalHome.getLocationString());
                 // Log home teleport if enabled in config
                 if (com.zerog.neoessentials.config.ConfigManager.getInstance().isLogHomeActionsEnabled()) {
-                    LOGGER.info("Player {} teleported to home '{}'", player.getName().getString(), homeName);
+                    NeoLog.info(LOGGER, LogCategory.TELEPORTATION, "Player {} teleported to home '{}'", player.getName().getString(), homeName);
                 }
             } else {
                 player.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.home.failed", homeName, result.getMessage()));
@@ -553,7 +651,7 @@ public class HomeManager {
     private void loadHomes() {
         // This method is now only called during initialization
         // Individual player homes are loaded on-demand via getHomes()
-        LOGGER.debug("Home loading is now on-demand per player");
+        NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "Home loading is now on-demand per player");
     }
 
     /**
@@ -565,7 +663,7 @@ public class HomeManager {
             Map<String, TeleportLocation> homes = new HashMap<>();
 
             if (data.keySet().isEmpty()) {
-                LOGGER.debug("No homes found for player {}", playerId);
+                NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "No homes found for player {}", playerId);
                 return homes;
             }
 
@@ -582,7 +680,7 @@ public class HomeManager {
                 }
             }
             
-            LOGGER.debug("Loaded {} homes for player {}", homes.size(), playerId);
+            NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "Loaded {} homes for player {}", homes.size(), playerId);
             return homes;
 
         } catch (Exception e) {
@@ -620,7 +718,7 @@ public class HomeManager {
             }
             
             playerDataStore.save(playerId, data);
-            LOGGER.debug("Saved {} homes for player {}", homes.size(), playerId);
+            NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "Saved {} homes for player {}", homes.size(), playerId);
 
         } catch (Exception e) {
             LOGGER.error("Failed to save homes for player {}: {}", playerId, e.getMessage(), e);
@@ -656,7 +754,7 @@ public class HomeManager {
     public void clearAllHomes() {
         playerHomes.clear();
         playerDataStore.clearAll();
-        LOGGER.info("Cleared all player homes");
+        NeoLog.info(LOGGER, LogCategory.TELEPORTATION, "Cleared all player homes");
     }
     
     /**
@@ -682,7 +780,7 @@ public class HomeManager {
      * Reload home data from disk
      */
     public void reload() {
-        LOGGER.info("Reloading home system...");
+        NeoLog.info(LOGGER, LogCategory.TELEPORTATION, "Reloading home system...");
 
         // Reload config values
         loadConfig();
@@ -693,7 +791,7 @@ public class HomeManager {
         // Clear cache - homes will be loaded on-demand from PlayerDataStore
         playerHomes.clear();
 
-        LOGGER.info("Home system reloaded - {} players in storage, homes will load on-demand",
+        NeoLog.info(LOGGER, LogCategory.TELEPORTATION, "Home system reloaded - {} players in storage, homes will load on-demand",
             playerDataStore.getTotalPlayers());
     }
 }

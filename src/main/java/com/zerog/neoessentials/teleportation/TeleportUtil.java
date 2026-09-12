@@ -1,5 +1,7 @@
 package com.zerog.neoessentials.teleportation;
 
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import com.zerog.neoessentials.util.MessageUtil;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -18,7 +20,33 @@ import java.util.concurrent.CompletableFuture;
  */
 public class TeleportUtil {
     private static final Logger LOGGER = LoggerFactory.getLogger(TeleportUtil.class);
-    
+
+    private static volatile boolean loggedSoundFallback = false;
+
+    /**
+     * Plays the teleport sound, tolerating cross-version signature drift on
+     * {@code ServerLevel#playSound} (same class of issue as the tell/serverLevel/
+     * addRegionTicket/ClickEvent fixes elsewhere in this mod). Sound is purely
+     * cosmetic, so a missing overload just skips it instead of failing the teleport.
+     */
+    private static void playTeleportSound(ServerLevel level, double x, double y, double z) {
+        try {
+            level.playSound(
+                null, // No specific player, play for all nearby
+                x, y, z,
+                SoundEvents.ENDERMAN_TELEPORT,
+                SoundSource.PLAYERS,
+                1.0F, 1.0F
+            );
+        } catch (NoSuchMethodError e) {
+            if (!loggedSoundFallback) {
+                loggedSoundFallback = true;
+                LOGGER.warn("ServerLevel#playSound(Player, double, double, double, SoundEvent, SoundSource, float, float) " +
+                    "is unavailable on this Minecraft version — skipping teleport sound effects. ({})", e.getMessage());
+            }
+        }
+    }
+
     // Teleport delays (in ticks)
     public static final int INSTANT_TELEPORT = 0;
     public static final int SHORT_DELAY = 20;   // 1 second
@@ -39,12 +67,39 @@ public class TeleportUtil {
                                                                   int delayTicks, boolean findSafe) {
         CompletableFuture<TeleportResult> future = new CompletableFuture<>();
 
+        NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "teleportPlayer request: player={} target={} delayTicks={} findSafe={}",
+            player.getName().getString(), location == null ? "null" : location.getLocationString(), delayTicks, findSafe);
+
         // Enforce combat check if enabled in config
         com.zerog.neoessentials.config.ConfigManager configManager = com.zerog.neoessentials.config.ConfigManager.getInstance();
         boolean allowTeleportInCombat = configManager.isAllowTeleportInCombatEnabled();
         if (!allowTeleportInCombat && com.zerog.neoessentials.teleportation.CombatTracker.isInCombat(player)) {
             int remainingTime = com.zerog.neoessentials.teleportation.CombatTracker.getRemainingCombatTime(player);
-            future.complete(TeleportResult.failure("You cannot teleport while in combat! Please wait " + remainingTime + " second(s)."));
+            NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "teleportPlayer: {} blocked, in combat ({}s remaining)", player.getName().getString(), remainingTime);
+            future.complete(TeleportResult.failure(MessageUtil.localize("commands.neoessentials.teleport.util.combat_cooldown", remainingTime)));
+            return future;
+        }
+
+        // FreezeManager blocks movement/attack/interact/block-break/place, but nothing stopped
+        // a frozen player from simply teleporting away via /home, /warp, /tpa, etc. — this is
+        // the single chokepoint essentially all of those commands route through, so checking
+        // here closes that escape route everywhere at once.
+        if (!com.zerog.neoessentials.moderation.FreezeManager.getInstance().canPlayerMove(player)) {
+            NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "teleportPlayer: {} blocked, player is frozen", player.getName().getString());
+            future.complete(TeleportResult.failure(MessageUtil.localize("commands.neoessentials.teleport.util.frozen")));
+            return future;
+        }
+
+        // Same gap as freeze: block break/place/attack/interact/respawn are all correctly
+        // redirected for jailed players (see ModerationEventHandler), but /tpa, /tpahere,
+        // /tpaccept, /back and /tp had no jail check at all — a jailed player could simply
+        // teleport request/accept their way out of the cell, including into another dimension.
+        // /home, /warp, /pwarp, /spawn already check JailManager individually; this closes the
+        // gap for every OTHER path through this same chokepoint at once.
+        if (com.zerog.neoessentials.moderation.JailManager.isJailSystemEnabled()
+                && com.zerog.neoessentials.moderation.JailManager.getInstance().isPlayerJailed(player.getUUID())) {
+            NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "teleportPlayer: {} blocked, player is jailed", player.getName().getString());
+            future.complete(TeleportResult.failure(MessageUtil.localize("commands.neoessentials.jail.prevent_escape")));
             return future;
         }
 
@@ -63,13 +118,16 @@ public class TeleportUtil {
                     for (Object region : regions) {
                         String regionName = (String) region.getClass().getMethod("getName").invoke(region);
                         if (protectedAreas.contains(regionName)) {
-                            future.complete(TeleportResult.failure("Teleportation is blocked: target location is in a protected area (" + regionName + ")!"));
+                            NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "teleportPlayer: {} blocked, destination is in protected area '{}'",
+                                player.getName().getString(), regionName);
+                            future.complete(TeleportResult.failure(MessageUtil.localize("commands.neoessentials.teleport.util.protected_area", regionName)));
                             return future;
                         }
                     }
                 }
             } catch (ClassNotFoundException e) {
                 // YAWP not installed, skip region check
+                NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "teleportPlayer: YAWP not installed, skipping protected-area check", e);
             } catch (Exception e) {
                 LOGGER.error("Error checking YAWP protected areas: {}", e.getMessage(), e);
             }
@@ -83,54 +141,70 @@ public class TeleportUtil {
             if (fromLoc.getWorldName().equals(location.getWorldName())) {
                 double dist = fromLoc.distanceTo(location);
                 if (dist > maxDistance) {
-                    future.complete(TeleportResult.failure("Teleport distance exceeds the maximum allowed by config (" + maxDistance + ")!"));
+                    NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "teleportPlayer: {} blocked, distance {} exceeds max {}",
+                        player.getName().getString(), dist, maxDistance);
+                    future.complete(TeleportResult.failure(MessageUtil.localize("commands.neoessentials.teleport.util.max_distance_exceeded", maxDistance)));
                     return future;
                 }
             }
         }
 
         if (location == null) {
-            future.complete(TeleportResult.failure("Invalid teleport location"));
+            future.complete(TeleportResult.failure(MessageUtil.localize("commands.neoessentials.teleport.util.invalid_location")));
             return future;
         }
 
         ServerLevel targetLevel = location.getLevel();
         if (targetLevel == null) {
-            future.complete(TeleportResult.failure("Target world not found or not loaded"));
+            String worldName = location.getWorldName();
+            LOGGER.warn("Teleport failed — world '{}' is not loaded or does not exist", worldName);
+            future.complete(TeleportResult.failure(MessageUtil.localize(
+                "commands.neoessentials.teleport.util.world_not_loaded", worldName)));
             return future;
         }
 
-        // Find safe location if requested
+        // Force-load the target chunk AND its 8 neighbours (3×3 grid) BEFORE doing safety
+        // checks — but ONLY when findSafe will actually run: findSafeLocation() may search up
+        // to ±16 blocks in X/Z which can cross chunk boundaries, so just loading the centre
+        // chunk isn't enough for THAT search. When findSafe is false (the caller — e.g.
+        // RandomTeleportManager — already verified the exact spot itself), the 8 neighbour
+        // chunks are never touched, so force-generating them was pure wasted cost: up to 8
+        // extra synchronous full chunk generations per teleport for nothing, which is exactly
+        // what was causing RTP to lag/watchdog-crash servers on ungenerated terrain.
+        BlockPos targetBlockPos = new BlockPos((int) location.getX(),
+                                              (int) location.getY(),
+                                              (int) location.getZ());
+        preloadChunksForTeleport(targetLevel, targetBlockPos, findSafe);
+
+        // Find safe location if requested (surrounding chunks are now loaded)
         TeleportLocation finalLocation = location;
         if (findSafe && !location.isSafe()) {
+            NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "teleportPlayer: destination unsafe, searching for safe landing near {}", location.getLocationString());
             finalLocation = location.findSafeLocation();
             if (finalLocation == null) {
-                future.complete(TeleportResult.failure("No safe teleport location found"));
+                String worldName = location.getWorldName();
+                int bx = (int) location.getX(), by = (int) location.getY(), bz = (int) location.getZ();
+                LOGGER.warn("No safe teleport location found at ({},{},{}) in '{}' — area may be solid, flooded, or over the void",
+                    bx, by, bz, worldName);
+                future.complete(TeleportResult.failure(MessageUtil.localize(
+                    "commands.neoessentials.teleport.util.no_safe_landing", bx, by, bz, worldName)));
                 return future;
             }
+            // Ensure the safe-landing chunk is also loaded (it is covered by the 3×3
+            // grid if the safe location is within ±1 chunk, but preload just in case).
+            BlockPos safeBlockPos = new BlockPos((int) finalLocation.getX(),
+                                                (int) finalLocation.getY(),
+                                                (int) finalLocation.getZ());
+            preloadChunksForTeleport(targetLevel, safeBlockPos, true);
         }
 
-        // Load chunks if needed
-        ChunkPos chunkPos = new ChunkPos(new BlockPos((int) finalLocation.getX(), 
-                                                     (int) finalLocation.getY(), 
-                                                     (int) finalLocation.getZ()));
-
-        if (!targetLevel.isLoaded(chunkPos.getWorldPosition())) {
-            // Force load the chunk
-            targetLevel.getChunkSource().addRegionTicket(
-                net.minecraft.server.level.TicketType.PORTAL,
-                chunkPos,
-                3,
-                chunkPos.getWorldPosition()
-            );
-        }
 
         // Execute teleport (with delay if specified)
         TeleportLocation teleportTo = finalLocation;
         if (delayTicks > 0) {
             // Schedule delayed teleport
             player.getServer().execute(() -> {
-                scheduleDelayedTeleport(player, teleportTo, delayTicks, future);
+                scheduleDelayedTeleport(player, teleportTo, delayTicks, future, findSafe);
             });
         } else {
             // Immediate teleport
@@ -143,45 +217,70 @@ public class TeleportUtil {
     /**
      * Schedule a delayed teleport
      */
-    private static void scheduleDelayedTeleport(ServerPlayer player, TeleportLocation location, 
-                                              int delayTicks, CompletableFuture<TeleportResult> future) {
+    private static void scheduleDelayedTeleport(ServerPlayer player, TeleportLocation location,
+                                              int delayTicks, CompletableFuture<TeleportResult> future, boolean findSafe) {
         // Store original position to check for movement
         Vec3 originalPos = player.position();
         com.zerog.neoessentials.config.ConfigManager configManager = com.zerog.neoessentials.config.ConfigManager.getInstance();
         boolean cancelOnMovement = com.zerog.neoessentials.config.ConfigManager.isCancelOnMovementEnabled();
         boolean cancelOnDamage = configManager.isCancelOnDamageEnabled();
 
+        // Reject a second overlapping warmup instead of silently clobbering the first one's
+        // damage-cancel registration (TeleportDamageCancelHandler holds only one pending
+        // cancel-action per player) — e.g. starting /warp while a /home warmup is still
+        // counting down previously left the first teleport un-cancelable by damage.
+        if (cancelOnDamage && com.zerog.neoessentials.teleportation.TeleportDamageCancelHandler.isPending(player)) {
+            future.complete(TeleportResult.failure(MessageUtil.localize("commands.neoessentials.teleport.util.already_in_progress")));
+            return;
+        }
+
         // Define cancel action
         Runnable cancelAction = () -> {
-            future.complete(TeleportResult.failure("Teleport cancelled - you moved/took damage!"));
+            future.complete(TeleportResult.failure(MessageUtil.localize("commands.neoessentials.teleport.util.cancelled_moved_or_damaged")));
         };
         // Register for damage cancel if enabled
         if (cancelOnDamage) {
             com.zerog.neoessentials.teleportation.TeleportDamageCancelHandler.registerPendingTeleport(player, cancelAction);
         }
 
-        // Schedule the teleport
-        player.getServer().tell(new net.minecraft.server.TickTask(delayTicks, () -> {
+        // Schedule the teleport.
+        com.zerog.neoessentials.scheduler.DelayedTaskScheduler.schedule(delayTicks, () -> {
             // Unregister damage cancel (teleport completed or cancelled)
             if (cancelOnDamage) {
                 com.zerog.neoessentials.teleportation.TeleportDamageCancelHandler.unregisterPendingTeleport(player);
             }
+            // DelayedTaskScheduler has no cancellation mechanism — this scheduled runnable
+            // always fires at its due tick regardless of what happened during the warmup.
+            // cancelAction (registered above) completes `future` early on damage, but without
+            // this check the teleport would still execute afterward anyway: the player would
+            // see "Teleport cancelled - you took damage!" and then get teleported a moment
+            // later regardless, completely defeating cancelOnDamage's purpose of stopping
+            // players from escaping combat via /home, /warp, /tpa, etc.
+            if (future.isDone()) return;
             // Check if player moved (cancel if they did), only if enabled in config
             // Use 1.5 block threshold to avoid false positives from network lag or small position shifts
             if (cancelOnMovement && player.position().distanceTo(originalPos) > 1.5) {
                 double distance = player.position().distanceTo(originalPos);
-                LOGGER.debug("Teleport cancelled for {} - moved {} blocks (threshold: 1.5)",
+                NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "Teleport cancelled for {} - moved {} blocks (threshold: 1.5)",
                     player.getName().getString(), String.format("%.2f", distance));
-                future.complete(TeleportResult.failure("Teleport cancelled - you moved!"));
+                future.complete(TeleportResult.failure(MessageUtil.localize("commands.neoessentials.teleport.util.cancelled_moved")));
                 return;
             }
             // Check if player is still online
             if (player.hasDisconnected()) {
-                future.complete(TeleportResult.failure("Player disconnected"));
+                future.complete(TeleportResult.failure(MessageUtil.localize("commands.neoessentials.teleport.util.player_disconnected")));
                 return;
             }
+            // Re-ensure the target chunk is still loaded at execution time.
+            // The PORTAL ticket we added earlier lasts 300 ticks, but for very long
+            // warmup delays we reload proactively to prevent "no safe location" errors.
+            ServerLevel execLevel = location.getLevel();
+            if (execLevel != null) {
+                preloadChunksForTeleport(execLevel, new BlockPos(
+                    (int) location.getX(), (int) location.getY(), (int) location.getZ()), findSafe);
+            }
             executeTeleport(player, location, future);
-        }));
+        });
     }
     
     /**
@@ -192,7 +291,7 @@ public class TeleportUtil {
         try {
             ServerLevel targetLevel = location.getLevel();
             if (targetLevel == null) {
-                future.complete(TeleportResult.failure("Target world no longer available"));
+                future.complete(TeleportResult.failure(MessageUtil.localize("commands.neoessentials.teleport.util.world_no_longer_available")));
                 return;
             }
 
@@ -217,13 +316,7 @@ public class TeleportUtil {
             // Sound effects (source)
             if (com.zerog.neoessentials.config.ConfigManager.getEnableSoundEffects()) {
                 if (player.level() instanceof ServerLevel serverLevel) {
-                    serverLevel.playSound(
-                        null, // No specific player, play for all nearby
-                        player.getX(), player.getY(), player.getZ(),
-                        SoundEvents.ENDERMAN_TELEPORT,
-                        SoundSource.PLAYERS,
-                        1.0F, 1.0F
-                    );
+                    playTeleportSound(serverLevel, player.getX(), player.getY(), player.getZ());
                 }
             }
 
@@ -283,30 +376,85 @@ public class TeleportUtil {
 
             // Sound effects (destination)
             if (com.zerog.neoessentials.config.ConfigManager.getEnableSoundEffects()) {
-                targetLevel.playSound(
-                    null, // No specific player, play for all nearby
-                    location.getX(), location.getY(), location.getZ(),
-                    SoundEvents.ENDERMAN_TELEPORT,
-                    SoundSource.PLAYERS,
-                    1.0F, 1.0F
-                );
+                playTeleportSound(targetLevel, location.getX(), location.getY(), location.getZ());
             }
 
-            LOGGER.debug("Teleported {} to {}", player.getName().getString(), location.getLocationString());
-            future.complete(TeleportResult.success("Teleported to " + location.getLocationString()));
+            NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "Teleported {} to {}", player.getName().getString(), location.getLocationString());
+            future.complete(TeleportResult.success(MessageUtil.localize("commands.neoessentials.teleport.util.teleported_to", location.getLocationString())));
 
         } catch (Exception e) {
             LOGGER.error("Failed to teleport player {}: {}", player.getName().getString(), e.getMessage(), e);
-            future.complete(TeleportResult.failure("Teleport failed: " + e.getMessage()));
+            future.complete(TeleportResult.failure(MessageUtil.localize("commands.neoessentials.teleport.util.teleport_failed", e.getMessage())));
         }
     }
     
+    /**
+     * Force-load a 3×3 grid of chunks around the given block position.
+     *
+     * <p>This ensures that both the target chunk and all immediate neighbours are
+     * fully loaded before any safety check or teleport.  {@code findSafeLocation()}
+     * can search up to ±16 blocks in X/Z which may cross into a neighbouring chunk;
+     * loading the surrounding 8 chunks prevents those positions from being falsely
+     * reported as unsafe (because {@code isLoaded()} returns {@code false} for
+     * unloaded chunks).</p>
+     *
+     * <p>Each chunk receives a {@link net.minecraft.server.level.TicketType#PORTAL}
+     * ticket (timeout ≈ 300 ticks / 15 s) and is loaded synchronously so it is
+     * immediately accessible for block-state queries and teleportation.</p>
+     */
+    private static volatile boolean loggedTicketFallback = false;
+
+    public static void preloadChunksForTeleport(ServerLevel level, BlockPos pos) {
+        preloadChunksForTeleport(level, pos, true);
+    }
+
+    /**
+     * @param grid3x3 {@code true} force-loads the target chunk plus its 8 neighbours (needed
+     *                whenever a ±16-block safe-location search might run against this spot);
+     *                {@code false} force-loads only the single target chunk — for callers that
+     *                already picked and verified an exact safe spot themselves (e.g. random
+     *                teleport), where the neighbour chunks are never actually read.
+     */
+    public static void preloadChunksForTeleport(ServerLevel level, BlockPos pos, boolean grid3x3) {
+        ChunkPos center = new ChunkPos(pos);
+        int radius = grid3x3 ? 1 : 0;
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dz = -radius; dz <= radius; dz++) {
+                ChunkPos cp = new ChunkPos(center.x + dx, center.z + dz);
+                // Always add a fresh ticket to reset the 300-tick expiry counter.
+                // NOTE: addRegionTicket's erased signature has proven fragile across
+                // Minecraft versions (same class of issue as MinecraftServer#tell and
+                // Entity#serverLevel — see the DelayedTaskScheduler/LevelCompat notes).
+                // If it's missing/renamed at runtime, skip the ticket rather than crash;
+                // the getChunk() force-load below still guarantees the chunk is loaded.
+                try {
+                    level.getChunkSource().addRegionTicket(
+                        net.minecraft.server.level.TicketType.PORTAL,
+                        cp, 3, cp.getWorldPosition()
+                    );
+                } catch (NoSuchMethodError e) {
+                    if (!loggedTicketFallback) {
+                        loggedTicketFallback = true;
+                        LOGGER.warn("ServerChunkCache#addRegionTicket is unavailable on this Minecraft version — " +
+                            "skipping chunk keep-alive ticket (chunks will still be force-loaded). ({})", e.getMessage());
+                    }
+                }
+                if (!level.isLoaded(cp.getWorldPosition())) {
+                    NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "Force-loading chunk ({},{}) in {} for teleport",
+                        cp.x, cp.z, level.dimension().location());
+                    // getChunk() with FULL status loads the chunk synchronously.
+                    level.getChunk(cp.x, cp.z);
+                }
+            }
+        }
+    }
+
     /**
      * Get the highest safe Y coordinate at the given X,Z in the world.
      * Scans top-down for a solid, non-dangerous ground with two clear blocks above.
      */
     public static int getHighestSafeY(ServerLevel level, int x, int z) {
-        for (int y = level.getMaxBuildHeight() - 2; y >= level.getMinBuildHeight() + 1; y--) {
+        for (int y = com.zerog.neoessentials.util.LevelHeightCompat.maxBuildHeight(level) - 2; y >= com.zerog.neoessentials.util.LevelHeightCompat.minBuildHeight(level) + 1; y--) {
             BlockPos testPos = new BlockPos(x, y, z);
             if (isSafeLocation(level, testPos)) {
                 return y;

@@ -2,10 +2,14 @@ package com.zerog.neoessentials.api;
 
 import com.zerog.neoessentials.api.permissions.PermissionAPI;
 import com.zerog.neoessentials.economy.managers.EconomyManager;
+import com.zerog.neoessentials.util.commands.NickCommand;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.stats.Stats;
 import net.minecraft.world.level.Level;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 
 import javax.annotation.Nullable;
 import java.text.DecimalFormat;
@@ -32,12 +36,19 @@ public class DefaultPlaceholderExpansion extends PlaceholderExpansion {
         placeholders.add("displayname");
         placeholders.add("username");
         placeholders.add("name"); // alias for username
+        // Hover/click variants — resolved to plain text here; ChatFormatter applies
+        // the actual click/hover component when chat enhancements are enabled
+        placeholders.add("username_hover");
+        placeholders.add("displayname_hover");
         
         // Permission system placeholders
         placeholders.add("prefix");
         placeholders.add("suffix");
         placeholders.add("group");
-        
+
+        // Chat channel placeholder
+        placeholders.add("channel");
+
         // Location placeholders
         placeholders.add("world");
         placeholders.add("x");
@@ -57,9 +68,14 @@ public class DefaultPlaceholderExpansion extends PlaceholderExpansion {
         // Economy placeholders
         placeholders.add("balance");
         placeholders.add("balance_formatted");
+        placeholders.add("balance_raw");       // plain number, no formatting
+        placeholders.add("currency_symbol");   // configured currency symbol
+        placeholders.add("baltop_rank");       // player's rank on the balance leaderboard
+        placeholders.add("pay_toggle");        // "enabled" / "disabled" pay acceptance status
         
         // Server placeholders
         placeholders.add("server_name");
+        placeholders.add("server_motd");
         placeholders.add("online_players");
         placeholders.add("max_players");
         
@@ -72,8 +88,14 @@ public class DefaultPlaceholderExpansion extends PlaceholderExpansion {
         placeholders.add("afk");
         placeholders.add("afk_time");
         placeholders.add("afk_reason");
+
+        // Stat placeholders
+        placeholders.add("deaths");
+        placeholders.add("player_kills");
+        placeholders.add("mob_kills");
+        placeholders.add("play_time");
         
-        LOGGER.debug("Initialized {} default placeholders", placeholders.size());
+        NeoLog.debug(LOGGER, LogCategory.GENERAL, "Initialized {} default placeholders", placeholders.size());
     }
     
     @Override
@@ -106,13 +128,19 @@ public class DefaultPlaceholderExpansion extends PlaceholderExpansion {
         try {
             return switch (identifier.toLowerCase()) {
                 // Player identity
-                case "displayname" -> player != null ? player.getDisplayName().getString() : null;
+                // displayname → nickname if set, otherwise the scoreboard-based display name
+                case "displayname" -> player != null ? getNickOrDisplayName(player) : null;
+                // username → always the real game-profile name (for admin use / realname lookup)
                 case "username", "name" -> player != null ? player.getName().getString() : null;
+                // Hover variants — plain text; ChatFormatter renders the Component side
+                case "username_hover"   -> player != null ? player.getName().getString() : null;
+                case "displayname_hover" -> player != null ? getNickOrDisplayName(player) : null;
                 
                 // Permission system
                 case "prefix" -> getPlayerPrefix(player);
                 case "suffix" -> getPlayerSuffix(player);
                 case "group" -> getPlayerGroup(player);
+                case "channel" -> player != null ? getPlayerChannel(player) : null;
                 
                 // Location
                 case "world" -> player != null ? getWorldName(player) : null;
@@ -133,9 +161,14 @@ public class DefaultPlaceholderExpansion extends PlaceholderExpansion {
                 // Economy
                 case "balance" -> getBalance(player);
                 case "balance_formatted" -> getFormattedBalance(player);
+                case "balance_raw" -> getBalanceRaw(player);
+                case "currency_symbol" -> getCurrencySymbol();
+                case "baltop_rank" -> getBaltopRank(player);
+                case "pay_toggle" -> getPayToggle(player);
                 
                 // Server
                 case "server_name" -> getServerName(player);
+                case "server_motd" -> getServerMotd(player);
                 case "online_players" -> getOnlinePlayerCount(player);
                 case "max_players" -> getMaxPlayerCount(player);
                 
@@ -148,6 +181,12 @@ public class DefaultPlaceholderExpansion extends PlaceholderExpansion {
                 case "afk" -> getAfkStatus(player);
                 case "afk_time" -> getAfkTime(player);
                 case "afk_reason" -> getAfkReason(player);
+
+                // Stats
+                case "deaths" -> player != null ? String.valueOf(player.getStats().getValue(Stats.CUSTOM.get(Stats.DEATHS))) : null;
+                case "player_kills" -> player != null ? String.valueOf(player.getStats().getValue(Stats.CUSTOM.get(Stats.PLAYER_KILLS))) : null;
+                case "mob_kills" -> player != null ? String.valueOf(player.getStats().getValue(Stats.CUSTOM.get(Stats.MOB_KILLS))) : null;
+                case "play_time" -> player != null ? formatPlayTime(player.getStats().getValue(Stats.CUSTOM.get(Stats.PLAY_TIME))) : null;
                 
                 default -> null;
             };
@@ -158,11 +197,35 @@ public class DefaultPlaceholderExpansion extends PlaceholderExpansion {
     }
     
     /**
+     * Returns the player's nickname (color-formatted) if one is set via {@code /nick},
+     * otherwise falls back to the raw game-profile name.
+     * <p>
+     * Deliberately NOT {@link ServerPlayer#getDisplayName()}: when a permissions plugin (e.g.
+     * LuckPerms) formats names via vanilla scoreboard teams, getDisplayName() already has the
+     * group prefix/suffix baked in — stacking that on top of a chat-format template that also
+     * places {@code {neoessentials_prefix}}/{@code {neoessentials_suffix}} explicitly produces a
+     * doubled prefix (e.g. "[Owner] [Owner] Name"). {@code {neoessentials_displayname}} exists
+     * only to add nickname-awareness; prefix/suffix are the dedicated placeholders' job.
+     */
+    private String getNickOrDisplayName(ServerPlayer player) {
+        try {
+            String nick = NickCommand.getNickname(player.getUUID());
+            if (nick != null && !nick.isEmpty()) {
+                return nick.replace("&", "§");
+            }
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "getNickOrDisplayName: error reading nickname for {}: {}",
+                player.getName().getString(), e.getMessage());
+        }
+        return player.getName().getString();
+    }
+
+    /**
      * Check if a placeholder requires a player context.
      */
     private boolean requiresPlayer(String identifier) {
         return switch (identifier.toLowerCase()) {
-            case "server_name", "online_players", "max_players", "time", "time_24", "date" -> false;
+            case "server_name", "server_motd", "online_players", "max_players", "time", "time_24", "date" -> false;
             default -> true;
         };
     }
@@ -177,17 +240,17 @@ public class DefaultPlaceholderExpansion extends PlaceholderExpansion {
             return null;
         }
 
-        boolean debugEnabled = com.zerog.neoessentials.config.ConfigManager.getInstance().isDebugLoggingEnabled();
+        boolean debugEnabled = com.zerog.neoessentials.logging.NeoLog.isDebugEnabled(com.zerog.neoessentials.logging.LogCategory.CHAT);
         if (debugEnabled) {
-            LOGGER.info(">>> DefaultPlaceholderExpansion.getPlayerPrefix() for: {}", player.getName().getString());
-            LOGGER.info(">>> Player UUID: {}", player.getUUID());
+            NeoLog.info(LOGGER, LogCategory.GENERAL, ">>> DefaultPlaceholderExpansion.getPlayerPrefix() for: {}", player.getName().getString());
+            NeoLog.info(LOGGER, LogCategory.GENERAL, ">>> Player UUID: {}", player.getUUID());
         }
 
         try {
             String prefix = PermissionAPI.getPrefix(player.getUUID());
             if (debugEnabled) {
-                LOGGER.info(">>> PermissionAPI returned prefix: [{}]", prefix);
-                LOGGER.info(">>> Returning prefix: [{}]", prefix);
+                NeoLog.info(LOGGER, LogCategory.GENERAL, ">>> PermissionAPI returned prefix: [{}]", prefix);
+                NeoLog.info(LOGGER, LogCategory.GENERAL, ">>> Returning prefix: [{}]", prefix);
             }
             return prefix;
         } catch (Exception e) {
@@ -206,35 +269,51 @@ public class DefaultPlaceholderExpansion extends PlaceholderExpansion {
         try {
             return PermissionAPI.getSuffix(player.getUUID());
         } catch (Exception e) {
-            LOGGER.debug("Error getting suffix for player {}: {}", player.getName().getString(), e.getMessage());
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Error getting suffix for player {}: {}", player.getName().getString(), e.getMessage());
             return "";
         }
     }
     
     /**
-     * Get player's primary group from the permission system.
+     * Get player's primary group from the permission system — this backs the single most
+     * widely-used group placeholder ({@code {group}}/{@code {neoessentials_group}}, used in
+     * chat, MOTD, holograms, custom expansions). Must go through
+     * {@link PermissionAPI#getPrimaryGroup} (checks the active external adapter first) rather
+     * than {@link PermissionAPI#getManager()} (internal-only) directly — the latter silently
+     * bucketed every player into "default" whenever LuckPerms/FTB Ranks was actually active.
      */
     @Nullable
     private String getPlayerGroup(@Nullable ServerPlayer player) {
         if (player == null) return null;
-        
+
         try {
-            // Get the player's group through the PermissionManager
-            var manager = PermissionAPI.getManager();
-            if (manager != null) {
-                var user = manager.getUser(player.getUUID());
-                if (user != null && user.getGroup() != null) {
-                    return user.getGroup();
-                }
-                return manager.getDefaultGroup();
-            }
-            return "default";
+            String group = PermissionAPI.getPrimaryGroup(player.getUUID());
+            return group != null ? group : "default";
         } catch (Exception e) {
-            LOGGER.debug("Error getting group for player {}: {}", player.getName().getString(), e.getMessage());
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Error getting group for player {}: {}", player.getName().getString(), e.getMessage());
             return "default";
         }
     }
     
+    /**
+     * Get the styled channel text to show for the player's current channel (persistent state, or
+     * the configured default channel, or "global" — see
+     * {@link com.zerog.neoessentials.chat.ChatHandler#getEffectiveChannel}), resolved through
+     * {@link com.zerog.neoessentials.chat.ChatHandler#getChannelDisplayName} so a channel's
+     * optional {@code displayName} (e.g. a colored icon) is used instead of the raw channel key.
+     */
+    @Nullable
+    private String getPlayerChannel(@Nullable ServerPlayer player) {
+        if (player == null) return null;
+        try {
+            String channelKey = com.zerog.neoessentials.chat.ChatHandler.getEffectiveChannel(player.getUUID());
+            return com.zerog.neoessentials.chat.ChatHandler.getChannelDisplayName(channelKey);
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Error getting channel for player {}: {}", player.getName().getString(), e.getMessage());
+            return "global";
+        }
+    }
+
     /**
      * Get the name of the world the player is in.
      */
@@ -247,7 +326,7 @@ public class DefaultPlaceholderExpansion extends PlaceholderExpansion {
             Level level = player.level();
             return level.dimension().location().getPath();
         } catch (Exception e) {
-            LOGGER.debug("Error getting world name for player {}: {}", player.getName().getString(), e.getMessage());
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Error getting world name for player {}: {}", player.getName().getString(), e.getMessage());
             return "unknown";
         }
     }
@@ -264,7 +343,7 @@ public class DefaultPlaceholderExpansion extends PlaceholderExpansion {
             var biome = player.level().getBiome(player.blockPosition());
             return biome.unwrapKey().map(key -> key.location().getPath()).orElse("unknown");
         } catch (Exception e) {
-            LOGGER.debug("Error getting biome for player {}: {}", player.getName().getString(), e.getMessage());
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Error getting biome for player {}: {}", player.getName().getString(), e.getMessage());
             return "unknown";
         }
     }
@@ -283,9 +362,59 @@ public class DefaultPlaceholderExpansion extends PlaceholderExpansion {
                 return balance.toString();
             }
         } catch (Exception e) {
-            LOGGER.debug("Error getting balance for player {}: {}", player.getName().getString(), e.getMessage());
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Error getting balance for player {}: {}", player.getName().getString(), e.getMessage());
         }
         return "0.0";
+    }
+
+    /** Raw plain balance with no trailing zeros. */
+    @Nullable
+    private String getBalanceRaw(@Nullable ServerPlayer player) {
+        if (player == null) return null;
+        try {
+            return EconomyManager.getInstance().getBalance(player.getUUID()).toPlainString();
+        } catch (Exception e) {
+            return "0";
+        }
+    }
+
+    /** Configured currency symbol (e.g. "$"). */
+    private String getCurrencySymbol() {
+        try {
+            return EconomyManager.getInstance().getCurrencySymbol();
+        } catch (Exception e) {
+            return "$";
+        }
+    }
+
+    /** Player's rank on the /baltop leaderboard, or "N/A" if unknown. */
+    @Nullable
+    private String getBaltopRank(@Nullable ServerPlayer player) {
+        if (player == null) return null;
+        try {
+            java.util.Map<java.util.UUID, java.math.BigDecimal> all =
+                EconomyManager.getInstance().getAllBalances();
+            java.math.BigDecimal myBal = EconomyManager.getInstance().getBalance(player.getUUID());
+            long rank = all.values().stream()
+                .filter(b -> b.compareTo(myBal) > 0)
+                .count() + 1;
+            return String.valueOf(rank);
+        } catch (Exception e) {
+            return "N/A";
+        }
+    }
+
+    /** Whether the player currently accepts payments ("enabled" / "disabled"). */
+    @Nullable
+    private String getPayToggle(@Nullable ServerPlayer player) {
+        if (player == null) return null;
+        try {
+            boolean accepts = com.zerog.neoessentials.economy.managers.PayToggleManager
+                .getInstance().getPayToggle(player.getUUID());
+            return accepts ? "enabled" : "disabled";
+        } catch (Exception e) {
+            return "enabled";
+        }
     }
     
     /**
@@ -302,23 +431,37 @@ public class DefaultPlaceholderExpansion extends PlaceholderExpansion {
                 return DECIMAL_FORMAT.format(balance.doubleValue());
             }
         } catch (Exception e) {
-            LOGGER.debug("Error getting formatted balance for player {}: {}", player.getName().getString(), e.getMessage());
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Error getting formatted balance for player {}: {}", player.getName().getString(), e.getMessage());
         }
         return "0.00";
     }
     
     /**
-     * Get the server name (motd or configured name).
+     * Get the plain, admin-configured server name ({@code general.serverName}) — deliberately
+     * NOT the MOTD (server.properties or NeoEssentials' own {@code /motd}), which is typically
+     * multi-line and heavily formatted for the server list and doesn't fit a single line
+     * elsewhere. See {@link #getServerMotd} for that.
      */
     private String getServerName(@Nullable ServerPlayer player) {
         try {
-            if (player != null && player.getServer() != null) {
-                return player.getServer().getMotd();
-            }
+            return com.zerog.neoessentials.config.ConfigManager.getServerName();
         } catch (Exception e) {
-            LOGGER.debug("Error getting server name: {}", e.getMessage());
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Error getting server name: {}", e.getMessage());
         }
         return "Minecraft Server";
+    }
+
+    /** The configured MOTD (NeoEssentials' own {@code /motd} if one is set, otherwise the
+     *  vanilla server.properties MOTD) — see {@link com.zerog.neoessentials.util.motd.MotdManager#getEffectiveMotd}. */
+    private String getServerMotd(@Nullable ServerPlayer player) {
+        try {
+            if (player != null && player.getServer() != null) {
+                return com.zerog.neoessentials.util.motd.MotdManager.getInstance().getEffectiveMotd(player.getServer());
+            }
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Error getting server MOTD: {}", e.getMessage());
+        }
+        return "";
     }
     
     /**
@@ -330,7 +473,7 @@ public class DefaultPlaceholderExpansion extends PlaceholderExpansion {
                 return String.valueOf(player.getServer().getPlayerCount());
             }
         } catch (Exception e) {
-            LOGGER.debug("Error getting online player count: {}", e.getMessage());
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Error getting online player count: {}", e.getMessage());
         }
         return "0";
     }
@@ -344,7 +487,7 @@ public class DefaultPlaceholderExpansion extends PlaceholderExpansion {
                 return String.valueOf(player.getServer().getMaxPlayers());
             }
         } catch (Exception e) {
-            LOGGER.debug("Error getting max player count: {}", e.getMessage());
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Error getting max player count: {}", e.getMessage());
         }
         return "20";
     }
@@ -356,7 +499,7 @@ public class DefaultPlaceholderExpansion extends PlaceholderExpansion {
         try {
             return java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("h:mm a"));
         } catch (Exception e) {
-            LOGGER.debug("Error getting current time: {}", e.getMessage());
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Error getting current time: {}", e.getMessage());
             return "00:00 AM";
         }
     }
@@ -368,7 +511,7 @@ public class DefaultPlaceholderExpansion extends PlaceholderExpansion {
         try {
             return java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
         } catch (Exception e) {
-            LOGGER.debug("Error getting current time (24h): {}", e.getMessage());
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Error getting current time (24h): {}", e.getMessage());
             return "00:00";
         }
     }
@@ -380,7 +523,7 @@ public class DefaultPlaceholderExpansion extends PlaceholderExpansion {
         try {
             return java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd"));
         } catch (Exception e) {
-            LOGGER.debug("Error getting current date: {}", e.getMessage());
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Error getting current date: {}", e.getMessage());
             return "1970-01-01";
         }
     }
@@ -397,7 +540,7 @@ public class DefaultPlaceholderExpansion extends PlaceholderExpansion {
             boolean isAfk = afkManager.isAfk(player.getUUID());
             return isAfk ? "AFK" : "";
         } catch (Exception e) {
-            LOGGER.debug("Error getting AFK status for player {}: {}", player.getName().getString(), e.getMessage());
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Error getting AFK status for player {}: {}", player.getName().getString(), e.getMessage());
             return "";
         }
     }
@@ -430,7 +573,7 @@ public class DefaultPlaceholderExpansion extends PlaceholderExpansion {
                 return String.format("%ds", seconds);
             }
         } catch (Exception e) {
-            LOGGER.debug("Error getting AFK time for player {}: {}", player.getName().getString(), e.getMessage());
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Error getting AFK time for player {}: {}", player.getName().getString(), e.getMessage());
             return "";
         }
     }
@@ -451,8 +594,25 @@ public class DefaultPlaceholderExpansion extends PlaceholderExpansion {
             String reason = afkManager.getAfkReason(player.getUUID());
             return reason != null ? reason : "";
         } catch (Exception e) {
-            LOGGER.debug("Error getting AFK reason for player {}: {}", player.getName().getString(), e.getMessage());
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Error getting AFK reason for player {}: {}", player.getName().getString(), e.getMessage());
             return "";
         }
+    }
+
+    /**
+     * Format play time from ticks (20 ticks = 1 second) into a human-readable string.
+     * e.g. "3d 4h 12m" or "45m 30s"
+     */
+    private String formatPlayTime(int ticks) {
+        long totalSeconds = ticks / 20;
+        long seconds = totalSeconds % 60;
+        long minutes = (totalSeconds / 60) % 60;
+        long hours   = (totalSeconds / 3600) % 24;
+        long days    = totalSeconds / 86400;
+
+        if (days > 0)        return String.format("%dd %dh %dm", days, hours, minutes);
+        else if (hours > 0)  return String.format("%dh %dm", hours, minutes);
+        else if (minutes > 0) return String.format("%dm %ds", minutes, seconds);
+        else                 return String.format("%ds", seconds);
     }
 }

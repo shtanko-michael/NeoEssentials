@@ -1,5 +1,7 @@
 package com.zerog.neoessentials.api.economy;
 import com.zerog.neoessentials.economy.managers.EconomyManager;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 
 import java.math.BigDecimal;
 import java.util.Map;
@@ -10,9 +12,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
-import net.neoforged.neoforge.common.NeoForge;
-import com.zerog.neoessentials.api.event.EconomyDepositEvent;
-import com.zerog.neoessentials.api.event.EconomyWithdrawEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,11 +44,11 @@ public class EconomyServiceImpl implements EconomyService {
         // One-time migration: Load old data file and import into EconomyManager
         if (!migrated && Files.exists(dataFile)) {
             migrated = true;
-            LOGGER.info("=== EconomyServiceImpl Migration ===");
-            LOGGER.info("Detecting old balance data format - migrating to EconomyManager...");
+            NeoLog.info(LOGGER, LogCategory.ECONOMY, "=== EconomyServiceImpl Migration ===");
+            NeoLog.info(LOGGER, LogCategory.ECONOMY, "Detecting old balance data format - migrating to EconomyManager...");
             migrateOldBalances();
         } else {
-            LOGGER.debug("EconomyServiceImpl initialized as wrapper around EconomyManager");
+            NeoLog.debug(LOGGER, LogCategory.ECONOMY, "EconomyServiceImpl initialized as wrapper around EconomyManager");
         }
     }
 
@@ -63,27 +62,17 @@ public class EconomyServiceImpl implements EconomyService {
     @Override
     public boolean deposit(UUID playerId, double amount) {
         if (amount <= 0) return false;
-        
-        // Delegate to EconomyManager
-        boolean success = EconomyManager.getInstance().addBalance(playerId, BigDecimal.valueOf(amount));
-        
-        if (success) {
-            NeoForge.EVENT_BUS.post(new EconomyDepositEvent(playerId, amount));
-        }
-        return success;
+        // Delegate to EconomyManager — it fires EconomyDepositEvent internally,
+        // so we must NOT post it again here (BUG FIX: double event was fired before).
+        return EconomyManager.getInstance().addBalance(playerId, BigDecimal.valueOf(amount));
     }
 
     @Override
     public boolean withdraw(UUID playerId, double amount) {
         if (amount <= 0) return false;
-        
-        // Delegate to EconomyManager
-        boolean success = EconomyManager.getInstance().subtractBalance(playerId, BigDecimal.valueOf(amount));
-        
-        if (success) {
-            NeoForge.EVENT_BUS.post(new EconomyWithdrawEvent(playerId, amount));
-        }
-        return success;
+        // Delegate to EconomyManager — it fires EconomyWithdrawEvent internally,
+        // so we must NOT post it again here (BUG FIX: double event was fired before).
+        return EconomyManager.getInstance().subtractBalance(playerId, BigDecimal.valueOf(amount));
     }
 
     @Override
@@ -97,8 +86,9 @@ public class EconomyServiceImpl implements EconomyService {
 
     @Override
     public boolean resetBalance(UUID playerId) {
-        // Delegate to EconomyManager
-        EconomyManager.getInstance().setBalance(playerId, BigDecimal.ZERO);
+        // Reset to the configured starting balance, not zero
+        BigDecimal startingBalance = BigDecimal.valueOf(com.zerog.neoessentials.config.ConfigManager.getEconomyStartingBalance());
+        EconomyManager.getInstance().setBalance(playerId, startingBalance);
         return true;
     }
 
@@ -122,11 +112,8 @@ public class EconomyServiceImpl implements EconomyService {
     @Override
     public boolean deleteAccount(UUID playerId) {
         if (!hasAccount(playerId)) return false;
-        
-        // Delete by setting to zero and removing from cache
-        // Note: EconomyManager doesn't have a delete method, so we set to zero
-        EconomyManager.getInstance().setBalance(playerId, BigDecimal.ZERO);
-        return true;
+        // Properly remove account from EconomyManager cache
+        return EconomyManager.getInstance().removeAccount(playerId);
     }
 
     @Override
@@ -147,7 +134,7 @@ public class EconomyServiceImpl implements EconomyService {
     private void migrateOldBalances() {
         try {
             if (!Files.exists(dataFile)) {
-                LOGGER.info("No old balance data found, skipping migration");
+                NeoLog.info(LOGGER, LogCategory.ECONOMY, "No old balance data found, skipping migration");
                 return;
             }
             
@@ -157,13 +144,13 @@ public class EconomyServiceImpl implements EconomyService {
                 Map<String, Object> raw = new Gson().fromJson(reader, type);
                 
                 if (raw == null || raw.isEmpty()) {
-                    LOGGER.info("Old balance file is empty, skipping migration");
+                    NeoLog.info(LOGGER, LogCategory.ECONOMY, "Old balance file is empty, skipping migration");
                     return;
                 }
                 
                 // Check if it's already the new format (has _dataVersion)
                 if (raw.containsKey("_dataVersion")) {
-                    LOGGER.info("Balance data already in new format, no migration needed");
+                    NeoLog.info(LOGGER, LogCategory.ECONOMY, "Balance data already in new format, no migration needed");
                     return;
                 }
                 
@@ -183,12 +170,12 @@ public class EconomyServiceImpl implements EconomyService {
                     }
                 }
                 
-                LOGGER.info("✓ Successfully migrated {} player balances to EconomyManager", migratedCount);
+                NeoLog.info(LOGGER, LogCategory.ECONOMY, "✓ Successfully migrated {} player balances to EconomyManager", migratedCount);
                 
                 // Rename old file as backup
                 Path backupPath = dataFile.getParent().resolve(dataFile.getFileName() + ".old");
                 Files.move(dataFile, backupPath);
-                LOGGER.info("✓ Old balance file backed up to: {}", backupPath.getFileName());
+                NeoLog.info(LOGGER, LogCategory.ECONOMY, "✓ Old balance file backed up to: {}", backupPath.getFileName());
                 
             }
         } catch (Exception e) {

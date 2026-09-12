@@ -28,8 +28,9 @@ import net.minecraft.world.item.component.Fireworks;
 import net.minecraft.world.level.Level;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
@@ -92,7 +93,7 @@ public class FunCommands {
             .then(Commands.literal("color")
                 .then(Commands.argument("options", StringArgumentType.greedyString())
                     .suggests((ctx, b) -> SharedSuggestionProvider.suggest(
-                        Arrays.asList("FF0000", "00FF00", "0000FF", "FFFF00", "FF00FF", "00FFFF",
+                        List.of("FF0000", "00FF00", "0000FF", "FFFF00", "FF00FF", "00FFFF",
                             "FFFFFF", "000000", "FF8800", "8800FF"), b))
                     .executes(ctx -> executeFireworkColor(ctx, StringArgumentType.getString(ctx, "options")))
                 )
@@ -147,7 +148,7 @@ public class FunCommands {
             return 0;
         }
 
-        var level = player.serverLevel();
+        var level = com.zerog.neoessentials.util.LevelCompat.of(player);
         for (int i = 0; i < amount; i++) {
             var look = player.getLookAngle().normalize();
             var fw = new net.minecraft.world.entity.projectile.FireworkRocketEntity(
@@ -159,7 +160,7 @@ public class FunCommands {
         }
         final int fa = amount;
         src.sendSuccess(() -> MessageUtil.success("commands.neoessentials.firework.fired", fa), false);
-        LOGGER.info("{} fired {}x firework", player.getName().getString(), amount);
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "{} fired {}x firework", player.getName().getString(), amount);
         return 1;
     }
 
@@ -219,7 +220,10 @@ public class FunCommands {
             if (hex.isEmpty()) continue;
             try {
                 result.add((int) Long.parseLong(hex, 16));
-            } catch (NumberFormatException ignored) {}
+            } catch (NumberFormatException e) {
+                NeoLog.debug(LOGGER, com.zerog.neoessentials.logging.LogCategory.COMMANDS,
+                    "Failed to parse '{}' as a hex color, skipping", hex, e);
+            }
         }
         return result;
     }
@@ -270,16 +274,16 @@ public class FunCommands {
 
         int nuked = 0;
         for (ServerPlayer target : targets) {
-            ServerLevel level = target.serverLevel();
+            ServerLevel level = com.zerog.neoessentials.util.LevelCompat.of(target);
             // Message the target
-            target.sendSystemMessage(Component.literal(MessageUtil.localize("commands.neoessentials.nuke.incoming")));
+            target.sendSystemMessage(MessageUtil.component("commands.neoessentials.nuke.incoming"));
             // Spawn a 5x5 grid of TNT 64 blocks above the player
             int bx = target.getBlockX();
             int bz = target.getBlockZ();
-            int topY = level.getMaxBuildHeight();
+            int topY = com.zerog.neoessentials.util.LevelHeightCompat.maxBuildHeight(level);
             for (int x = -10; x <= 10; x += 5) {
                 for (int z = -10; z <= 10; z += 5) {
-                    PrimedTnt tnt = EntityType.TNT.create(level);
+                    PrimedTnt tnt = com.zerog.neoessentials.util.EntityTypeCompat.create(EntityType.TNT, level);
                     if (tnt != null) {
                         tnt.moveTo(bx + x, topY, bz + z);
                         tnt.setFuse(80); // 4 seconds
@@ -291,7 +295,7 @@ public class FunCommands {
         }
         final int fn = nuked;
         src.sendSuccess(() -> MessageUtil.success("commands.neoessentials.nuke.success", fn), true);
-        LOGGER.info("{} nuked {} player(s)", src.getTextName(), nuked);
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "{} nuked {} player(s)", src.getTextName(), nuked);
         return 1;
     }
 
@@ -501,34 +505,26 @@ public class FunCommands {
         var src = ctx.getSource();
         var player = src.getPlayer();
 
-        ConfigManager cfg = ConfigManager.getInstance();
-        String motd = cfg.getMotd();
-        String rules = cfg.getRules();
-
+        String motd = com.zerog.neoessentials.util.motd.MotdManager.getInstance().getActiveMotd();
         if (motd == null) motd = "";
-        if (rules == null) rules = "";
 
         String playerName = player != null ? player.getName().getString() : "Server";
         String motdResolved = motd.replace("{player}", playerName).replace("{name}", playerName);
-        final String finalRules = rules;
 
-        // Show MOTD + Rules summary together as /info
+        // Show MOTD + a pointer to /rules as /info
+        String motdResolvedFinal = motdResolved;
         src.sendSuccess(() -> Component.literal(
             MessageUtil.localize("commands.neoessentials.info.header") + "\n" +
-            motdResolved + "\n" +
-            MessageUtil.localize("commands.neoessentials.info.rules_hint")
+            motdResolvedFinal + "\n" +
+            MessageUtil.localize("commands.neoessentials.info.footer")
         ), false);
-
-        if (!finalRules.isEmpty() && !finalRules.equals("No rules set.")) {
-            src.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.info.rules_header") + "\n" + finalRules), false);
-        }
         return 1;
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     @SuppressWarnings("unused")
     private static BlockPos getHighestBlock(ServerLevel level, int x, int z) {
-        return BlockPos.containing(x, level.getMaxBuildHeight(), z);
+        return BlockPos.containing(x, com.zerog.neoessentials.util.LevelHeightCompat.maxBuildHeight(level), z);
     }
 
     // ── /antioch ──────────────────────────────────────────────────────────────
@@ -555,15 +551,15 @@ public class FunCommands {
         if (flavour) {
             var server = src.getServer();
             server.getPlayerList().broadcastSystemMessage(
-                Component.literal(MessageUtil.localize("commands.neoessentials.antioch.flavour_1")), false);
+                MessageUtil.component("commands.neoessentials.antioch.flavour1"), false);
             server.getPlayerList().broadcastSystemMessage(
-                Component.literal(MessageUtil.localize("commands.neoessentials.antioch.flavour_2")), false);
+                MessageUtil.component("commands.neoessentials.antioch.flavour2"), false);
         }
 
         var hit = player.pick(20, 1.0f, false);
         var pos = hit.getLocation();
-        ServerLevel level = player.serverLevel();
-        PrimedTnt tnt = EntityType.TNT.create(level);
+        ServerLevel level = com.zerog.neoessentials.util.LevelCompat.of(player);
+        PrimedTnt tnt = com.zerog.neoessentials.util.EntityTypeCompat.create(EntityType.TNT, level);
         if (tnt != null) {
             tnt.moveTo(pos.x, pos.y, pos.z);
             tnt.setFuse(80);
@@ -592,8 +588,8 @@ public class FunCommands {
         var player = src.getPlayer();
         if (player == null) { src.sendFailure(MessageUtil.error("commands.neoessentials.general.player_only")); return 0; }
 
-        ServerLevel level = player.serverLevel();
-        Cat cat = EntityType.CAT.create(level);
+        ServerLevel level = com.zerog.neoessentials.util.LevelCompat.of(player);
+        Cat cat = com.zerog.neoessentials.util.EntityTypeCompat.create(EntityType.CAT, level);
         if (cat == null) {
             src.sendFailure(MessageUtil.error("commands.neoessentials.general.error"));
             return 0;
@@ -612,17 +608,14 @@ public class FunCommands {
 
         // Schedule explosion after 20 ticks (1 second)
         final var catRef = cat;
-        level.getServer().tell(new net.minecraft.server.TickTask(
-            level.getServer().getTickCount() + 20,
-            () -> {
-                if (catRef.isAlive()) {
-                    var loc = catRef.position();
-                    catRef.discard();
-                    level.explode(null, loc.x, loc.y, loc.z, 0f,
-                        Level.ExplosionInteraction.NONE);
-                }
+        com.zerog.neoessentials.scheduler.DelayedTaskScheduler.schedule(20, () -> {
+            if (catRef.isAlive()) {
+                var loc = catRef.position();
+                catRef.discard();
+                level.explode(null, loc.x, loc.y, loc.z, 0f,
+                    Level.ExplosionInteraction.NONE);
             }
-        ));
+        });
 
         src.sendSuccess(() -> MessageUtil.success("commands.neoessentials.kittycannon.fired"), false);
         return 1;
@@ -648,10 +641,10 @@ public class FunCommands {
         var player = ctx.getSource().getPlayer();
         if (player == null) { src.sendFailure(MessageUtil.error("commands.neoessentials.general.player_only")); return 0; }
 
-        ServerLevel level = player.serverLevel();
+        ServerLevel level = com.zerog.neoessentials.util.LevelCompat.of(player);
         int spawned = 0;
         for (int i = 0; i < amount; i++) {
-            var bee = EntityType.BEE.create(level);
+            var bee = com.zerog.neoessentials.util.EntityTypeCompat.create(EntityType.BEE, level);
             if (bee != null) {
                 bee.moveTo(player.getX(), player.getEyeY(), player.getZ());
                 var look = player.getLookAngle().normalize().scale(1.5 + RANDOM.nextDouble() * 0.5);
@@ -731,26 +724,26 @@ public class FunCommands {
         var server = src.getServer();
 
         // Step 1: save-all
-        src.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.backup.saving")), false);
+        src.sendSuccess(() -> MessageUtil.component("commands.neoessentials.backup.saving"), false);
         server.getAllLevels().forEach(level -> level.save(null, true, false));
 
         // Step 2: run configured backup command (if any)
         String backupCmd = ConfigManager.getInstance().getBackupCommand();
         if (backupCmd != null && !backupCmd.isBlank() && !backupCmd.equalsIgnoreCase("save-all")) {
-            src.sendSuccess(() -> Component.literal(MessageUtil.localize("commands.neoessentials.backup.running", backupCmd)), false);
+            src.sendSuccess(() -> MessageUtil.component("commands.neoessentials.backup.running_command", backupCmd), false);
             try {
                 new ProcessBuilder(backupCmd.split("\\s+"))
                     .inheritIO()
                     .start();
             } catch (Exception e) {
-                src.sendFailure(Component.literal(MessageUtil.localize("commands.neoessentials.backup.failed", e.getMessage())));
+                src.sendFailure(MessageUtil.component("commands.neoessentials.backup.failed", e.getMessage()));
                 LOGGER.error("Backup command '{}' failed: {}", backupCmd, e.getMessage(), e);
                 return 0;
             }
         }
 
         src.sendSuccess(() -> MessageUtil.success("commands.neoessentials.backup.done"), true);
-        LOGGER.info("{} triggered a server backup", src.getTextName());
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "{} triggered a server backup", src.getTextName());
         return 1;
     }
 }

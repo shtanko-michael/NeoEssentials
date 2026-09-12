@@ -6,7 +6,8 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.zerog.neoessentials.api.permissions.PermissionAPI;
 import com.zerog.neoessentials.config.ConfigManager;
-import com.zerog.neoessentials.teleportation.Misc.MiscTeleportManager;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import com.zerog.neoessentials.util.MessageUtil;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -51,7 +52,7 @@ public class TeleportRequestCommands {
                         .requires(source -> {
                             if (source.getEntity() instanceof ServerPlayer player) {
                                 boolean hasPerm = PermissionAPI.hasPermission(player.getUUID(), PERMISSION_TPA);
-                                LOGGER.info("[TPA] Checking permission {} for {}: {}", PERMISSION_TPA, player.getName().getString(), hasPerm);
+                                NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "[TPA] Checking permission {} for {}: {}", PERMISSION_TPA, player.getName().getString(), hasPerm);
                                 return hasPerm;
                             }
                             return false; // Console can't use teleport requests
@@ -70,7 +71,7 @@ public class TeleportRequestCommands {
                         .requires(source -> {
                             if (source.getEntity() instanceof ServerPlayer player) {
                                 boolean hasPerm = PermissionAPI.hasPermission(player.getUUID(), PERMISSION_TPAHERE);
-                                LOGGER.info("[TPAHERE] Checking permission {} for {}: {}", PERMISSION_TPAHERE, player.getName().getString(), hasPerm);
+                                NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "[TPAHERE] Checking permission {} for {}: {}", PERMISSION_TPAHERE, player.getName().getString(), hasPerm);
                                 return hasPerm;
                             }
                             return false; // Console can't use teleport requests
@@ -89,7 +90,7 @@ public class TeleportRequestCommands {
                         .requires(source -> {
                             if (source.getEntity() instanceof ServerPlayer player) {
                                 boolean hasPerm = PermissionAPI.hasPermission(player.getUUID(), PERMISSION_ACCEPT);
-                                LOGGER.info("[TPACCEPT] Checking permission {} for {}: {}", PERMISSION_ACCEPT, player.getName().getString(), hasPerm);
+                                NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "[TPACCEPT] Checking permission {} for {}: {}", PERMISSION_ACCEPT, player.getName().getString(), hasPerm);
                                 return hasPerm;
                             }
                             return false; // Console can't use teleport requests
@@ -105,7 +106,7 @@ public class TeleportRequestCommands {
                         .requires(source -> {
                             if (source.getEntity() instanceof ServerPlayer player) {
                                 boolean hasPerm = PermissionAPI.hasPermission(player.getUUID(), PERMISSION_DENY);
-                                LOGGER.info("[TPDENY] Checking permission {} for {}: {}", PERMISSION_DENY, player.getName().getString(), hasPerm);
+                                NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "[TPDENY] Checking permission {} for {}: {}", PERMISSION_DENY, player.getName().getString(), hasPerm);
                                 return hasPerm;
                             }
                             return false; // Console can't use teleport requests
@@ -121,7 +122,7 @@ public class TeleportRequestCommands {
                         .requires(source -> {
                             if (source.getEntity() instanceof ServerPlayer player) {
                                 boolean hasPerm = PermissionAPI.hasPermission(player.getUUID(), PERMISSION_CANCEL);
-                                LOGGER.info("[TPCANCEL] Checking permission {} for {}: {}", PERMISSION_CANCEL, player.getName().getString(), hasPerm);
+                                NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "[TPCANCEL] Checking permission {} for {}: {}", PERMISSION_CANCEL, player.getName().getString(), hasPerm);
                                 return hasPerm;
                             }
                             return false; // Console can't use teleport requests
@@ -130,7 +131,7 @@ public class TeleportRequestCommands {
                 );
             }
             
-            LOGGER.info("Registered enabled teleport request commands");
+            NeoLog.info(LOGGER, LogCategory.TELEPORTATION, "Registered enabled teleport request commands");
         }
     }
     
@@ -200,8 +201,13 @@ public class TeleportRequestCommands {
             ServerPlayer teleportedPlayer = context.getSource().getPlayerOrException();
             TeleportRequestManager manager = TeleportRequestManager.getInstance();
 
-            // Save the player's current location for /back
-            MiscTeleportManager.getInstance().saveBackLocation(teleportedPlayer);
+            // NOTE: Do NOT save back location here.
+            // TeleportRequestManager.executeTeleportRequest() saves the back location
+            // for the correct player (the one actually being teleported).
+            // For /tpa: the requester is teleported, NOT the acceptor.
+            // For /tpahere: the acceptor is teleported — handled by the Manager.
+            // Saving back for the acceptor here would overwrite their back location
+            // with their current (unchanged) position, breaking /back for them.
 
             boolean success = manager.acceptTeleportRequest(teleportedPlayer);
 

@@ -11,6 +11,10 @@ import com.zerog.neoessentials.util.MessageUtil;
 import com.zerog.neoessentials.moderation.BanManager;
 
 import java.util.regex.Pattern;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Handles the /mute command for muting a player.
@@ -21,6 +25,7 @@ public class MuteCommand {
     private static final Pattern DURATION_TOKEN = Pattern.compile(
         "(?i)^\\d+(s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|week|weeks)$");
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(MuteCommand.class);
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         registerMuteCommand(dispatcher, "mute");
         registerMuteCommand(dispatcher, "silence");
@@ -61,12 +66,12 @@ public class MuteCommand {
         }
         String targetName = targetPlayer.getName().getString();
 
-        // Validate sender
+        // Sender may be console/RCON (source.getPlayer() == null) — every other moderation
+        // command (ban, kick, freeze, jail, warn, ...) already allows that, so mute/unmute/
+        // mutelist should too rather than rejecting with a "server context" error that doesn't
+        // even describe the real condition being checked.
         net.minecraft.server.level.ServerPlayer sender = source.getPlayer();
-        if (sender == null) {
-            source.sendFailure(MessageUtil.error("neoessentials.error.no_server"));
-            return 0;
-        }
+        String senderName = sender != null ? sender.getName().getString() : "Console";
 
         // Check if command is enabled
         ChatManager chatManager = com.zerog.neoessentials.api.ChatAPI.getChatManager();
@@ -75,14 +80,14 @@ public class MuteCommand {
             return 0;
         }
 
-        // Check permissions
-        if (!com.zerog.neoessentials.api.permissions.PermissionAPI.hasPermission(sender.getUUID(), "neoessentials.chat.mute")) {
+        // Check permissions (console always passes, same as every other moderation command)
+        if (sender != null && !com.zerog.neoessentials.api.permissions.PermissionAPI.hasPermission(sender.getUUID(), "neoessentials.chat.mute")) {
             source.sendFailure(MessageUtil.error("commands.neoessentials.no_permission"));
             return 0;
         }
 
         // Check if trying to mute self
-        if (sender.getName().getString().equalsIgnoreCase(targetName)) {
+        if (sender != null && senderName.equalsIgnoreCase(targetName)) {
             source.sendFailure(MessageUtil.error("commands.neoessentials.mute.self"));
             return 0;
         }
@@ -112,7 +117,8 @@ public class MuteCommand {
         long durationMillis = durationToken != null ? BanManager.parseDuration(durationToken) : 0L;
         final String finalReason = reason;
 
-        com.zerog.neoessentials.chat.MuteManager.mute(sender, targetName, durationMillis, finalReason);
+        com.zerog.neoessentials.chat.MuteManager.mute(
+            targetName, finalReason.isEmpty() ? null : finalReason, senderName, durationMillis);
         // The mute state is otherwise only noticed when the player next tries to chat. Notify
         // the online target immediately with the same information the moderator supplied.
         String notificationDuration = durationMillis > 0
@@ -123,17 +129,19 @@ public class MuteCommand {
             : finalReason;
         targetPlayer.sendSystemMessage(MessageUtil.warning(
             "commands.neoessentials.mute.target_notification",
-            sender.getName().getString(), notificationDuration, notificationReason));
+            senderName, notificationDuration, notificationReason));
 
         // Notify Discord integrations (fold duration into the relayed reason text since the
         // integration API has no separate duration field)
         try {
-            String discordReason = reason.isEmpty() ? "No reason given" : reason;
+            String discordReason = finalReason.isEmpty() ? "No reason given" : finalReason;
             if (durationMillis > 0) {
                 discordReason = "[" + BanManager.formatDuration(durationMillis) + "] " + discordReason;
             }
             com.zerog.neoessentials.integrations.ChatIntegrationManager.broadcastMuteEvent(targetPlayer, discordReason, true);
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.CHAT, "Failed to broadcast mute event to integrations for " + targetName, e);
+        }
 
         if (durationMillis > 0) {
             String formattedDuration = BanManager.formatDuration(durationMillis);

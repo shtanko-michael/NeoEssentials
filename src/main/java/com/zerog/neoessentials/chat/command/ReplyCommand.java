@@ -6,9 +6,11 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.server.level.ServerPlayer;
 import com.zerog.neoessentials.util.MessageUtil;
-import com.zerog.neoessentials.util.ChatDebugUtil;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.util.Map;
 
 /**
  * Handles the /reply command for replying to the last private message sender.
@@ -16,7 +18,7 @@ import org.slf4j.LoggerFactory;
 public class ReplyCommand {
     private static final Logger LOGGER = LoggerFactory.getLogger(ReplyCommand.class);
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        ChatDebugUtil.debug("ReplyCommand - Registering /reply command");
+        NeoLog.debug(LOGGER, LogCategory.CHAT, "ReplyCommand - Registering /reply command");
         // Register with vanilla aliases to override vanilla behavior
         registerCommand(dispatcher, "reply");
         registerCommand(dispatcher, "r");
@@ -26,7 +28,7 @@ public class ReplyCommand {
         dispatcher.register(Commands.literal(commandName)
             .then(Commands.argument("message", StringArgumentType.greedyString())
                 .executes(ctx -> {
-                    ChatDebugUtil.debug("ReplyCommand - Command executed!");
+                    NeoLog.debug(LOGGER, LogCategory.CHAT, "ReplyCommand - Command executed!");
                     CommandSourceStack source = ctx.getSource();
                     String message = StringArgumentType.getString(ctx, "message");
                     
@@ -38,16 +40,16 @@ public class ReplyCommand {
                     }
                     
                     // Find target from last message history
-                    ChatDebugUtil.debug("ReplyCommand - Looking for last messager for %s", sender.getName().getString());
+                    NeoLog.debug(LOGGER, LogCategory.CHAT, "ReplyCommand - Looking for last messager for {}", sender.getName().getString());
                     ServerPlayer target = com.zerog.neoessentials.chat.LastMessageManager.getLastMessager(sender);
-                    ChatDebugUtil.debug("ReplyCommand - Found target: %s", (target != null ? target.getName().getString() : "null"));
+                    NeoLog.debug(LOGGER, LogCategory.CHAT, "ReplyCommand - Found target: {}", (target != null ? target.getName().getString() : "null"));
                     if (target == null) {
                         source.sendFailure(MessageUtil.error("commands.neoessentials.reply.no_target"));
                         return 0;
                     }
                     
                     // Show who we're replying to for confirmation
-                    LOGGER.debug("Player {} replying to {}", sender.getName().getString(), target.getName().getString());
+                    NeoLog.debug(LOGGER, LogCategory.CHAT, "Player {} replying to {}", sender.getName().getString(), target.getName().getString());
                     
                     // Check if target is still online
                     if (!target.getServer().getPlayerList().getPlayers().contains(target)) {
@@ -99,22 +101,20 @@ public class ReplyCommand {
                         }
                     }
                     
-                    // Send reply messages using PlaceholderAPI for consistent placeholder support
-                    String toTemplate = MessageUtil.localize("commands.neoessentials.reply.format.to");
-                    String fromTemplate = MessageUtil.localize("commands.neoessentials.reply.format.from");
-                    
-                    // Add MESSAGE placeholder and resolve with PlaceholderAPI
-                    String toMessage = toTemplate.replace("{MESSAGE}", message);
-                    String fromMessage = fromTemplate.replace("{MESSAGE}", message);
-                    
-                    String resolvedToMessage = com.zerog.neoessentials.api.PlaceholderAPI.setPlaceholders(target, toMessage);
-                    String resolvedFromMessage = com.zerog.neoessentials.api.PlaceholderAPI.setPlaceholders(sender, fromMessage);
+                    // Send reply messages using resolveTemplate for uniform placeholder support
+                    String toTemplate  = MsgCommand.getMsgFormat("replyFormatTo",   "commands.neoessentials.reply.format.to");
+                    String fromTemplate = MsgCommand.getMsgFormat("replyFormatFrom", "commands.neoessentials.reply.format.from");
+
+                    // Pass target context for "To" (target's display name), sender for "From"
+                    Map<String, String> vars = Map.of("message", message, "MESSAGE", message);
+                    String resolvedToMessage   = MessageUtil.resolveTemplate(target, toTemplate,   vars);
+                    String resolvedFromMessage = MessageUtil.resolveTemplate(sender, fromTemplate, vars);
                     
                     target.sendSystemMessage(MessageUtil.coloredText(resolvedFromMessage));
                     sender.sendSystemMessage(MessageUtil.coloredText(resolvedToMessage));
                     
                     // When replying, the target should now be able to reply back to the sender
-                    ChatDebugUtil.debug("ReplyCommand - Setting last messager: %s can reply to %s", target.getName().getString(), sender.getName().getString());
+                    NeoLog.debug(LOGGER, LogCategory.CHAT, "ReplyCommand - Setting last messager: {} can reply to {}", target.getName().getString(), sender.getName().getString());
                     com.zerog.neoessentials.chat.LastMessageManager.setLastMessager(target, sender);
                     
                     com.zerog.neoessentials.api.ChatAPI.broadcastSocialSpy(sender, target, message);

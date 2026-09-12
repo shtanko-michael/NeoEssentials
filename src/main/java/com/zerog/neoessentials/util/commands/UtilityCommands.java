@@ -19,10 +19,11 @@ import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.item.ItemStack;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 /**
  * Utility commands ported from EssentialsX:
@@ -49,7 +50,10 @@ public class UtilityCommands {
         registerEffectCmd(dispatcher);
         registerSpawnMob(dispatcher);
         registerUnlimited(dispatcher);
-        registerCondense(dispatcher);
+        // /condense is registered by MiscItemCommands — this file used to duplicate that
+        // registration (dead weight that could only ever end up shadowed behind it, since
+        // Brigadier merges same-named nodes but keeps the first-registered suggestions
+        // provider), removed rather than kept in sync with two copies of the same command.
     }
 
     // ── /ptime [reset|<value>] [player] ──────────────────────────────────────
@@ -70,7 +74,7 @@ public class UtilityCommands {
             // /ptime <value> [player]
             .then(Commands.argument("time", StringArgumentType.word())
                 .suggests((ctx, b) -> SharedSuggestionProvider.suggest(
-                    Arrays.asList("reset","day","noon","night","midnight","sunrise","0","1000","6000","12000","18000"), b))
+                    List.of("reset","day","noon","night","midnight","sunrise","0","1000","6000","12000","18000"), b))
                 .executes(ctx -> executePtimeSet(ctx, parseTimeTicks(StringArgumentType.getString(ctx, "time")), null))
                 .then(Commands.argument("target", StringArgumentType.word())
                     .suggests((ctx, b) -> SharedSuggestionProvider.suggest(ctx.getSource().getServer().getPlayerNames(), b))
@@ -105,7 +109,7 @@ public class UtilityCommands {
         if (ticks < 0) {
             playerTimes.remove(target.getUUID());
             // Reset to real world time
-            sendTimePacket(target, target.serverLevel().getDayTime(), false);
+            sendTimePacket(target, com.zerog.neoessentials.util.LevelCompat.of(target).getDayTime(), false);
             src.sendSuccess(() -> MessageUtil.success("commands.neoessentials.ptime.reset", target.getName().getString()), false);
         } else {
             playerTimes.put(target.getUUID(), ticks);
@@ -119,7 +123,7 @@ public class UtilityCommands {
     @SuppressWarnings("resource") // ServerLevel does not implement AutoCloseable — IDE false positive
     private static void sendTimePacket(ServerPlayer player, long ticks, boolean lock) {
         player.connection.send(new net.minecraft.network.protocol.game.ClientboundSetTimePacket(
-            player.serverLevel().getGameTime(), ticks, !lock));
+            com.zerog.neoessentials.util.LevelCompat.of(player).getGameTime(), ticks, !lock));
     }
 
     // ── /pweather [reset|sun|storm] [player] ─────────────────────────────────
@@ -175,7 +179,7 @@ public class UtilityCommands {
 
         if (type == null) {
             playerWeather.remove(target.getUUID());
-            sendWeatherPacket(target, target.serverLevel().isRaining());
+            sendWeatherPacket(target, com.zerog.neoessentials.util.LevelCompat.of(target).isRaining());
             src.sendSuccess(() -> MessageUtil.success("commands.neoessentials.pweather.reset", target.getName().getString()), false);
         } else {
             playerWeather.put(target.getUUID(), type);
@@ -192,6 +196,43 @@ public class UtilityCommands {
             net.minecraft.network.protocol.game.ClientboundGameEventPacket.RAIN_LEVEL_CHANGE, level));
         player.connection.send(new net.minecraft.network.protocol.game.ClientboundGameEventPacket(
             net.minecraft.network.protocol.game.ClientboundGameEventPacket.THUNDER_LEVEL_CHANGE, level));
+    }
+
+    // ── Dashboard-facing wrappers ─────────────────────────────────────────────
+    // Same state changes as /ptime and /pweather, just driven by a target ServerPlayer
+    // directly instead of a CommandSourceStack.
+
+    /** Current ptime override for {@code uuid}, or null if using real world time. */
+    public static Long getPtime(UUID uuid) {
+        Long t = playerTimes.get(uuid);
+        return (t != null && t >= 0) ? t : null;
+    }
+
+    /** Sets (or, if {@code ticks} is null, resets) {@code target}'s ptime override. */
+    public static void setPtime(ServerPlayer target, Long ticks) {
+        if (ticks == null || ticks < 0) {
+            playerTimes.remove(target.getUUID());
+            sendTimePacket(target, com.zerog.neoessentials.util.LevelCompat.of(target).getDayTime(), false);
+        } else {
+            playerTimes.put(target.getUUID(), ticks);
+            sendTimePacket(target, ticks, true);
+        }
+    }
+
+    /** Current pweather override for {@code uuid} ("sun"/"storm"), or null if using server weather. */
+    public static String getPweather(UUID uuid) {
+        return playerWeather.get(uuid);
+    }
+
+    /** Sets (or, if {@code type} is null, resets) {@code target}'s pweather override. */
+    public static void setPweather(ServerPlayer target, String type) {
+        if (type == null) {
+            playerWeather.remove(target.getUUID());
+            sendWeatherPacket(target, com.zerog.neoessentials.util.LevelCompat.of(target).isRaining());
+        } else {
+            playerWeather.put(target.getUUID(), type);
+            sendWeatherPacket(target, "storm".equals(type));
+        }
     }
 
     /** Called on player join — restore their ptime/pweather. */
@@ -225,7 +266,7 @@ public class UtilityCommands {
                 .then(Commands.argument("effect", StringArgumentType.word())
                     .suggests((ctx, b) -> SharedSuggestionProvider.suggest(
                         BuiltInRegistries.MOB_EFFECT.keySet().stream()
-                            .map(ResourceLocation::getPath).collect(Collectors.toList()), b))
+                            .map(ResourceLocation::getPath).toList(), b))
                     .executes(ctx -> executeEffectApply(ctx,
                         StringArgumentType.getString(ctx, "target"),
                         StringArgumentType.getString(ctx, "effect"), 30, 0))
@@ -298,7 +339,7 @@ public class UtilityCommands {
             .then(Commands.argument("mob", StringArgumentType.word())
                 .suggests((ctx, b) -> SharedSuggestionProvider.suggest(
                     BuiltInRegistries.ENTITY_TYPE.keySet().stream()
-                        .map(ResourceLocation::getPath).collect(Collectors.toList()), b))
+                        .map(ResourceLocation::getPath).toList(), b))
                 .executes(ctx -> executeSpawnMob(ctx, StringArgumentType.getString(ctx, "mob"), 1, null))
                 .then(Commands.argument("amount", IntegerArgumentType.integer(1, 100))
                     .executes(ctx -> executeSpawnMob(ctx, StringArgumentType.getString(ctx, "mob"),
@@ -319,7 +360,7 @@ public class UtilityCommands {
             .then(Commands.argument("mob", StringArgumentType.word())
                 .suggests((ctx, b) -> SharedSuggestionProvider.suggest(
                     BuiltInRegistries.ENTITY_TYPE.keySet().stream()
-                        .map(ResourceLocation::getPath).collect(Collectors.toList()), b))
+                        .map(ResourceLocation::getPath).toList(), b))
                 .executes(ctx -> executeSpawnMob(ctx, StringArgumentType.getString(ctx, "mob"), 1, null))
                 .then(Commands.argument("amount", IntegerArgumentType.integer(1, 100))
                     .executes(ctx -> executeSpawnMob(ctx, StringArgumentType.getString(ctx, "mob"),
@@ -359,10 +400,10 @@ public class UtilityCommands {
             return 0;
         }
         EntityType<?> entityType = typeOpt.get();
-        var level = spawnAt.serverLevel();
+        var level = com.zerog.neoessentials.util.LevelCompat.of(spawnAt);
         int spawned = 0;
         for (int i = 0; i < amount; i++) {
-            var entity = entityType.create(level);
+            var entity = com.zerog.neoessentials.util.EntityTypeCompat.create(entityType, level);
             if (entity == null) break;
             entity.moveTo(spawnAt.getX(), spawnAt.getY(), spawnAt.getZ(), spawnAt.getYRot(), 0f);
             if (entity instanceof Mob mob) {
@@ -375,7 +416,7 @@ public class UtilityCommands {
         final int fs = spawned;
         src.sendSuccess(() -> MessageUtil.success("commands.neoessentials.spawnmob.success",
             fs, mobId, spawnAt.getName().getString()), true);
-        LOGGER.info("{} spawned {}x {} at {}", senderName(src), fs, mobId, spawnAt.getName().getString());
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "{} spawned {}x {} at {}", senderName(src), fs, mobId, spawnAt.getName().getString());
         return 1;
     }
 
@@ -400,6 +441,8 @@ public class UtilityCommands {
                     .executes(ctx -> executeUnlimitedClear(ctx, StringArgumentType.getString(ctx, "target"))))
             )
             .then(Commands.argument("item", StringArgumentType.word())
+                .suggests((ctx, b) -> SharedSuggestionProvider.suggest(
+                    BuiltInRegistries.ITEM.keySet().stream().map(ResourceLocation::getPath), b))
                 .executes(ctx -> executeUnlimitedToggle(ctx, StringArgumentType.getString(ctx, "item"), null))
                 .then(Commands.argument("target", StringArgumentType.word())
                     .suggests((ctx, b) -> SharedSuggestionProvider.suggest(ctx.getSource().getServer().getPlayerNames(), b))
@@ -471,111 +514,6 @@ public class UtilityCommands {
         Set<String> items = unlimitedItems.get(uuid);
         return items != null && items.contains(itemId);
     }
-
-    // ── /condense [item] ──────────────────────────────────────────────────────
-    // Essentials: convert loose items to storage block equivalents using crafting recipes.
-    // We hard-code the most common condensable mappings (nugget→ingot→block pattern).
-    private static void registerCondense(CommandDispatcher<CommandSourceStack> d) {
-        d.register(Commands.literal("condense")
-            .requires(src -> { var p = src.getPlayer(); return p == null || PermissionAPI.hasPermission(p.getUUID(), "neoessentials.condense"); })
-            .executes(ctx -> executeCondense(ctx, null))
-            .then(Commands.argument("item", StringArgumentType.word())
-                .executes(ctx -> executeCondense(ctx, StringArgumentType.getString(ctx, "item")))
-            )
-        );
-    }
-
-    // Condense rules: item → (required count, result item, result count)
-    private static final List<CondenseRule> CONDENSE_RULES = Arrays.asList(
-        // Nuggets → Ingots
-        new CondenseRule("minecraft:iron_nugget", 9, "minecraft:iron_ingot", 1),
-        new CondenseRule("minecraft:gold_nugget", 9, "minecraft:gold_ingot", 1),
-        // Ingots → Blocks
-        new CondenseRule("minecraft:iron_ingot", 9, "minecraft:iron_block", 1),
-        new CondenseRule("minecraft:gold_ingot", 9, "minecraft:gold_block", 1),
-        new CondenseRule("minecraft:copper_ingot", 9, "minecraft:copper_block", 1),
-        new CondenseRule("minecraft:netherite_ingot", 9, "minecraft:netherite_block", 1),
-        new CondenseRule("minecraft:diamond", 9, "minecraft:diamond_block", 1),
-        new CondenseRule("minecraft:emerald", 9, "minecraft:emerald_block", 1),
-        new CondenseRule("minecraft:lapis_lazuli", 9, "minecraft:lapis_block", 1),
-        new CondenseRule("minecraft:redstone", 9, "minecraft:redstone_block", 1),
-        new CondenseRule("minecraft:coal", 9, "minecraft:coal_block", 1),
-        new CondenseRule("minecraft:quartz", 4, "minecraft:quartz_block", 1),
-        new CondenseRule("minecraft:wheat", 9, "minecraft:hay_block", 1),
-        new CondenseRule("minecraft:bone_meal", 9, "minecraft:bone_block", 1),
-        new CondenseRule("minecraft:snowball", 4, "minecraft:snow_block", 1),
-        new CondenseRule("minecraft:clay_ball", 4, "minecraft:clay", 1),
-        new CondenseRule("minecraft:glowstone_dust", 4, "minecraft:glowstone", 1),
-        new CondenseRule("minecraft:amethyst_shard", 4, "minecraft:amethyst_block", 1),
-        new CondenseRule("minecraft:raw_iron", 9, "minecraft:raw_iron_block", 1),
-        new CondenseRule("minecraft:raw_gold", 9, "minecraft:raw_gold_block", 1),
-        new CondenseRule("minecraft:raw_copper", 9, "minecraft:raw_copper_block", 1)
-    );
-
-    private static int executeCondense(CommandContext<CommandSourceStack> ctx, String filterItem) {
-        var src = ctx.getSource();
-        var player = src.getPlayer();
-        if (player == null) { src.sendFailure(MessageUtil.error("commands.neoessentials.general.player_only")); return 0; }
-
-        var inv = player.getInventory();
-        int converted = 0;
-
-        for (CondenseRule rule : CONDENSE_RULES) {
-            if (filterItem != null) {
-                String fid = filterItem.contains(":") ? filterItem : "minecraft:" + filterItem;
-                if (!rule.inputId.equals(fid)) continue;
-            }
-            // Count how many of the input item we have
-            int count = 0;
-            for (int i = 0; i < inv.getContainerSize(); i++) {
-                ItemStack s = inv.getItem(i);
-                if (!s.isEmpty() && com.zerog.neoessentials.economy.worth.WorthManager.getItemId(s).equals(rule.inputId)) {
-                    count += s.getCount();
-                }
-            }
-            if (count < rule.inputCount) continue;
-
-            int times = count / rule.inputCount;
-            // Remove inputs — inline count directly, no redundant intermediate variable
-            int remaining = times * rule.inputCount;
-            for (int i = 0; i < inv.getContainerSize() && remaining > 0; i++) {
-                ItemStack s = inv.getItem(i);
-                if (!s.isEmpty() && com.zerog.neoessentials.economy.worth.WorthManager.getItemId(s).equals(rule.inputId)) {
-                    int take = Math.min(s.getCount(), remaining);
-                    s.shrink(take);
-                    remaining -= take;
-                    if (s.isEmpty()) inv.setItem(i, ItemStack.EMPTY);
-                }
-            }
-
-            // Add outputs
-            ResourceLocation outLoc = ResourceLocation.tryParse(rule.outputId);
-            if (outLoc != null) {
-                net.minecraft.world.item.Item outItem = BuiltInRegistries.ITEM.get(outLoc);
-                if (outItem != net.minecraft.world.item.Items.AIR) {
-                    int totalOut = times * rule.outputCount;
-                    int maxStack = new ItemStack(outItem).getMaxStackSize();
-                    while (totalOut > 0) {
-                        int give = Math.min(totalOut, maxStack);
-                        ItemStack out = new ItemStack(outItem, give);
-                        if (!inv.add(out)) player.drop(out, false);
-                        totalOut -= give;
-                    }
-                    converted++;
-                }
-            }
-        }
-
-        if (converted == 0) {
-            src.sendFailure(MessageUtil.error("commands.neoessentials.condense.nothing"));
-            return 0;
-        }
-        final int fc = converted;
-        src.sendSuccess(() -> MessageUtil.success("commands.neoessentials.condense.success", fc), false);
-        return 1;
-    }
-
-    private record CondenseRule(String inputId, int inputCount, String outputId, int outputCount) {}
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     private static ServerPlayer resolveTarget(CommandSourceStack src, String targetName) {

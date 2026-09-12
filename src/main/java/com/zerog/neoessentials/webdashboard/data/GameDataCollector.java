@@ -2,9 +2,14 @@ package com.zerog.neoessentials.webdashboard.data;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.CommandEvent;
+import net.neoforged.neoforge.event.ServerChatEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
 import org.slf4j.Logger;
@@ -182,8 +187,41 @@ public class GameDataCollector {
         ));
     }
     
+    /**
+     * Records chat messages for the dashboard's activity log ({@code LogEntryType: 'chat'}).
+     * Only fires for messages that actually reach chat — NeoForge doesn't deliver a
+     * canceled event to a plain {@code @SubscribeEvent} listener, so muted/blocked
+     * messages (see {@link com.zerog.neoessentials.chat.ChatHandler}) are naturally
+     * excluded without any extra check here.
+     */
+    @SubscribeEvent
+    public static void onServerChat(ServerChatEvent event) {
+        ServerPlayer player = event.getPlayer();
+        addEvent(new GameEvent(
+            "player.chat",
+            player.getName().getString() + ": " + event.getRawText(),
+            player.getUUID().toString()
+        ));
+    }
+
+    /**
+     * Records executed commands for the dashboard's activity log. Console/command-block
+     * sources are skipped — the dashboard's log is about player activity, and non-player
+     * command volume (e.g. repeating command blocks) would otherwise drown it out.
+     */
+    @SubscribeEvent
+    public static void onCommand(CommandEvent event) {
+        if (!(event.getParseResults().getContext().getSource().getEntity() instanceof ServerPlayer player)) return;
+        String command = event.getParseResults().getReader().getString();
+        addEvent(new GameEvent(
+            "player.command",
+            player.getName().getString() + " ran: " + command,
+            player.getUUID().toString()
+        ));
+    }
+
     // Helper methods
-    
+
     private static void addEvent(GameEvent event) {
         eventQueue.offer(event);
         
@@ -199,7 +237,7 @@ public class GameDataCollector {
      */
     public void clearEvents() {
         eventQueue.clear();
-        LOGGER.info("Game event history cleared");
+        NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Game event history cleared");
     }
     
     // Inner class for game events

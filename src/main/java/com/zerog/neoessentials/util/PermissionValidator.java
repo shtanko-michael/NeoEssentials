@@ -1,10 +1,13 @@
 package com.zerog.neoessentials.util;
 
 import com.zerog.neoessentials.api.permissions.PermissionAPI;
+import com.zerog.neoessentials.api.permissions.PermissionRegistry;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 
 import java.util.UUID;
 
@@ -35,9 +38,24 @@ public class PermissionValidator {
 
             // Validate permission
             if (!PermissionAPI.hasPermission(playerUuid, permission)) {
-                LOGGER.debug("Permission denied for player {} ({}): {}",
+                NeoLog.debug(LOGGER, LogCategory.GENERAL, "Permission denied for player {} ({}): {}",
                     player.getGameProfile().getName(), playerUuid, permission);
-                return PermissionResult.failure("commands.neoessentials.general.no_permission");
+                // Pre-localized here (not just a key) because the required-permission node is a
+                // runtime argument that the caller's MessageUtil.error(getErrorMessage()) can't supply.
+                String msg = MessageUtil.localize(
+                    "commands.neoessentials.permission_check.no_permission_required", permission);
+                // Append human-friendly description from PermissionRegistry if available
+                try {
+                    PermissionRegistry.PermissionInfo info =
+                        PermissionRegistry.getInstance().getPermissionInfo(permission);
+                    if (info != null && info.getDescription() != null && !info.getDescription().isEmpty()) {
+                        msg += "\n§8(" + info.getDescription() + ")";
+                    }
+                } catch (Exception e) {
+                    NeoLog.debug(LOGGER, LogCategory.GENERAL,
+                        "Failed to look up description for permission '{}'", permission, e);
+                }
+                return PermissionResult.failure(msg);
             }
             
             return PermissionResult.success(player);
@@ -70,14 +88,27 @@ public class PermissionValidator {
                 }
             }
 
-            LOGGER.debug("Permission denied for player {} ({}): none of {}",
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Permission denied for player {} ({}): none of {}",
                 player.getGameProfile().getName(), playerUuid, java.util.Arrays.toString(permissions));
             // Pre-localized here (not just a key) because the required-permission list is a
             // runtime argument that the caller's MessageUtil.error(getErrorMessage()) can't supply.
             String orSeparator = MessageUtil.localize("commands.neoessentials.permission_check.or_separator");
-            return PermissionResult.failure(MessageUtil.localize(
+            StringBuilder msg = new StringBuilder(MessageUtil.localize(
                 "commands.neoessentials.permission_check.no_permission_required_any",
                 String.join(orSeparator, permissions)));
+            // Append descriptions for each node from PermissionRegistry
+            try {
+                for (String perm : permissions) {
+                    PermissionRegistry.PermissionInfo info =
+                        PermissionRegistry.getInstance().getPermissionInfo(perm);
+                    if (info != null && info.getDescription() != null && !info.getDescription().isEmpty()) {
+                        msg.append("\n§8  ").append(perm).append(" — ").append(info.getDescription());
+                    }
+                }
+            } catch (Exception e) {
+                NeoLog.debug(LOGGER, LogCategory.GENERAL, "Failed to look up permission descriptions", e);
+            }
+            return PermissionResult.failure(msg.toString());
 
         } catch (Exception e) {
             LOGGER.error("Error validating permissions {} for source: {}", 

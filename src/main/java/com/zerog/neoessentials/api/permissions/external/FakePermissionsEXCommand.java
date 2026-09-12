@@ -10,6 +10,8 @@ import com.zerog.neoessentials.util.MessageUtil;
 import net.minecraft.network.chat.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 
 import java.util.List;
 
@@ -25,8 +27,12 @@ public class FakePermissionsEXCommand {
      * This will be overridden if the real PermissionsEX loads, but provides fallback functionality.
      */
     public static void registerFakePexCommand(CommandDispatcher<CommandSourceStack> dispatcher) {
-        LOGGER.info("Registering fake /pex command for NeoEssentials permission tab completion...");
-        
+        if (!com.zerog.neoessentials.config.ConfigManager.getInstance().isCommandEnabled("pex")) {
+            NeoLog.debug(LOGGER, LogCategory.PERMISSIONS, "Fake /pex command is disabled in config, skipping registration");
+            return;
+        }
+        NeoLog.info(LOGGER, LogCategory.PERMISSIONS, "Registering fake /pex command for NeoEssentials permission tab completion...");
+
         try {
             // Get all permissions for suggestions
             SuggestionProvider<CommandSourceStack> permissionSuggestions = (context, builder) -> {
@@ -62,8 +68,8 @@ public class FakePermissionsEXCommand {
                                         MessageUtil.localize("commands.neoessentials.pex.fake.simulation_notice") + "\n" +
                                         MessageUtil.localize("commands.neoessentials.pex.fake.permission_valid", ExternalPermissionProvider.hasPermission(permission))
                                     ), false);
-
-                                    LOGGER.info("Fake PEX: Would add {} to group {}", permission, group);
+                                    
+                                    NeoLog.info(LOGGER, LogCategory.PERMISSIONS, "Fake PEX: Would add {} to group {}", permission, group);
                                     return 1;
                                 })
                             )
@@ -121,8 +127,8 @@ public class FakePermissionsEXCommand {
                                         MessageUtil.localize("commands.neoessentials.pex.fake.simulation_notice") + "\n" +
                                         MessageUtil.localize("commands.neoessentials.pex.fake.permission_valid", ExternalPermissionProvider.hasPermission(permission))
                                     ), false);
-
-                                    LOGGER.info("Fake PEX: Would add {} to user {}", permission, user);
+                                    
+                                    NeoLog.info(LOGGER, LogCategory.PERMISSIONS, "Fake PEX: Would add {} to user {}", permission, user);
                                     return 1;
                                 })
                             )
@@ -168,7 +174,7 @@ public class FakePermissionsEXCommand {
                 })
             );
             
-            LOGGER.info("Fake /pex command registered - {} permissions available for tab completion", 
+            NeoLog.info(LOGGER, LogCategory.PERMISSIONS, "Fake /pex command registered - {} permissions available for tab completion", 
                 ExternalPermissionProvider.getAllNeoEssentialsPermissions().size());
             
         } catch (Exception e) {
@@ -185,10 +191,10 @@ public class FakePermissionsEXCommand {
             // If they do, we could remove our fake command
             var existing = dispatcher.getRoot().getChild("pex");
             if (existing != null) {
-                LOGGER.info("Real /pex command detected - our fake command may be overridden");
+                NeoLog.info(LOGGER, LogCategory.PERMISSIONS, "Real /pex command detected - our fake command may be overridden");
             }
         } catch (Exception e) {
-            LOGGER.debug("Could not check for real PermissionsEX", e);
+            NeoLog.debug(LOGGER, LogCategory.PERMISSIONS, "Could not check for real PermissionsEX", e);
         }
     }
 }

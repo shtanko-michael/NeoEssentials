@@ -2,18 +2,20 @@ package com.zerog.neoessentials.i18n;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
 import com.zerog.neoessentials.util.MessageUtil;
 import net.neoforged.fml.loading.FMLPaths;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 
 import java.io.*;
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -25,23 +27,34 @@ public class CustomLanguageManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(CustomLanguageManager.class);
     private static CustomLanguageManager INSTANCE;
     // Use only the correct path under the mod's data directory
+    @SuppressWarnings("unused") // kept for external tools that may reference this constant
     private static final String LANG_DIR = "neoessentials/languages/custom/";
     private static final String LANG_FILE = "en_us.json";
+    /** Collection/id for the admin translation-override document in the active DataStore. */
+    private static final String OVERRIDES_COLLECTION = "language_overrides";
+    private static final String OVERRIDES_ID = "global";
     private final Path customLangDir;
     private final Path templatesDir;
-    private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
+    private final Path overridesFile;
+    private final Gson gson = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
+    private final com.zerog.neoessentials.storage.DataStore store;
 
     // Track missing translation keys for template generation
     private final Set<String> missingKeys = ConcurrentHashMap.newKeySet();
     private final Map<String, Map<String, String>> customTranslations = new ConcurrentHashMap<>();
     private final Map<String, LanguageFileInfo> languageFiles = new ConcurrentHashMap<>();
+    /** Admin overrides — take priority over all language files and the JAR en_us.json. */
+    private final Map<String, String> overrides = new ConcurrentHashMap<>();
 
     private CustomLanguageManager() {
         // Always resolve relative to the server root, not 'run/'
         this.customLangDir = resolveModDataPath("languages", "custom");
         this.templatesDir = resolveModDataPath("languages", "templates");
-        LOGGER.info("[LANG] Custom language directory set to: {}", this.customLangDir.toAbsolutePath());
-        LOGGER.info("[LANG] Template directory set to: {}", this.templatesDir.toAbsolutePath());
+        this.overridesFile = resolveModDataPath("languages", "overrides.json");
+        this.store = com.zerog.neoessentials.storage.StorageManager.getInstance().getStore();
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "[LANG] Custom language directory set to: {}", this.customLangDir.toAbsolutePath());
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "[LANG] Template directory set to: {}", this.templatesDir.toAbsolutePath());
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "[LANG] Overrides file set to: {}", this.overridesFile.toAbsolutePath());
     }
 
     public static CustomLanguageManager getInstance() {
@@ -56,8 +69,8 @@ public class CustomLanguageManager {
      */
     public void initialize() {
         try {
-            LOGGER.info("Custom language directory resolved to: {}", customLangDir.toAbsolutePath());
-            LOGGER.info("Template directory resolved to: {}", templatesDir.toAbsolutePath());
+            NeoLog.info(LOGGER, LogCategory.GENERAL, "Custom language directory resolved to: {}", customLangDir.toAbsolutePath());
+            NeoLog.info(LOGGER, LogCategory.GENERAL, "Template directory resolved to: {}", templatesDir.toAbsolutePath());
 
             // Create directories
             Files.createDirectories(customLangDir);
@@ -84,7 +97,7 @@ public class CustomLanguageManager {
                 try (InputStream in = findLangResource(LANG_FILE)) {
                     if (in != null) {
                         Files.copy(in, langFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                        LOGGER.info("Copied language file from JAR: {}", langFile.toAbsolutePath());
+                        NeoLog.info(LOGGER, LogCategory.GENERAL, "Copied language file from JAR: {}", langFile.toAbsolutePath());
                     } else {
                         LOGGER.error("Failed to copy language file: Resource not found for {}!", LANG_FILE);
                     }
@@ -92,7 +105,11 @@ public class CustomLanguageManager {
                     LOGGER.error("Exception while copying language file from JAR: {}", e.getMessage(), e);
                 }
             } else {
-                // Merge missing keys from JAR version
+                // Merge missing keys from JAR version, and force-refresh any key with a
+                // confirmed content bug (see MessageUtil.FORCE_REFRESH_KEYS) regardless of
+                // whether it's already present — this runs on every server boot (unlike
+                // regenerate(), which is manually triggered), so it's the main path that needs
+                // to actually converge a stale on-disk value automatically.
                 Map<String, String> jarLang = loadBaseTranslations();
                 Map<String, String> fileLang;
                 try (Reader reader = Files.newBufferedReader(langFile, StandardCharsets.UTF_8)) {
@@ -105,12 +122,16 @@ public class CustomLanguageManager {
                         if (!fileLang.containsKey(entry.getKey())) {
                             fileLang.put(entry.getKey(), entry.getValue());
                             updated = true;
+                        } else if (MessageUtil.FORCE_REFRESH_KEYS.contains(entry.getKey())
+                                && !entry.getValue().equals(fileLang.get(entry.getKey()))) {
+                            fileLang.put(entry.getKey(), entry.getValue());
+                            updated = true;
                         }
                     }
                     if (updated) {
                         try (Writer writer = Files.newBufferedWriter(langFile, StandardCharsets.UTF_8)) {
                             gson.toJson(fileLang, writer);
-                            LOGGER.info("Merged missing keys from JAR into language file: {}", langFile.toAbsolutePath());
+                            NeoLog.info(LOGGER, LogCategory.GENERAL, "Merged missing/force-refreshed keys from JAR into language file: {}", langFile.toAbsolutePath());
                         }
                     }
                 }
@@ -126,13 +147,16 @@ public class CustomLanguageManager {
             // Scan for custom language files (will load the file)
             scanCustomLanguageFiles();
 
+            // Load admin overrides
+            loadOverrides();
+
             // Generate templates for common languages if they don't exist
             generateTemplatesIfNeeded();
 
-            LOGGER.info("Custom Language Manager initialized");
-            LOGGER.info("  Custom languages found: {}", languageFiles.keySet());
-            LOGGER.info("  Custom language directory: {}", customLangDir.toAbsolutePath());
-            LOGGER.info("  Template directory: {}", templatesDir.toAbsolutePath());
+            NeoLog.info(LOGGER, LogCategory.GENERAL, "Custom Language Manager initialized");
+            NeoLog.info(LOGGER, LogCategory.GENERAL, "  Custom languages found: {}", languageFiles.keySet());
+            NeoLog.info(LOGGER, LogCategory.GENERAL, "  Custom language directory: {}", customLangDir.toAbsolutePath());
+            NeoLog.info(LOGGER, LogCategory.GENERAL, "  Template directory: {}", templatesDir.toAbsolutePath());
         } catch (Exception e) {
             LOGGER.error("Failed to initialize custom language manager", e);
         }
@@ -180,7 +204,7 @@ public class CustomLanguageManager {
                     langCode, nativeName, englishName, author, version, filePath
                 ));
 
-                LOGGER.info("Loaded custom language: {} ({}) - {} keys",
+                NeoLog.info(LOGGER, LogCategory.GENERAL, "Loaded custom language: {} ({}) - {} keys",
                     langCode, nativeName, translations.size());
             }
 
@@ -190,9 +214,16 @@ public class CustomLanguageManager {
     }
 
     /**
-     * Get translation from custom language file, with fallback to MessageUtil
+     * Get translation from custom language file, with fallback to MessageUtil.
+     * Admin overrides take priority over everything.
      */
+    @SuppressWarnings("unused") // public API — called by TranslationHandler and external integrations
     public String getTranslation(String key, String languageCode) {
+        // Admin overrides take top priority
+        if (overrides.containsKey(key)) {
+            return overrides.get(key);
+        }
+
         // Try custom translation first
         Map<String, String> customLang = customTranslations.get(languageCode);
         if (customLang != null && customLang.containsKey(key)) {
@@ -214,6 +245,7 @@ public class CustomLanguageManager {
     /**
      * Check if a custom language is available
      */
+    @SuppressWarnings("unused") // public API
     public boolean hasCustomLanguage(String languageCode) {
         return customTranslations.containsKey(languageCode);
     }
@@ -281,7 +313,7 @@ public class CustomLanguageManager {
                 gson.toJson(template, writer);
             }
 
-            LOGGER.info("Generated language template: {} ({} keys)", outputPath, template.size());
+            NeoLog.info(LOGGER, LogCategory.GENERAL, "Generated language template: {} ({} keys)", outputPath, template.size());
 
         } catch (Exception e) {
             LOGGER.error("Failed to generate language template for {}", languageCode, e);
@@ -308,7 +340,7 @@ public class CustomLanguageManager {
                 gson.toJson(missingTemplate, writer);
             }
 
-            LOGGER.info("Exported {} missing keys to {}", missingKeys.size(), outputPath);
+            NeoLog.info(LOGGER, LogCategory.GENERAL, "Exported {} missing keys to {}", missingKeys.size(), outputPath);
 
         } catch (Exception e) {
             LOGGER.error("Failed to export missing keys", e);
@@ -337,13 +369,22 @@ public class CustomLanguageManager {
     }
 
     /**
-     * Reload all custom language files
+     * Reload all custom language files.
+     *
+     * <p>Also re-runs {@link #deployBundledLanguageFiles()} so that any new keys
+     * added to bundled JAR translations (fr_fr, de_de, etc.) since the last server
+     * start are merged into the on-disk files before they are re-read into memory.
+     * User edits are preserved — only missing keys are added.
      */
     public void reload() {
         customTranslations.clear();
         languageFiles.clear();
+        overrides.clear();
+        // Re-merge new JAR keys into all bundled language files before re-scanning disk
+        deployBundledLanguageFiles();
         scanCustomLanguageFiles();
-        LOGGER.info("Reloaded custom languages: {}", languageFiles.keySet());
+        loadOverrides();
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "Reloaded custom languages: {}", languageFiles.keySet());
     }
 
     /**
@@ -354,6 +395,7 @@ public class CustomLanguageManager {
         stats.put("customLanguagesLoaded", customTranslations.size());
         stats.put("languageCodes", new ArrayList<>(customTranslations.keySet()));
         stats.put("missingKeysTracked", missingKeys.size());
+        stats.put("overrideCount", overrides.size());
         stats.put("customLanguageDirectory", customLangDir.toAbsolutePath().toString());
         stats.put("templateDirectory", templatesDir.toAbsolutePath().toString());
 
@@ -400,6 +442,7 @@ public class CustomLanguageManager {
         public String getEnglishName() { return englishName; }
         public String getAuthor() { return author; }
         public String getVersion() { return version; }
+        @SuppressWarnings("unused") // public API
         public Path getFilePath() { return filePath; }
     }
 
@@ -420,13 +463,13 @@ public class CustomLanguageManager {
             try {
                 try (InputStream in = findLangResource(fileName)) {
                     if (in == null) {
-                        LOGGER.debug("No bundled lang file found in JAR for: {}", langCode);
+                        NeoLog.debug(LOGGER, LogCategory.GENERAL, "No bundled lang file found in JAR for: {}", langCode);
                         continue;
                     }
                     if (!Files.exists(target)) {
                         // First run — copy from JAR
                         Files.copy(in, target);
-                        LOGGER.info("Deployed bundled language file: {}", fileName);
+                        NeoLog.info(LOGGER, LogCategory.GENERAL, "Deployed bundled language file: {}", fileName);
                         deployed++;
                     } else {
                         // Already on disk — merge NEW keys only, don't overwrite user edits
@@ -451,7 +494,7 @@ public class CustomLanguageManager {
                                 try (Writer writer = Files.newBufferedWriter(target, StandardCharsets.UTF_8)) {
                                     gson.toJson(diskLang, writer);
                                 }
-                                LOGGER.info("Merged new keys from JAR into {}", fileName);
+                                NeoLog.info(LOGGER, LogCategory.GENERAL, "Merged new keys from JAR into {}", fileName);
                                 merged++;
                             }
                         }
@@ -462,46 +505,310 @@ public class CustomLanguageManager {
             }
         }
         if (deployed > 0 || merged > 0) {
-            LOGGER.info("Language deployment complete: {} deployed, {} merged", deployed, merged);
+            NeoLog.info(LOGGER, LogCategory.GENERAL, "Language deployment complete: {} deployed, {} merged", deployed, merged);
         }
     }
 
+    // =========================================================================
+    // Admin Override Support
+    // =========================================================================
+
+    /**
+     * Load admin overrides from the active {@link com.zerog.neoessentials.storage.DataStore}.
+     * Overrides take priority over all language files. Migrates the legacy overrides.json
+     * file into the store on first run (see {@link #migrateLegacyOverridesIfNeeded()}).
+     */
+    private void loadOverrides() {
+        migrateLegacyOverridesIfNeeded();
+        JsonObject doc = store.get(OVERRIDES_COLLECTION, OVERRIDES_ID);
+        if (doc == null) {
+            return;
+        }
+        int count = 0;
+        for (Map.Entry<String, com.google.gson.JsonElement> entry : doc.entrySet()) {
+            if (entry.getValue().isJsonPrimitive()) {
+                overrides.put(entry.getKey(), entry.getValue().getAsString());
+                count++;
+            }
+        }
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "Loaded {} admin translation override(s) from storage", count);
+    }
+
+    /**
+     * Save admin overrides to the active {@link com.zerog.neoessentials.storage.DataStore},
+     * as a single document keyed by {@link #OVERRIDES_ID} (overrides are global, not
+     * per-language).
+     */
+    private void saveOverrides() {
+        try {
+            JsonObject doc = new JsonObject();
+            for (Map.Entry<String, String> entry : overrides.entrySet()) {
+                doc.addProperty(entry.getKey(), entry.getValue());
+            }
+            store.put(OVERRIDES_COLLECTION, OVERRIDES_ID, doc);
+            NeoLog.info(LOGGER, LogCategory.GENERAL, "Saved {} admin translation override(s) to storage", overrides.size());
+        } catch (Exception e) {
+            LOGGER.error("Failed to save translation overrides: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * One-time import of the legacy languages/overrides.json file into the active
+     * DataStore, if it's still empty and storage.autoMigrate is enabled. The old file is
+     * a flat {@code Map<String,String>} of override key -> value; it becomes a single
+     * document ({@link #OVERRIDES_COLLECTION}/{@link #OVERRIDES_ID}) with the same fields.
+     */
+    private void migrateLegacyOverridesIfNeeded() {
+        if (store.hasAnyData(OVERRIDES_COLLECTION)) return;
+        if (!com.zerog.neoessentials.config.ConfigManager.getInstance().isStorageAutoMigrateEnabled()) return;
+        if (!Files.exists(overridesFile)) return;
+
+        try (Reader reader = Files.newBufferedReader(overridesFile, StandardCharsets.UTF_8)) {
+            Type type = new TypeToken<Map<String, String>>(){}.getType();
+            Map<String, String> loaded = gson.fromJson(reader, type);
+            if (loaded != null && !loaded.isEmpty()) {
+                JsonObject doc = new JsonObject();
+                for (Map.Entry<String, String> entry : loaded.entrySet()) {
+                    doc.addProperty(entry.getKey(), entry.getValue());
+                }
+                store.put(OVERRIDES_COLLECTION, OVERRIDES_ID, doc);
+                NeoLog.info(LOGGER, LogCategory.GENERAL, "CustomLanguageManager: migrated {} admin translation override(s) from legacy overrides.json into the '{}' storage backend.",
+                    loaded.size(), com.zerog.neoessentials.storage.StorageManager.getInstance().getActiveType());
+            }
+        } catch (Exception e) {
+            LOGGER.error("Failed to migrate legacy translation overrides from {}: {}", overridesFile, e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Set an admin override for a translation key.
+     */
+    public void setOverride(String key, String value) {
+        overrides.put(key, value);
+        saveOverrides();
+    }
+
+    /**
+     * Remove an admin override.
+     * @return true if it existed and was removed
+     */
+    public boolean removeOverride(String key) {
+        boolean existed = overrides.containsKey(key);
+        overrides.remove(key);
+        if (existed) saveOverrides();
+        return existed;
+    }
+
+    /**
+     * Get all current admin overrides.
+     */
+    public Map<String, String> getOverrides() {
+        return new LinkedHashMap<>(overrides);
+    }
+
+    /**
+     * Get a specific override value, or null if not set.
+     */
+    public String getOverride(String key) {
+        return overrides.get(key);
+    }
+
+    /**
+     * Clear all admin overrides.
+     */
+    public void clearOverrides() {
+        overrides.clear();
+        saveOverrides();
+    }
+
+    // =========================================================================
+    // Validation & Regeneration
+    // =========================================================================
+
+    /**
+     * Validate a language file against the base English translations.
+     * Returns a report with coverage stats and lists of missing/extra keys.
+     */
+    public ValidationReport validateLanguage(String languageCode) {
+        Map<String, String> base = loadBaseTranslations();
+        Set<String> baseKeys = new LinkedHashSet<>();
+        for (String k : base.keySet()) {
+            if (!k.startsWith("_")) baseKeys.add(k);
+        }
+
+        Map<String, String> target = customTranslations.get(languageCode);
+        if (target == null) {
+            // Try loading from disk directly
+            Path filePath = customLangDir.resolve(languageCode + ".json");
+            if (Files.exists(filePath)) {
+                try (Reader reader = Files.newBufferedReader(filePath, StandardCharsets.UTF_8)) {
+                    Type type = new TypeToken<Map<String, String>>(){}.getType();
+                    target = gson.fromJson(reader, type);
+                } catch (Exception e) {
+                    return new ValidationReport(languageCode, 0, 0, 0,
+                        Collections.emptyList(), Collections.emptyList(),
+                        "Failed to read file: " + e.getMessage());
+                }
+            } else {
+                return new ValidationReport(languageCode, 0, 0, 0,
+                    Collections.emptyList(), Collections.emptyList(),
+                    "Language file not found: " + filePath.toAbsolutePath());
+            }
+        }
+
+        final Map<String, String> targetFinal = target;
+        Set<String> targetKeys = new LinkedHashSet<>();
+        for (String k : targetFinal.keySet()) {
+            if (!k.startsWith("_")) targetKeys.add(k);
+        }
+
+        List<String> missingFromTarget = new ArrayList<>();
+        for (String k : baseKeys) {
+            if (!targetKeys.contains(k)) missingFromTarget.add(k);
+        }
+
+        List<String> extraInTarget = new ArrayList<>();
+        for (String k : targetKeys) {
+            if (!baseKeys.contains(k)) extraInTarget.add(k);
+        }
+
+        int total = baseKeys.size();
+        int present = total - missingFromTarget.size();
+        int coverage = total > 0 ? (int) ((present * 100.0) / total) : 100;
+
+        return new ValidationReport(languageCode, total, present, coverage,
+            missingFromTarget, extraInTarget, null);
+    }
+
+    /**
+     * Regenerate a language file from the JAR, merging existing user translations.
+     * The current file is backed up to &lt;lang&gt;.json.bak before overwriting.
+     * @return the number of new keys added from the JAR
+     */
+    public int regenerate(String languageCode) throws IOException {
+        String fileName = languageCode + ".json";
+        Path target = customLangDir.resolve(fileName);
+        Path backup = customLangDir.resolve(languageCode + ".json.bak");
+
+        // Read existing disk file (may have user edits)
+        Map<String, String> existing = new LinkedHashMap<>();
+        if (Files.exists(target)) {
+            try (Reader reader = Files.newBufferedReader(target, StandardCharsets.UTF_8)) {
+                Type type = new TypeToken<Map<String, String>>(){}.getType();
+                Map<String, String> loaded = gson.fromJson(reader, type);
+                if (loaded != null) existing.putAll(loaded);
+            }
+            // Backup current file
+            Files.copy(target, backup, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            NeoLog.info(LOGGER, LogCategory.GENERAL, "Backed up {} to {}", target, backup);
+        }
+
+        // Load fresh JAR version
+        Map<String, String> jarVersion;
+        try (InputStream in = findLangResource(fileName)) {
+            if (in == null) throw new IOException("JAR resource not found for language: " + languageCode);
+            try (Reader reader = new InputStreamReader(in, StandardCharsets.UTF_8)) {
+                Type type = new TypeToken<Map<String, String>>(){}.getType();
+                jarVersion = gson.fromJson(reader, type);
+            }
+        }
+        if (jarVersion == null) throw new IOException("Empty/invalid JAR language file for: " + languageCode);
+
+        // Merge: JAR keys + existing user values (user wins on conflict) — EXCEPT for
+        // MessageUtil.FORCE_REFRESH_KEYS, which always take the JAR value regardless. Those
+        // are keys with a confirmed content bug (wrong/missing {n} argument, swapped argument
+        // order); without this override, "user wins" meant regenerating from the JAR could
+        // never actually fix a broken key already on disk — it would just keep re-saving the
+        // same broken value back, forever, since a "regenerate" always finds the key already
+        // present and defers to it.
+        Map<String, String> merged = new LinkedHashMap<>(jarVersion);
+        int newKeys = 0;
+        int forceRefreshed = 0;
+        for (Map.Entry<String, String> e : jarVersion.entrySet()) {
+            if (!existing.containsKey(e.getKey())) {
+                newKeys++;
+            } else if (MessageUtil.FORCE_REFRESH_KEYS.contains(e.getKey())) {
+                if (!e.getValue().equals(existing.get(e.getKey()))) {
+                    forceRefreshed++;
+                }
+                // merged already holds the JAR value from the initial copy above — leave it.
+            } else {
+                merged.put(e.getKey(), existing.get(e.getKey())); // keep user value
+            }
+        }
+
+        Files.createDirectories(target.getParent());
+        try (Writer writer = Files.newBufferedWriter(target, StandardCharsets.UTF_8)) {
+            gson.toJson(merged, writer);
+        }
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "Regenerated {}: {} total keys, {} new from JAR, {} force-refreshed, backup at {}",
+            fileName, merged.size(), newKeys, forceRefreshed, backup);
+
+        // Reload translations for this language
+        loadCustomLanguageFile(target);
+
+        return newKeys;
+    }
+
+    /**
+     * Validation report from comparing a language file against the English base.
+     */
+    public static class ValidationReport {
+        private final String languageCode;
+        private final int totalKeys;
+        private final int presentKeys;
+        private final int coveragePercent;
+        private final List<String> missingKeys;
+        private final List<String> extraKeys;
+        private final String errorMessage;
+
+        public ValidationReport(String languageCode, int totalKeys, int presentKeys, int coveragePercent,
+                                List<String> missingKeys, List<String> extraKeys, String errorMessage) {
+            this.languageCode = languageCode;
+            this.totalKeys = totalKeys;
+            this.presentKeys = presentKeys;
+            this.coveragePercent = coveragePercent;
+            this.missingKeys = missingKeys;
+            this.extraKeys = extraKeys;
+            this.errorMessage = errorMessage;
+        }
+
+        @SuppressWarnings("unused") // public API
+        public String getLanguageCode() { return languageCode; }
+        public int getTotalKeys() { return totalKeys; }
+        public int getPresentKeys() { return presentKeys; }
+        public int getCoveragePercent() { return coveragePercent; }
+        public List<String> getMissingKeys() { return missingKeys; }
+        @SuppressWarnings("unused") // public API
+        public List<String> getExtraKeys() { return extraKeys; }
+        public boolean hasError() { return errorMessage != null; }
+        public String getErrorMessage() { return errorMessage; }
+        public int getMissingCount() { return missingKeys.size(); }
+        public int getExtraCount() { return extraKeys.size(); }
+    }
+
     private InputStream findLangResource(String filename) {
-        // Try with and without leading slash
+        // Try class.getResourceAsStream with and without leading slash
         String[] paths = {"/data/lang/" + filename, "data/lang/" + filename};
         for (String path : paths) {
             InputStream in = getClass().getResourceAsStream(path);
             if (in != null) {
-                LOGGER.info("Found language resource at: {}", path);
+                NeoLog.debug(LOGGER, LogCategory.GENERAL, "Found language resource at: {}", path);
                 return in;
-            } else {
-                LOGGER.warn("Language resource not found at: {}", path);
             }
         }
         // Try classloader as fallback
         for (String path : paths) {
-            InputStream in = getClass().getClassLoader().getResourceAsStream(path.startsWith("/") ? path.substring(1) : path);
+            String normalised = path.startsWith("/") ? path.substring(1) : path;
+            InputStream in = getClass().getClassLoader().getResourceAsStream(normalised);
             if (in != null) {
-                LOGGER.info("Found language resource via classloader at: {}", path);
+                NeoLog.debug(LOGGER, LogCategory.GENERAL, "Found language resource via classloader at: {}", normalised);
                 return in;
-            } else {
-                LOGGER.warn("ClassLoader: Language resource not found at: {}", path);
             }
         }
-        // Log all resources in the JAR for debugging
-        try {
-            LOGGER.error("Language resource not found. Listing all resources in JAR for debugging:");
-            var jar = getClass().getProtectionDomain().getCodeSource().getLocation();
-            try (java.util.jar.JarFile jarFile = new java.util.jar.JarFile(jar.getPath())) {
-                jarFile.stream().forEach(entry -> {
-                    if (entry.getName().contains("lang")) {
-                        LOGGER.error("  JAR entry: {}", entry.getName());
-                    }
-                });
-            }
-        } catch (Exception e) {
-            LOGGER.error("Failed to list JAR resources: {}", e.getMessage());
-        }
+        // Truly not found — log once at WARN level (not ERROR, and no expensive JAR listing)
+        LOGGER.warn("Language resource not found in JAR for: {} (tried paths: /data/lang/{}, data/lang/{})",
+            filename, filename, filename);
         return null;
     }
 
@@ -516,7 +823,7 @@ public class CustomLanguageManager {
             neoEssentialsDir = neoEssentialsDir.resolve(part);
         }
         // Log the resolved path for debugging
-        LOGGER.info("[LANG] Resolved mod data path: {}", neoEssentialsDir.toAbsolutePath());
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "[LANG] Resolved mod data path: {}", neoEssentialsDir.toAbsolutePath());
         return neoEssentialsDir;
     }
 }

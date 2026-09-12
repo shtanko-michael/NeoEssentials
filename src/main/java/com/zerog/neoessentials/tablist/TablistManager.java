@@ -1,28 +1,53 @@
 package com.zerog.neoessentials.tablist;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.zerog.neoessentials.api.permissions.PermissionAPI;
+import com.zerog.neoessentials.chat.RichTextFormatter;
 import com.zerog.neoessentials.config.ConfigManager;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundTabListPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.ServerScoreboard;
+import net.minecraft.world.scores.PlayerTeam;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Custom Player Tablist system for NeoEssentials.
+ * NeoEssentials Tablist System — BungeeTabListPlus-inspired rewrite.
  *
- * Features:
- * - Animated header/footer with frame cycling
- * - Per-group prefix/suffix display on player rows (via GameProfile display name)
- * - Placeholder support: {player}, {online}, {max}, {ping}, {world}, {tps}, {time}
- * - Configurable refresh interval
- * - Per-player custom name override (e.g. nick system integration)
- * - Vanished player hiding for non-staff
- * - AFK indicator in tablist
+ * <h2>Feature parity with BungeeTabListPlus</h2>
+ * <ul>
+ *   <li>Animated header/footer with frame cycling</li>
+ *   <li>Extended placeholder set (network, proxy, server, health, XP, session, AFK)</li>
+ *   <li>Fake player decorative entries — {@link FakePlayerManager}</li>
+ *   <li>Proxy integration — {@link ProxyIntegration} (BungeeCord/Velocity channel)</li>
+ *   <li>BTLP-style group-sorted player list — {@link TablistLayout}</li>
+ *   <li>PlayersByServer grouping — {@link TablistLayout#isPlayersByServer()}</li>
+ *   <li>Independent mode: NeoEssentials owns the tab; no proxy plugin needed</li>
+ *   <li>Hex colors, gradients, rainbow, named colors via {@link RichTextFormatter}</li>
+ *   <li>Per-group header/footer, prefix/suffix display</li>
+ *   <li>Per-player header/footer + custom name override (nick system)</li>
+ *   <li>Vanished player hiding for non-staff</li>
+ *   <li>AFK indicator in tablist</li>
+ * </ul>
+ *
+ * <h2>Placeholder reference</h2>
+ * <pre>
+     * Standard : {player} {displayname} {online} {max} {ping} {world} {tps} {time}
+     *            {server_name} {server_motd} {x} {y} {z} {balance} {prefix} {suffix} {group}
+     * BTLP-style: {network_online} {server_online:NAME} {current_server} {server_label}
+     *             {rank_weight} {session_minutes} {session_hours}
+     *             {level} {health} {max_health} {afk}
+     * Decoration: {newline} {bar}
+     * Animations: {animation:NAME}  — replaced with current frame from animations.json
+ * </pre>
  *
  * References: TAB [1.7.x-1.21.x], BungeeTabListPlus, Simple TabList
  */
@@ -34,15 +59,59 @@ public class TablistManager {
 
     // ── Config ────────────────────────────────────────────────────────────────
     private boolean enabled = true;
-    private int refreshIntervalTicks = 20; // 1 second
-    private List<String> headerFrames = new ArrayList<>();
-    private List<String> footerFrames = new ArrayList<>();
-    private String playerFormat = "§f{prefix}§r{player}{suffix}";
+    /**
+     * Independent mode — when true, NeoEssentials is the sole owner of the tablist.
+     * No proxy plugin should be managing this server's tab simultaneously.
+     * Proxy integration ({@link ProxyIntegration}) is still used for data only.
+     */
+    private boolean independentMode = true;
+    private int refreshIntervalTicks = 20;
+    private final List<String> headerFrames = new ArrayList<>();
+    private final List<String> footerFrames = new ArrayList<>();
+    private String playerFormat = "&f{prefix}&r{player}{suffix}";
+    /**
+     * Text segments derived from {@link #playerFormat}, split around its three tokens.
+     * Vanilla's scoreboard-team prefix/suffix mechanism always renders as a fixed
+     * {@code prefix + <actual player name> + suffix} — there's no way to reorder
+     * {player} relative to {prefix}/{suffix}, or to insert text between the player's
+     * name and the surrounding prefix/suffix except by putting it INSIDE the prefix
+     * (trailing) or suffix (leading) string sent to the client. These four segments
+     * are exactly that: whatever text sits before {prefix}, between {prefix} and
+     * {player}, between {player} and {suffix}, and after {suffix} in the template —
+     * e.g. a plain space in "{prefix} {player} {suffix}" ends up appended to the
+     * prefix and prepended to the suffix, which is the only way to actually separate
+     * them visually. Recomputed once whenever playerFormat is (re)loaded, not per-tick.
+     */
+    private String formatLead = "";
+    private String formatBetweenPrefixPlayer = "";
+    private String formatBetweenPlayerSuffix = "";
+    private String formatTrail = "";
     private boolean hideVanished = true;
     private boolean showAfkIndicator = true;
-    private String afkSuffix = " §7[AFK]";
+    private String afkSuffix = " &7[AFK]";
     /** Per-group colour overrides loaded from tablist.json groupColors section. */
-    private final Map<String, String> groupColors = new java.util.LinkedHashMap<>();
+    private final Map<String, String> groupColors = new LinkedHashMap<>();
+
+    // Per-group header/footer frame overrides (group name → frame list)
+    private final Map<String, List<String>> groupHeaderFrames = new LinkedHashMap<>();
+    private final Map<String, List<String>> groupFooterFrames = new LinkedHashMap<>();
+
+    // ── Nametag (above-head) prefix/suffix ──────────────────────────────────────
+    /**
+     * Whether NeoEssentials manages the scoreboard-team prefix/suffix that drives the
+     * above-head nametag at all. Vanilla ties nametag and tab-list-row prefix/suffix to the
+     * SAME team property — there's no separate "nametag text" independent of the team's
+     * prefix/suffix — so disabling this means the team is still used for tablist sorting, but
+     * NeoEssentials sets no prefix/suffix on it at all, leaving that to another mod/plugin.
+     */
+    private boolean nametagEnabled = true;
+    // Per-group / per-player nametag prefix+suffix overrides, layered over the default (same
+    // value chat uses, via PermissionAPI.getPrefix/getSuffix) in priority order: player > group
+    // > permission-based default. Empty map entries are treated the same as "no override".
+    private final Map<String, String> groupNametagPrefix = new ConcurrentHashMap<>();
+    private final Map<String, String> groupNametagSuffix = new ConcurrentHashMap<>();
+    private final Map<UUID, String> playerNametagPrefix = new ConcurrentHashMap<>();
+    private final Map<UUID, String> playerNametagSuffix = new ConcurrentHashMap<>();
 
     // ── Runtime state ─────────────────────────────────────────────────────────
     private int headerFrame = 0;
@@ -51,92 +120,153 @@ public class TablistManager {
 
     // Per-player custom tab name override (used by nick system)
     private final Map<UUID, String> customNames = new ConcurrentHashMap<>();
+    // Per-player header/footer frame overrides (set via command or loaded from config)
+    private final Map<UUID, List<String>> playerHeaderFrames = new ConcurrentHashMap<>();
+    private final Map<UUID, List<String>> playerFooterFrames = new ConcurrentHashMap<>();
+    // Player session start times (for {session_minutes} / {session_hours})
+    private final Map<UUID, Long> sessionStartTimes = new ConcurrentHashMap<>();
+
+    // ── Team-update dirty cache ───────────────────────────────────────────────
+    // Avoids sending redundant scoreboard team packets on every tick, which causes
+    // the prefix/suffix to flicker when refreshInterval is very low (e.g. 1 tick).
+    private final Map<UUID, String> lastTeamName   = new ConcurrentHashMap<>();
+    private final Map<UUID, String> lastTeamPrefix = new ConcurrentHashMap<>();
+    private final Map<UUID, String> lastTeamSuffix = new ConcurrentHashMap<>();
+    // Same dirty-check idea, for the nickname tab-list display-name override — see
+    // updateNicknameOverridePacket()'s javadoc for why this exists at all.
+    private final Map<UUID, String> lastNicknameOverride = new ConcurrentHashMap<>();
 
     private TablistManager() {
-        // Default header/footer if nothing configured
-        headerFrames.add("§6§l{server_name} §8| §e{online}§8/§e{max} §7players");
-        footerFrames.add("§7TPS: §a{tps} §8| §7Ping: §a{ping}ms §8| §7{world}");
+        headerFrames.add("<gradient:FFD700-FF8C00>&l{server_name}&r &8| &e{online}&8/&e{max} &7players");
+        footerFrames.add("&7TPS: {tps} &8| &7Ping: &a{ping}ms &8| &7{world}");
+        parsePlayerFormat();
     }
 
     // ── Initialisation ────────────────────────────────────────────────────────
+    /** Load all tablist config, including proxy, fake-players, and layout sub-sections. */
     public void loadConfig() {
         try {
-            // Prefer dedicated tablist.json; fall back to "tablist" section in config.json
-            com.google.gson.JsonObject tab = null;
+            JsonObject tab = null;
 
             // 1) Try standalone tablist.json first
             try {
-                com.google.gson.JsonObject standalone = ConfigManager.getInstance()
+                JsonObject standalone = ConfigManager.getInstance()
                     .getConfig(ConfigManager.TABLIST_CONFIG);
                 if (standalone != null && standalone.has("tablist")) {
                     tab = standalone.getAsJsonObject("tablist");
-                    LOGGER.debug("TablistManager: loading from tablist.json");
+                    NeoLog.debug(LOGGER, LogCategory.GENERAL, "TablistManager: loading from tablist.json");
                 }
             } catch (Exception ex) {
-                LOGGER.debug("TablistManager: tablist.json not available, trying config.json fallback: {}", ex.getMessage());
+                NeoLog.debug(LOGGER, LogCategory.GENERAL, "TablistManager: tablist.json not available, trying config.json fallback: {}", ex.getMessage());
             }
 
             // 2) Legacy fallback: "tablist" key inside config.json
             if (tab == null) {
-                com.google.gson.JsonObject cfg = ConfigManager.getInstance().getConfig(ConfigManager.MAIN_CONFIG);
+                JsonObject cfg = ConfigManager.getInstance().getConfig(ConfigManager.MAIN_CONFIG);
                 if (cfg != null && cfg.has("tablist")) {
                     tab = cfg.getAsJsonObject("tablist");
-                    LOGGER.debug("TablistManager: loading from legacy tablist section in config.json");
+                    NeoLog.debug(LOGGER, LogCategory.GENERAL, "TablistManager: loading from legacy tablist section in config.json");
                 }
             }
 
             if (tab == null) {
-                LOGGER.info("TablistManager: no tablist configuration found — using defaults.");
+                NeoLog.info(LOGGER, LogCategory.GENERAL, "TablistManager: no tablist configuration found — using defaults.");
                 return;
             }
 
-            enabled            = !tab.has("enabled")           || tab.get("enabled").getAsBoolean();
-            refreshIntervalTicks = tab.has("refreshInterval")  ? tab.get("refreshInterval").getAsInt() : 20;
-            hideVanished       = !tab.has("hideVanished")       || tab.get("hideVanished").getAsBoolean();
-            showAfkIndicator   = !tab.has("showAfkIndicator")   || tab.get("showAfkIndicator").getAsBoolean();
-            afkSuffix          = tab.has("afkSuffix")
-                                    ? tab.get("afkSuffix").getAsString().replace("&", "§")
-                                    : " §7[AFK]";
-            playerFormat       = tab.has("playerFormat")        ? tab.get("playerFormat").getAsString() : playerFormat;
+            enabled              = !tab.has("enabled")           || tab.get("enabled").getAsBoolean();
+            independentMode      = !tab.has("independentMode")    || tab.get("independentMode").getAsBoolean();
+            refreshIntervalTicks = tab.has("refreshInterval")    ? tab.get("refreshInterval").getAsInt() : 20;
+            hideVanished         = !tab.has("hideVanished")       || tab.get("hideVanished").getAsBoolean();
+            showAfkIndicator     = !tab.has("showAfkIndicator")   || tab.get("showAfkIndicator").getAsBoolean();
+            afkSuffix            = tab.has("afkSuffix")           ? tab.get("afkSuffix").getAsString() : " &7[AFK]";
+            playerFormat         = tab.has("playerFormat")        ? tab.get("playerFormat").getAsString() : playerFormat;
+            parsePlayerFormat();
+
+            // Nametag (above-head) master toggle
+            nametagEnabled = true;
+            if (tab.has("nametagSettings") && tab.get("nametagSettings").isJsonObject()) {
+                JsonObject nametagCfg = tab.getAsJsonObject("nametagSettings");
+                if (nametagCfg.has("enabled")) nametagEnabled = nametagCfg.get("enabled").getAsBoolean();
+            }
 
             // Per-group colour overrides
             groupColors.clear();
             if (tab.has("groupColors") && tab.get("groupColors").isJsonObject()) {
                 for (var entry : tab.getAsJsonObject("groupColors").entrySet()) {
-                    groupColors.put(entry.getKey(), entry.getValue().getAsString().replace("&", "§"));
+                    groupColors.put(entry.getKey(), entry.getValue().getAsString());
                 }
             }
 
+            // Global header/footer frames
             headerFrames.clear();
-            if (tab.has("header")) {
-                var h = tab.get("header");
-                if (h.isJsonArray()) {
-                    for (var el : h.getAsJsonArray()) headerFrames.add(el.getAsString());
-                } else {
-                    headerFrames.add(h.getAsString());
-                }
-            }
-
+            if (tab.has("header")) headerFrames.addAll(loadFrames(tab.get("header")));
             footerFrames.clear();
-            if (tab.has("footer")) {
-                var f = tab.get("footer");
-                if (f.isJsonArray()) {
-                    for (var el : f.getAsJsonArray()) footerFrames.add(el.getAsString());
-                } else {
-                    footerFrames.add(f.getAsString());
+            if (tab.has("footer")) footerFrames.addAll(loadFrames(tab.get("footer")));
+
+            if (headerFrames.isEmpty()) headerFrames.add("&6&l{server_name}");
+            if (footerFrames.isEmpty()) footerFrames.add("&7{online}&8/&7{max} online");
+
+            // Per-group header/footer overrides (+ nametag prefix/suffix overrides)
+            groupHeaderFrames.clear();
+            groupFooterFrames.clear();
+            groupNametagPrefix.clear();
+            groupNametagSuffix.clear();
+            if (tab.has("groups") && tab.get("groups").isJsonObject()) {
+                for (var entry : tab.getAsJsonObject("groups").entrySet()) {
+                    String grp = entry.getKey();
+                    if (!entry.getValue().isJsonObject()) continue;
+                    JsonObject grpCfg = entry.getValue().getAsJsonObject();
+                    if (grpCfg.has("header")) groupHeaderFrames.put(grp, loadFrames(grpCfg.get("header")));
+                    if (grpCfg.has("footer")) groupFooterFrames.put(grp, loadFrames(grpCfg.get("footer")));
+                    if (grpCfg.has("nametagPrefix")) groupNametagPrefix.put(grp, grpCfg.get("nametagPrefix").getAsString());
+                    if (grpCfg.has("nametagSuffix")) groupNametagSuffix.put(grp, grpCfg.get("nametagSuffix").getAsString());
                 }
             }
 
-            if (headerFrames.isEmpty()) headerFrames.add("§6§l{server_name}");
-            if (footerFrames.isEmpty()) footerFrames.add("§7{online}§8/§7{max} online");
+            // Per-player header/footer overrides (+ nametag prefix/suffix overrides) (UUIDs as keys)
+            playerHeaderFrames.clear();
+            playerFooterFrames.clear();
+            playerNametagPrefix.clear();
+            playerNametagSuffix.clear();
+            if (tab.has("players") && tab.get("players").isJsonObject()) {
+                for (var entry : tab.getAsJsonObject("players").entrySet()) {
+                    try {
+                        UUID uuid = UUID.fromString(entry.getKey());
+                        if (!entry.getValue().isJsonObject()) continue;
+                        JsonObject pCfg = entry.getValue().getAsJsonObject();
+                        if (pCfg.has("header")) playerHeaderFrames.put(uuid, loadFrames(pCfg.get("header")));
+                        if (pCfg.has("footer")) playerFooterFrames.put(uuid, loadFrames(pCfg.get("footer")));
+                        if (pCfg.has("nametagPrefix")) playerNametagPrefix.put(uuid, pCfg.get("nametagPrefix").getAsString());
+                        if (pCfg.has("nametagSuffix")) playerNametagSuffix.put(uuid, pCfg.get("nametagSuffix").getAsString());
+                    } catch (IllegalArgumentException ignored) {
+                        LOGGER.warn("TablistManager: invalid UUID in 'players' section: {}", entry.getKey());
+                    }
+                }
+            }
 
-            // Reset animation counters so changes take effect immediately on reload
-            headerFrame  = 0;
-            footerFrame  = 0;
-            tickCounter  = 0;
+            // Reset animation counters
+            headerFrame = 0;
+            footerFrame = 0;
+            tickCounter = 0;
 
-            LOGGER.info("TablistManager loaded — {} header frame(s), {} footer frame(s), refresh every {} ticks.",
-                headerFrames.size(), footerFrames.size(), refreshIntervalTicks);
+            // Clear dirty cache so all players get a fresh team update after reload
+            lastTeamName.clear();
+            lastTeamPrefix.clear();
+            lastTeamSuffix.clear();
+            lastNicknameOverride.clear();
+
+            // Delegate to sub-system configs
+            ProxyIntegration.getInstance().loadConfig();
+            FakePlayerManager.getInstance().loadConfig();
+            TablistLayout.getInstance().loadConfig();
+            AnimationManager.getInstance().loadConfig();
+
+            NeoLog.info(LOGGER, LogCategory.GENERAL, "TablistManager loaded — {} header frame(s), {} footer frame(s), {} group override(s), " +
+                "refresh every {} ticks. independentMode={}, proxyEnabled={}, animations={}.",
+                headerFrames.size(), footerFrames.size(), groupHeaderFrames.size(), refreshIntervalTicks,
+                independentMode, ProxyIntegration.getInstance().isProxyEnabled(),
+                AnimationManager.getInstance().getAnimationCount());
         } catch (Exception e) {
             LOGGER.error("Failed to load tablist config: {}", e.getMessage());
         }
@@ -144,126 +274,455 @@ public class TablistManager {
 
     // ── Tick ──────────────────────────────────────────────────────────────────
     /**
-     * Called every server tick from TablistEventHandler.onServerTick().
-     * Only does work every refreshIntervalTicks ticks.
+     * Advances {@link AnimationManager}'s frame clock — the single call site for the entire
+     * mod, since {@code {animation:NAME}} is shared by tablist/scoreboard/hologram/chat/crate
+     * keys. Called every server tick by {@link TablistEventHandler#onServerTick} regardless of
+     * whether the tablist module itself is enabled — extracted out of {@link #onTick} (which
+     * only runs when the tablist module is on) specifically so a server that disables tablist
+     * customization but still uses holograms/scoreboard doesn't have every animation freeze on
+     * its first frame forever.
      */
+    public void tickAnimationsOnly() {
+        AnimationManager.getInstance().tick(System.currentTimeMillis());
+    }
+
     public void onTick(MinecraftServer server) {
         if (!enabled) return;
         tickCounter++;
         if (tickCounter < refreshIntervalTicks) return;
         tickCounter = 0;
 
-        // Advance animation frames
-        if (headerFrames.size() > 1) headerFrame = (headerFrame + 1) % headerFrames.size();
-        if (footerFrames.size() > 1) footerFrame = (footerFrame + 1) % footerFrames.size();
+        // Advance using the LARGEST frame count across the global list AND every
+        // per-group/per-player override — not just headerFrames.size(). Otherwise a
+        // server with a single (unanimated) default header but a multi-frame per-group
+        // header (e.g. VIP) would never advance headerFrame at all, since the old check
+        // only looked at the global list's size — the per-group frames would be stuck on
+        // index 0 forever even though getHeaderFrame() correctly indexes into them.
+        int maxHeaderFrames = maxFrameCount(headerFrames, groupHeaderFrames, playerHeaderFrames);
+        int maxFooterFrames = maxFrameCount(footerFrames, groupFooterFrames, playerFooterFrames);
+        if (maxHeaderFrames > 1) headerFrame = (headerFrame + 1) % maxHeaderFrames;
+        if (maxFooterFrames > 1) footerFrame = (footerFrame + 1) % maxFooterFrames;
+
+        // Tick proxy integration (polls proxy data at its own configured rate)
+        ProxyIntegration.getInstance().onTick(server);
 
         updateAll(server);
     }
 
+    /** Largest frame-list size across the global list and every per-group/per-player override. */
+    private static int maxFrameCount(List<String> global, Map<String, List<String>> byGroup, Map<UUID, List<String>> byPlayer) {
+        int max = global.size();
+        for (List<String> frames : byGroup.values()) max = Math.max(max, frames.size());
+        for (List<String> frames : byPlayer.values()) max = Math.max(max, frames.size());
+        return max;
+    }
+
     // ── Update ────────────────────────────────────────────────────────────────
-    /** Send updated header/footer packet to all online players. */
     public void updateAll(MinecraftServer server) {
         if (!enabled || server == null) return;
+        // NOTE: this used to also call TablistLayout.applySortingTeams(server) here, which
+        // independently moved every player onto its own "neL_<weight>_<group>" sorting team
+        // (no prefix/suffix) right before the loop below moves them again onto
+        // updatePlayerTeam's "ne_<weight>_<group>"/column-key team (which DOES carry
+        // prefix/suffix). A player can only be on one scoreboard team, so that second move
+        // undid the first every single cycle — except updatePlayerTeam's dirty-check cache
+        // only compares against ITS OWN last-applied team/prefix/suffix, so once a cycle
+        // completed and the cache recorded "already on ne_..., nothing to do", it had no way
+        // to notice applySortingTeams silently stealing the player onto neL_... at the START
+        // of the NEXT cycle — updatePlayerTeam would then see its own target team/prefix
+        // unchanged from its cache and skip re-applying it, leaving the player stuck on the
+        // blank-prefix neL_ team until something (e.g. /tablist reload) cleared the cache.
+        // updatePlayerTeam's own team-naming logic already covers every case
+        // applySortingTeams did (plain group, weight-sorted, and BTLP column-key), so the
+        // call was fully redundant as well as actively breaking nametag/prefix display —
+        // removing it rather than trying to reconcile the two competing team assignments.
+        TablistLayout.getInstance().recomputeColumnLayout(server);
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             updatePlayer(player, server);
         }
     }
 
-    /** Send header/footer to a single player. */
     public void updatePlayer(ServerPlayer player, MinecraftServer server) {
         if (!enabled) return;
         try {
-            String header = buildHeader(player, server);
-            String footer = buildFooter(player, server);
-            ClientboundTabListPacket packet = new ClientboundTabListPacket(
-                Component.literal(header),
-                Component.literal(footer)
-            );
+            // Build raw text (placeholders resolved, & codes NOT yet converted)
+            String headerText = buildHeader(player, server);
+            String footerText = buildFooter(player, server);
+            // Convert to rich Components — RichTextFormatter handles gradients, hex, named colors, &-codes
+            Component headerComp = RichTextFormatter.processTablistText(headerText);
+            Component footerComp = RichTextFormatter.processTablistText(footerText);
+            ClientboundTabListPacket packet = new ClientboundTabListPacket(headerComp, footerComp);
             player.connection.send(packet);
-        } catch (Exception e) {
-            LOGGER.debug("Failed to send tablist packet to {}: {}", player.getName().getString(), e.getMessage());
+        } catch (Throwable e) {
+            // Catches Errors too (e.g. a version-drifted vanilla API) so one player's
+            // failure can't abort the header/footer send for every other player this tick.
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Failed to send tablist packet to {}: {}", player.getName().getString(), e.getMessage());
+        }
+        try {
+            updatePlayerTeam(player, server);
+        } catch (Throwable e) {
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Failed to update tablist team for {}: {}", player.getName().getString(), e.getMessage());
+        }
+        // Inject fake-player decorative entries (BTLP-style fakePlayers)
+        if (FakePlayerManager.getInstance().isEnabled()) {
+            try {
+                FakePlayerManager.getInstance().injectForPlayer(player, server);
+            } catch (Throwable e) {
+                NeoLog.debug(LOGGER, LogCategory.GENERAL, "Failed to inject fake tablist entries for {}: {}", player.getName().getString(), e.getMessage());
+            }
+        }
+        // Inject the BTLP-style column grid's section headers + blank fillers, if enabled
+        if (TablistLayout.getInstance().isGroupSections()) {
+            try {
+                FakePlayerManager.getInstance().injectColumnSlots(player, server);
+            } catch (Throwable e) {
+                NeoLog.debug(LOGGER, LogCategory.GENERAL, "Failed to inject column layout entries for {}: {}", player.getName().getString(), e.getMessage());
+            }
         }
     }
 
-    // ── Build header/footer ───────────────────────────────────────────────────
+    /**
+     * Splits {@link #playerFormat} around its {@code {prefix}}/{@code {player}}/
+     * {@code {suffix}} tokens into the four literal segments that surround them,
+     * for use by {@link #updatePlayerTeam}. See {@link #formatLead} for why this
+     * is the only way {@code playerFormat} can actually affect rendering.
+     */
+    private void parsePlayerFormat() {
+        String fmt = playerFormat;
+        final String tokPrefix = "{prefix}", tokPlayer = "{player}", tokSuffix = "{suffix}";
+        int playerIdx = fmt.indexOf(tokPlayer);
+        if (playerIdx < 0) {
+            // No {player} token — nothing sane to derive; leave every segment empty
+            // rather than guess, matching the previous (template-ignored) behavior.
+            formatLead = formatBetweenPrefixPlayer = formatBetweenPlayerSuffix = formatTrail = "";
+            return;
+        }
+        int prefixIdx = fmt.indexOf(tokPrefix);
+        int suffixIdx = fmt.indexOf(tokSuffix);
+
+        formatLead = (prefixIdx > 0) ? fmt.substring(0, prefixIdx) : "";
+
+        if (prefixIdx >= 0 && prefixIdx + tokPrefix.length() <= playerIdx) {
+            formatBetweenPrefixPlayer = fmt.substring(prefixIdx + tokPrefix.length(), playerIdx);
+        } else {
+            formatBetweenPrefixPlayer = "";
+        }
+
+        int afterPlayer = playerIdx + tokPlayer.length();
+        if (suffixIdx >= 0 && afterPlayer <= suffixIdx) {
+            formatBetweenPlayerSuffix = fmt.substring(afterPlayer, suffixIdx);
+            formatTrail = fmt.substring(suffixIdx + tokSuffix.length());
+        } else {
+            formatBetweenPlayerSuffix = (afterPlayer <= fmt.length()) ? fmt.substring(afterPlayer) : "";
+            formatTrail = "";
+        }
+    }
+
+    // ── Scoreboard Team Prefix (player name row) ──────────────────────────────
+    public void updatePlayerTeam(ServerPlayer player, MinecraftServer server) {
+        if (!enabled || server == null) return;
+        try {
+            String prefix = getPermissionPrefix(player, server);
+            String suffix = getPermissionSuffix(player, server);
+
+            // Append AFK suffix to the team suffix when AFK
+            String effectiveSuffix = suffix;
+            if (showAfkIndicator && isAfk(player)) {
+                effectiveSuffix = suffix + afkSuffix;
+            }
+
+            // Nicknamed players need their tab-list display-name override kept in sync with
+            // prefix/suffix independently of the team dirty-check below — a nickname change
+            // (or a prefix/suffix change while nicknamed) doesn't necessarily change the TEAM
+            // dirty-check's inputs, so this must run unconditionally every call, not just when
+            // that check finds something to do. See updateNicknameOverridePacket()'s javadoc
+            // for why this even needs to exist.
+            updateNicknameOverridePacket(player, server, prefix, effectiveSuffix);
+
+            // BTLP-style: encode group weight (or, with groupSections on, the exact column-grid
+            // slot) into the team name for client-side sort order.
+            //
+            // A scoreboard team's prefix/suffix is ONE shared value applied to every member —
+            // there is no per-player variant. Naming the team purely after the group (e.g.
+            // "ne_default") therefore puts every player in that group on the same team object,
+            // so if any two of them ever resolve to different actual text (a per-player nametag
+            // override, differing AFK state, a per-user permission grant layered on top of the
+            // group, etc.), whichever player's update runs last on a given tick silently
+            // overwrites what every OTHER member of that team displays — which is exactly what
+            // made a fresh login look like it "reset" everyone else's suffix to the new player's
+            // (new connections are appended to the end of getPlayerList(), so they're typically
+            // processed last in updateAll()'s loop). Folding a hash of the actually-resolved
+            // prefix+suffix into the team key means players who'd show identical text still
+            // safely share one team (harmless, and fewer packets), but anyone whose resolved
+            // text differs gets their own team instead of clobbering someone else's.
+            String rawTeamName;
+            String columnKey = TablistLayout.getInstance().getColumnTeamKey(player.getUUID());
+            if (columnKey != null) {
+                rawTeamName = columnKey;
+            } else {
+                int contentTag = Objects.hash(prefix, effectiveSuffix) & 0xFFFFFF;
+                if (TablistLayout.getInstance().isSortByGroupWeight()) {
+                    int weight = getGroupWeight(player);
+                    int sortKey = 9999 - Math.min(weight, 9999);
+                    rawTeamName = String.format("ne_%04d_%06x", sortKey, contentTag);
+                } else {
+                    rawTeamName = String.format("ne_%06x", contentTag);
+                }
+            }
+            String teamName = rawTeamName.length() > 16 ? rawTeamName.substring(0, 16) : rawTeamName;
+
+            UUID uuid = player.getUUID();
+
+            // ── Dirty check: skip all scoreboard packets if nothing changed ────────
+            // This is the core fix for prefix flickering at low refreshInterval values.
+            // setPlayerPrefix/setPlayerSuffix and addPlayerToTeam all broadcast packets
+            // to every connected client; doing that 20×/sec causes visible flicker.
+            String cachedTeam   = lastTeamName.get(uuid);
+            String cachedPrefix = lastTeamPrefix.get(uuid);
+            String cachedSuffix = lastTeamSuffix.get(uuid);
+
+            boolean teamChanged   = !teamName.equals(cachedTeam);
+            boolean prefixChanged = !prefix.equals(cachedPrefix);
+            boolean suffixChanged = !effectiveSuffix.equals(cachedSuffix);
+
+            if (!teamChanged && !prefixChanged && !suffixChanged) {
+                return; // Nothing to update — no packet needed
+            }
+
+            // Update the cache with new values
+            lastTeamName.put(uuid, teamName);
+            lastTeamPrefix.put(uuid, prefix);
+            lastTeamSuffix.put(uuid, effectiveSuffix);
+
+            ServerScoreboard scoreboard = server.getScoreboard();
+
+            // If the player moved to a different team, remove from the old one first
+            if (teamChanged) {
+                PlayerTeam current = scoreboard.getPlayersTeam(player.getName().getString());
+                if (current != null && current.getName().startsWith("ne_") && !current.getName().equals(teamName)) {
+                    scoreboard.removePlayerFromTeam(player.getName().getString(), current);
+                }
+            }
+
+            PlayerTeam team = scoreboard.getPlayerTeam(teamName);
+            if (team == null) team = scoreboard.addPlayerTeam(teamName);
+
+            // Only push prefix/suffix packets when they have actually changed.
+            // playerFormat's literal text around {prefix}/{player}/{suffix} is folded
+            // into the prefix/suffix strings themselves here — see parsePlayerFormat().
+            if (prefixChanged || teamChanged) {
+                team.setPlayerPrefix(RichTextFormatter.processTablistText(formatLead + prefix + formatBetweenPrefixPlayer));
+            }
+            if (suffixChanged || teamChanged) {
+                team.setPlayerSuffix(RichTextFormatter.processTablistText(formatBetweenPlayerSuffix + effectiveSuffix + formatTrail));
+            }
+
+            // Only re-add to team when the team itself changed (avoid redundant add packets)
+            if (teamChanged) {
+                scoreboard.addPlayerToTeam(player.getName().getString(), team);
+            }
+
+        } catch (Throwable e) {
+            // Catches Errors too — Scoreboard/PlayerTeam are exactly the kind of vanilla
+            // API Mojang has reworked across 1.21.x versions elsewhere in this mod.
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Failed to update team for {}: {}", player.getName().getString(), e.getMessage());
+        }
+    }
+
+    /**
+     * Keeps a nicknamed player's tab-list display-name override in sync with their
+     * (possibly-changing) prefix/suffix.
+     *
+     * <p><b>Why this exists:</b> {@code /nick} makes a player's tab-list row show a custom
+     * name by sending a raw {@code ClientboundPlayerInfoUpdatePacket} display-name override
+     * (see {@code NickCommand}). Vanilla's own tab-list rendering
+     * ({@code PlayerTabOverlay.getNameForDisplay}) only wraps a row with the scoreboard
+     * team's prefix/suffix when there is <em>no</em> display-name override at all — when one
+     * is set, the client uses it completely verbatim, with zero team involvement. So a
+     * nickname sent as a bare display-name override silently drops the player's permission
+     * group prefix/suffix from the tab list the instant a nickname is set, regardless of
+     * group, and stays that way until the nickname is cleared — this was reported by users as
+     * "the nickname overrides it and only shows the nickname in tab", and looked
+     * group-dependent purely because whichever test players happened to have a nickname set
+     * lost their prefix, not because of anything actually tied to their group.
+     *
+     * <p>The fix: whenever a player is nicknamed, the override text itself must already
+     * contain prefix + nickname + suffix (using the same {@link #formatLead}/
+     * {@link #formatBetweenPrefixPlayer}/{@link #formatBetweenPlayerSuffix}/{@link #formatTrail}
+     * literal segments the team-prefix path uses), and must be re-sent whenever that
+     * composed text changes — not just once at {@code /nick} time, since a later permission
+     * change, AFK toggle, or config reload can change the prefix/suffix without anyone
+     * re-running {@code /nick}.
+     */
+    private void updateNicknameOverridePacket(ServerPlayer player, MinecraftServer server, String prefix, String effectiveSuffix) {
+        UUID uuid = player.getUUID();
+        String nickname = com.zerog.neoessentials.util.commands.NickCommand.getNickname(uuid);
+        if (nickname == null || nickname.isEmpty()) {
+            // No nickname — nothing to override; NickCommand's own reset path already sends
+            // the null-revert packet, which hands rendering back to vanilla's normal
+            // team-wrapped path on its own.
+            lastNicknameOverride.remove(uuid);
+            return;
+        }
+
+        String raw = formatLead + prefix + formatBetweenPrefixPlayer + nickname + formatBetweenPlayerSuffix + effectiveSuffix + formatTrail;
+        if (raw.equals(lastNicknameOverride.get(uuid))) return; // unchanged — no packet needed
+        lastNicknameOverride.put(uuid, raw);
+
+        Component displayName = RichTextFormatter.processTablistText(raw);
+        com.zerog.neoessentials.util.commands.NickCommand.sendTabListDisplayName(player, displayName, server);
+    }
+
+    /**
+     * Public entry point for {@code NickCommand} to get the correctly prefix/suffix-wrapped
+     * override text immediately when a nickname is set — without waiting for the next
+     * periodic tick to fix it via {@link #updateNicknameOverridePacket}. Returns {@code null}
+     * if the player has no nickname (nothing to override).
+     */
+    public String resolveNicknameOverrideRaw(ServerPlayer player, MinecraftServer server) {
+        String nickname = com.zerog.neoessentials.util.commands.NickCommand.getNickname(player.getUUID());
+        if (nickname == null || nickname.isEmpty()) return null;
+        String prefix = getPermissionPrefix(player, server);
+        String suffix = getPermissionSuffix(player, server);
+        if (showAfkIndicator && isAfk(player)) suffix = suffix + afkSuffix;
+        return formatLead + prefix + formatBetweenPrefixPlayer + nickname + formatBetweenPlayerSuffix + suffix + formatTrail;
+    }
+
+    // ── Build header/footer (returns raw text for processTablistText) ─────────
     private String buildHeader(ServerPlayer player, MinecraftServer server) {
-        String frame = headerFrames.get(Math.min(headerFrame, headerFrames.size() - 1));
+        String frame = getHeaderFrame(player);
         return applyPlaceholders(frame, player, server);
     }
 
     private String buildFooter(ServerPlayer player, MinecraftServer server) {
-        String frame = footerFrames.get(Math.min(footerFrame, footerFrames.size() - 1));
+        String frame = getFooterFrame(player);
         return applyPlaceholders(frame, player, server);
+    }
+
+    /**
+     * Frame selection priority: per-player override → per-group override → global default.
+     */
+    private String getHeaderFrame(ServerPlayer player) {
+        // 1. Per-player
+        List<String> pf = playerHeaderFrames.get(player.getUUID());
+        if (pf != null && !pf.isEmpty()) return pf.get(headerFrame % pf.size());
+        // 2. Per-group
+        String group = getPermissionGroup(player);
+        List<String> gf = groupHeaderFrames.get(group);
+        if (gf != null && !gf.isEmpty()) return gf.get(headerFrame % gf.size());
+        // 3. Global
+        return headerFrames.get(Math.min(headerFrame, headerFrames.size() - 1));
+    }
+
+    private String getFooterFrame(ServerPlayer player) {
+        // 1. Per-player
+        List<String> pf = playerFooterFrames.get(player.getUUID());
+        if (pf != null && !pf.isEmpty()) return pf.get(footerFrame % pf.size());
+        // 2. Per-group
+        String group = getPermissionGroup(player);
+        List<String> gf = groupFooterFrames.get(group);
+        if (gf != null && !gf.isEmpty()) return gf.get(footerFrame % gf.size());
+        // 3. Global
+        return footerFrames.get(Math.min(footerFrame, footerFrames.size() - 1));
     }
 
     // ── Placeholders ─────────────────────────────────────────────────────────
     /**
-     * Supported placeholders:
-     * {player}        — player's name
-     * {displayname}   — player's display name (with nick/prefix)
-     * {online}        — current online player count (excluding vanished for non-staff)
-     * {max}           — max player slots
-     * {ping}          — player's ping in ms
-     * {world}         — current dimension path (e.g. overworld)
-     * {tps}           — server TPS (formatted to 1 dp)
-     * {time}          — server real-world time (HH:mm)
-     * {server_name}   — server motd / name
-     * {x}, {y}, {z}   — player coordinates
-     * {balance}       — player balance (from EconomyManager)
-     * {prefix}        — permission group prefix
-     * {suffix}        — permission group suffix
-     * {group}         — permission group name
-     * {newline}       — line break
-     * {bar}           — decorative separator
-     * &<code>         — colour codes converted to §
+     * Resolves all {placeholder} tokens in the frame text.
+     *
+     * <p><strong>Note:</strong> This method intentionally does NOT convert {@code &} to
+     * {@code §}.  Color processing is deferred to {@link RichTextFormatter#processTablistText(String)}.
+     *
+     * <p><strong>BTLP-equivalent placeholders:</strong>
+     * <ul>
+     *   <li>{@code {network_online}}   — total players on the proxy network</li>
+     *   <li>{@code {server_online:X}}  — players on proxy server X</li>
+     *   <li>{@code {current_server}}   — proxy server name this player is on</li>
+     *   <li>{@code {server_label}}     — this server's configured display label</li>
+     *   <li>{@code {rank_weight}}      — numeric group weight</li>
+     *   <li>{@code {session_minutes}}  — minutes in current session</li>
+     *   <li>{@code {session_hours}}    — hours in current session</li>
+     *   <li>{@code {level}}            — XP level</li>
+     *   <li>{@code {health}}           — current HP</li>
+     *   <li>{@code {max_health}}       — max HP</li>
+     *   <li>{@code {afk}}              — AFK label (blank when not AFK)</li>
+     * </ul>
      */
+    @SuppressWarnings("resource") // ServerLevel is not AutoCloseable; IntelliJ false positive
     private String applyPlaceholders(String text, ServerPlayer player, MinecraftServer server) {
         if (text == null) return "";
 
-        // Convert & colour codes
-        text = text.replace("&", "§");
-
+        // ── Basic counts ──────────────────────────────────────────────────────
         int online = (int) server.getPlayerList().getPlayers().stream()
             .filter(p -> !isVanishedFromPlayer(p, player))
             .count();
         int max = server.getMaxPlayers();
         int ping = player.connection.latency();
-        String world = player.serverLevel().dimension().location().getPath();
+        String world = com.zerog.neoessentials.util.LevelCompat.of(player).dimension().location().getPath();
         String playerName = player.getName().getString();
         String displayName = getDisplayName(player);
 
-        // TPS
+        // TPS — use &a / &e / &c codes, processTablistText converts them
         double tps = getTps(server);
-        String tpsStr = tps >= 19.0 ? "§a" + String.format("%.1f", tps)
-                      : tps >= 15.0 ? "§e" + String.format("%.1f", tps)
-                      : "§c" + String.format("%.1f", tps);
+        String tpsStr = tps >= 19.0 ? "&a" + String.format("%.1f", tps)
+                      : tps >= 15.0 ? "&e" + String.format("%.1f", tps)
+                      : "&c" + String.format("%.1f", tps);
 
-        // Real time
         String time = new java.text.SimpleDateFormat("HH:mm").format(new java.util.Date());
+        String serverName = com.zerog.neoessentials.config.ConfigManager.getServerName();
+        String serverMotd = com.zerog.neoessentials.util.motd.MotdManager.getInstance().getEffectiveMotd(server);
 
-        // Server name from MOTD
-        String serverName = server.getMotd();
-
-        // Position
         int x = player.getBlockX(), y = player.getBlockY(), z = player.getBlockZ();
 
-        // Economy balance
+        // ── Economy ───────────────────────────────────────────────────────────
         String balance = "0";
         try {
             java.math.BigDecimal bd = com.zerog.neoessentials.economy.managers.EconomyManager.getInstance().getBalance(player.getUUID());
             balance = String.format("%.2f", bd.doubleValue());
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, com.zerog.neoessentials.logging.LogCategory.GENERAL,
+                "Failed to resolve balance for {} tablist placeholder", player.getName().getString(), e);
+        }
 
-        // Permission group prefix/suffix/name
-        String prefix = getPermissionPrefix(player);
-        String suffix = getPermissionSuffix(player);
-        String group = getPermissionGroup(player);
+        // ── Permission / group ────────────────────────────────────────────────
+        // Computed lazily (only when actually referenced) — getPermissionPrefix/Suffix now run
+        // their OWN result through this same applyPlaceholders() pipeline (so nametag overrides
+        // can use {group}/{balance}/etc. too), so eagerly calling them here unconditionally
+        // would reenter applyPlaceholders on every single header/footer build even when {prefix}
+        // /{suffix} aren't used, and — worse — reenter unconditionally every time a nametag
+        // override itself gets resolved, which is exactly the recursion this guards against.
+        String prefix = text.contains("{prefix}") ? getPermissionPrefix(player, server) : "";
+        String suffix = text.contains("{suffix}") ? getPermissionSuffix(player, server) : "";
+        String group  = getPermissionGroup(player);
+        int rankWeight = getGroupWeight(player);
 
         // Apply per-group colour override to displayname if configured
         String groupColor = groupColors.getOrDefault(group, groupColors.getOrDefault("default", ""));
         String coloredDisplayName = groupColor.isEmpty() ? displayName : groupColor + displayName;
 
-        text = text
+        // ── Proxy / network data (BTLP-style) ─────────────────────────────────
+        ProxyIntegration proxy = ProxyIntegration.getInstance();
+        int networkOnline = proxy.isProxyEnabled() ? proxy.getNetworkOnline() : online;
+        String currentServer = proxy.isProxyEnabled()
+            ? proxy.getPlayerServer(player.getUUID()) : proxy.getServerLabel();
+        String serverLabel = proxy.getServerLabel();
+
+        // ── Session duration ──────────────────────────────────────────────────
+        long sessionMs = System.currentTimeMillis()
+            - sessionStartTimes.getOrDefault(player.getUUID(), System.currentTimeMillis());
+        long sessionMinutes = sessionMs / 60_000;
+        long sessionHours   = sessionMinutes / 60;
+
+        // ── Health / XP ───────────────────────────────────────────────────────
+        int level     = player.experienceLevel;
+        int health    = (int) player.getHealth();
+        int maxHealth = (int) player.getMaxHealth();
+
+        // ── AFK indicator ─────────────────────────────────────────────────────
+        String afkStr = (showAfkIndicator && isAfk(player)) ? afkSuffix : "";
+
+        String result = text
+            // Standard
             .replace("{player}", playerName)
             .replace("{displayname}", coloredDisplayName)
             .replace("{online}", String.valueOf(online))
@@ -273,6 +732,7 @@ public class TablistManager {
             .replace("{tps}", tpsStr)
             .replace("{time}", time)
             .replace("{server_name}", serverName)
+            .replace("{server_motd}", serverMotd)
             .replace("{x}", String.valueOf(x))
             .replace("{y}", String.valueOf(y))
             .replace("{z}", String.valueOf(z))
@@ -280,10 +740,58 @@ public class TablistManager {
             .replace("{prefix}", prefix)
             .replace("{suffix}", suffix)
             .replace("{group}", group)
+            .replace("{rank_weight}", String.valueOf(rankWeight))
+            // BTLP-style proxy / network
+            .replace("{network_online}", String.valueOf(networkOnline))
+            .replace("{current_server}", currentServer)
+            .replace("{server_label}", serverLabel)
+            // Session
+            .replace("{session_minutes}", String.valueOf(sessionMinutes % 60))
+            .replace("{session_hours}", String.valueOf(sessionHours))
+            // Player stats
+            .replace("{level}", String.valueOf(level))
+            .replace("{health}", String.valueOf(health))
+            .replace("{max_health}", String.valueOf(maxHealth))
+            // AFK
+            .replace("{afk}", afkStr)
+            // Decoration
             .replace("{newline}", "\n")
-            .replace("{bar}", "§8§m                              §r");
+            .replace("{bar}", "&8&m                              &r");
 
-        return text;
+        // Resolve dynamic {server_online:ServerName} tokens
+        result = resolveServerOnlinePlaceholders(result, proxy);
+
+        // Resolve {animation:NAME} tokens — expands to the current animation frame
+        result = AnimationManager.getInstance().resolveAnimations(result);
+
+        // Finally, pass any remaining {placeholder} tokens through the full PlaceholderAPI
+        // so that {neoessentials_*}, {luckperms_*}, {ftbranks_*} and any custom
+        // registered expansions are resolved too.
+        try {
+            result = com.zerog.neoessentials.api.PlaceholderAPI.setPlaceholders(player, result);
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, com.zerog.neoessentials.logging.LogCategory.GENERAL,
+                "Failed to resolve remaining placeholders for {} tablist entry", player.getName().getString(), e);
+        }
+
+        return result;
+    }
+
+    /**
+     * Resolves {@code {server_online:ServerName}} tokens.
+     * Example: {@code "Lobby: {server_online:Lobby}"} → {@code "Lobby: 5"}.
+     */
+    private static String resolveServerOnlinePlaceholders(String text, ProxyIntegration proxy) {
+        if (!text.contains("{server_online:")) return text;
+        StringBuilder sb = new StringBuilder(text);
+        int start;
+        while ((start = sb.indexOf("{server_online:")) >= 0) {
+            int end = sb.indexOf("}", start);
+            if (end < 0) break;
+            String srvName = sb.substring(start + "{server_online:".length(), end);
+            sb.replace(start, end + 1, String.valueOf(proxy.getServerOnline(srvName)));
+        }
+        return sb.toString();
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -291,67 +799,210 @@ public class TablistManager {
         if (!hideVanished) return false;
         boolean targetVanished = com.zerog.neoessentials.moderation.VanishManager.getInstance().isPlayerVanished(target.getUUID());
         if (!targetVanished) return false;
-        // Staff with seevanished perm can still see them
         return !PermissionAPI.hasPermission(viewer.getUUID(), "neoessentials.vanish.see");
     }
 
+    /**
+     * Vanish-aware online count from {@code viewer}'s perspective — the same computation
+     * {@code {online}} uses in tablist headers. Public so other systems (e.g. chat's
+     * short-form placeholder support) can reuse it.
+     */
+    public int countOnlineExcludingVanish(MinecraftServer server, ServerPlayer viewer) {
+        return (int) server.getPlayerList().getPlayers().stream()
+            .filter(p -> !isVanishedFromPlayer(p, viewer))
+            .count();
+    }
+
+    /** Total minutes elapsed in {@code uuid}'s current session (not capped to 0-59; pair with {@link #getSessionHours}). */
+    public long getSessionMinutes(UUID uuid) {
+        long sessionMs = System.currentTimeMillis()
+            - sessionStartTimes.getOrDefault(uuid, System.currentTimeMillis());
+        return sessionMs / 60_000;
+    }
+
+    /** Full hours elapsed in {@code uuid}'s current session. */
+    public long getSessionHours(UUID uuid) {
+        return getSessionMinutes(uuid) / 60;
+    }
+
+    private boolean isAfk(ServerPlayer player) {
+        try {
+            return com.zerog.neoessentials.chat.AfkManager.getInstance().isAfk(player.getUUID());
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, com.zerog.neoessentials.logging.LogCategory.GENERAL,
+                "Failed to resolve AFK state for {} tablist entry", player.getName().getString(), e);
+        }
+        return false;
+    }
+
     private String getDisplayName(ServerPlayer player) {
-        // Check custom name override (nick system)
+        // Priority: NickCommand nickname → internal customNames override → real name
+        try {
+            String nick = com.zerog.neoessentials.util.commands.NickCommand.getNickname(player.getUUID());
+            if (nick != null && !nick.isEmpty()) return nick.replace("&", "§");
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, com.zerog.neoessentials.logging.LogCategory.GENERAL,
+                "Failed to resolve nickname for {} tablist entry", player.getName().getString(), e);
+        }
         String custom = customNames.get(player.getUUID());
         if (custom != null && !custom.isEmpty()) return custom;
         return player.getName().getString();
     }
 
-    private double getTps(MinecraftServer server) {
+    /** Public so other systems (e.g. chat's short-form placeholder support) can reuse it. */
+    public double getTps(MinecraftServer server) {
         try {
-            // NeoForge 1.21.1: getAverageTickTimeNanos() → convert to TPS
             double avgMs = server.getAverageTickTimeNanos() / 1_000_000.0;
             return Math.min(20.0, 1000.0 / Math.max(avgMs, 1.0));
-        } catch (Exception e) {
+        } catch (Throwable e) {
+            // Catches Errors too — MinecraftServer's tick-time accessor has had naming/shape
+            // changes across versions before (getAverageTickTime() vs getAverageTickTimeNanos()).
             return 20.0;
         }
     }
 
-    private String getPermissionPrefix(ServerPlayer player) {
+    /**
+     * Resolves the nametag (above-head + tab-list-row) prefix for {@code player}, in priority
+     * order: per-player nametag override > per-group nametag override > the SAME prefix chat
+     * uses ({@link com.zerog.neoessentials.api.permissions.PermissionAPI#getPrefix}). The old
+     * version of this method bypassed PermissionAPI entirely and read straight from the
+     * internal PermissionManager, so when an external adapter (e.g. LuckPerms) was configured,
+     * the nametag/tablist prefix could silently disagree with what chat showed for the exact
+     * same player — this keeps them in sync by default while still allowing an independent
+     * override for admins who want the nametag to say something different from chat.
+     */
+    // Guards against infinite recursion: applyPlaceholders() calls getPermissionPrefix/Suffix
+    // to resolve {prefix}/{suffix} tokens, and (below) getPermissionPrefix/Suffix call back into
+    // applyPlaceholders() to resolve tokens *within* a configured nametag override — a nametag
+    // override that itself contained a literal "{prefix}"/"{suffix}" token would otherwise
+    // recurse forever. One level of reentrancy is allowed (the normal case is 0), a second
+    // triggers a warning and returns the raw, unresolved override text as its bottom-out value.
+    private final ThreadLocal<Integer> nametagResolveDepth = ThreadLocal.withInitial(() -> 0);
+
+    private String getPermissionPrefix(ServerPlayer player, MinecraftServer server) {
         try {
-            com.zerog.neoessentials.permissions.PermissionManager mgr =
-                com.zerog.neoessentials.permissions.PermissionSystem.getManager();
-            com.zerog.neoessentials.permissions.PermissionUser user = mgr.getUser(player.getUUID());
-            if (user != null) {
-                String groupName = user.getGroup();
-                com.zerog.neoessentials.permissions.PermissionGroup group = mgr.getGroup(groupName);
-                if (group != null && group.getPrefix() != null && !group.getPrefix().isEmpty()) {
-                    return group.getPrefix().replace("&", "§");
-                }
-            }
-        } catch (Exception ignored) {}
+            if (!nametagEnabled) return "";
+            UUID uuid = player.getUUID();
+            String playerOverride = playerNametagPrefix.get(uuid);
+            if (playerOverride != null) return resolveNametagText(playerOverride, player, server);
+
+            String groupName = getPermissionGroup(player);
+            String groupOverride = groupNametagPrefix.get(groupName);
+            if (groupOverride != null) return resolveNametagText(groupOverride, player, server);
+
+            String prefix = com.zerog.neoessentials.api.permissions.PermissionAPI.getPrefix(uuid);
+            return prefix != null ? resolveNametagText(prefix, player, server) : "";
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, com.zerog.neoessentials.logging.LogCategory.GENERAL,
+                "Failed to resolve nametag prefix for {}", player.getName().getString(), e);
+        }
         return "";
     }
 
-    private String getPermissionSuffix(ServerPlayer player) {
+    /** See {@link #getPermissionPrefix(ServerPlayer, MinecraftServer)} — same priority order for the suffix. */
+    private String getPermissionSuffix(ServerPlayer player, MinecraftServer server) {
         try {
-            com.zerog.neoessentials.permissions.PermissionManager mgr =
-                com.zerog.neoessentials.permissions.PermissionSystem.getManager();
-            com.zerog.neoessentials.permissions.PermissionUser user = mgr.getUser(player.getUUID());
-            if (user != null) {
-                String groupName = user.getGroup();
-                com.zerog.neoessentials.permissions.PermissionGroup group = mgr.getGroup(groupName);
-                if (group != null && group.getSuffix() != null && !group.getSuffix().isEmpty()) {
-                    return group.getSuffix().replace("&", "§");
-                }
-            }
-        } catch (Exception ignored) {}
+            if (!nametagEnabled) return "";
+            UUID uuid = player.getUUID();
+            String playerOverride = playerNametagSuffix.get(uuid);
+            if (playerOverride != null) return resolveNametagText(playerOverride, player, server);
+
+            String groupName = getPermissionGroup(player);
+            String groupOverride = groupNametagSuffix.get(groupName);
+            if (groupOverride != null) return resolveNametagText(groupOverride, player, server);
+
+            String suffix = com.zerog.neoessentials.api.permissions.PermissionAPI.getSuffix(uuid);
+            return suffix != null ? resolveNametagText(suffix, player, server) : "";
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, com.zerog.neoessentials.logging.LogCategory.GENERAL,
+                "Failed to resolve nametag suffix for {}", player.getName().getString(), e);
+        }
         return "";
+    }
+
+    /** Runs nametag prefix/suffix text through the same {placeholder} pipeline header/footer use. */
+    private String resolveNametagText(String text, ServerPlayer player, MinecraftServer server) {
+        if (text.isEmpty() || server == null) return text;
+        int depth = nametagResolveDepth.get();
+        if (depth > 0) {
+            LOGGER.warn("TablistManager: nametag override for {} references {{prefix}}/{{suffix}} " +
+                "(directly or via a group/player chain) — returning it unresolved to avoid infinite recursion.",
+                player.getName().getString());
+            return text;
+        }
+        try {
+            nametagResolveDepth.set(depth + 1);
+            return applyPlaceholders(text, player, server);
+        } finally {
+            nametagResolveDepth.set(depth);
+        }
     }
 
     private String getPermissionGroup(ServerPlayer player) {
+        // Goes through PermissionAPI (checks the external adapter, e.g. LuckPerms, first) — this
+        // used to go straight to the internal PermissionManager, which never knew about LuckPerms
+        // group assignments and silently fell back to "default", same class of bug getGroupWeight()
+        // below was already fixed for.
         try {
-            com.zerog.neoessentials.permissions.PermissionManager mgr =
-                com.zerog.neoessentials.permissions.PermissionSystem.getManager();
-            com.zerog.neoessentials.permissions.PermissionUser user = mgr.getUser(player.getUUID());
-            if (user != null) return user.getGroup();
-        } catch (Exception ignored) {}
+            String group = com.zerog.neoessentials.api.permissions.PermissionAPI.getPrimaryGroup(player.getUUID());
+            if (group != null) return group;
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, com.zerog.neoessentials.logging.LogCategory.GENERAL,
+                "Failed to resolve permission group for {}, defaulting to 'default'", player.getName().getString(), e);
+        }
         return "default";
+    }
+
+    /** Public so other systems (e.g. chat's short-form placeholder support) can reuse it. */
+    public int getGroupWeight(ServerPlayer player) {
+        // Goes through PermissionAPI (checks the external adapter, e.g. LuckPerms, first) —
+        // this used to go straight to the internal PermissionManager, which silently returned
+        // 0 for every player whenever LuckPerms was configured as the backing provider (the
+        // internal group registry is typically unpopulated for LP's actual groups), flattening
+        // tablist sort order.
+        try {
+            return com.zerog.neoessentials.api.permissions.PermissionAPI.getGroupWeight(player.getUUID());
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, com.zerog.neoessentials.logging.LogCategory.GENERAL,
+                "Failed to resolve group weight for {}", player.getName().getString(), e);
+        }
+        return 0;
+    }
+
+    /**
+     * Load a header/footer frame list from a JsonElement (array or single string).
+     *
+     * <p>The outer array is always a list of animation frames — each element becomes one frame
+     * shown in turn. An element is normally a plain string (one line), but can also be its own
+     * JSON array of strings, joined with {@code \n} into a single multi-line frame — vanilla's
+     * tab list header/footer already renders embedded newlines as real line breaks, this just
+     * gives config authors a way to write multi-line text without hand-escaping {@code \n}
+     * inside a JSON string. A flat array of plain strings keeps meaning what it always has
+     * (multiple single-line animation frames), so existing configs are unaffected.
+     *
+     * <pre>{@code
+     * "header": [
+     *   ["&6Line 1 of frame A", "&bLine 2 of frame A"],
+     *   ["&6Line 1 of frame B", "&bLine 2 of frame B"]
+     * ]
+     * }</pre>
+     */
+    private static List<String> loadFrames(JsonElement el) {
+        List<String> frames = new ArrayList<>();
+        if (el.isJsonArray()) {
+            for (JsonElement e : el.getAsJsonArray()) {
+                if (e.isJsonArray()) {
+                    List<String> lines = new ArrayList<>();
+                    for (JsonElement lineEl : e.getAsJsonArray()) lines.add(lineEl.getAsString());
+                    frames.add(String.join("\n", lines));
+                } else {
+                    frames.add(e.getAsString());
+                }
+            }
+        } else {
+            frames.add(el.getAsString());
+        }
+        return frames;
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
@@ -361,22 +1012,124 @@ public class TablistManager {
     public int getRefreshIntervalTicks() { return refreshIntervalTicks; }
     public int getHeaderFrameCount() { return headerFrames.size(); }
     public int getFooterFrameCount() { return footerFrames.size(); }
+    public boolean isIndependentMode() { return independentMode; }
+    public void setIndependentMode(boolean independentMode) { this.independentMode = independentMode; }
 
-    /** Runtime header override (first frame replaced). Cleared on reload. */
+    /** Runtime global header override (first frame replaced). Cleared on reload. */
     public void setHeaderOverride(String text) {
         headerFrames.clear();
         headerFrames.add(text);
         headerFrame = 0;
     }
 
-    /** Runtime footer override (first frame replaced). Cleared on reload. */
+    /** Runtime global footer override (first frame replaced). Cleared on reload. */
     public void setFooterOverride(String text) {
         footerFrames.clear();
         footerFrames.add(text);
         footerFrame = 0;
     }
 
+    // ── Per-player overrides ──────────────────────────────────────────────────
+    /** Set a per-player header override (runtime). Single frame. */
+    public void setPlayerHeaderOverride(UUID uuid, String text) {
+        if (text == null || text.isEmpty()) {
+            playerHeaderFrames.remove(uuid);
+        } else {
+            playerHeaderFrames.put(uuid, Collections.singletonList(text));
+        }
+    }
+
+    /** Set a per-player header override with multiple animated frames (runtime). */
+    @SuppressWarnings("unused")
+    public void setPlayerHeaderFrames(UUID uuid, List<String> frames) {
+        if (frames == null || frames.isEmpty()) playerHeaderFrames.remove(uuid);
+        else playerHeaderFrames.put(uuid, new ArrayList<>(frames));
+    }
+
+    /** Set a per-player footer override (runtime). Single frame. */
+    public void setPlayerFooterOverride(UUID uuid, String text) {
+        if (text == null || text.isEmpty()) {
+            playerFooterFrames.remove(uuid);
+        } else {
+            playerFooterFrames.put(uuid, Collections.singletonList(text));
+        }
+    }
+
+    /** Set a per-player footer override with multiple animated frames (runtime). */
+    @SuppressWarnings("unused")
+    public void setPlayerFooterFrames(UUID uuid, List<String> frames) {
+        if (frames == null || frames.isEmpty()) playerFooterFrames.remove(uuid);
+        else playerFooterFrames.put(uuid, new ArrayList<>(frames));
+    }
+
+    /** Set a per-player nametag prefix override (runtime). Pass null/empty to clear it. */
+    public void setPlayerNametagPrefixOverride(UUID uuid, String text) {
+        if (text == null || text.isEmpty()) playerNametagPrefix.remove(uuid);
+        else playerNametagPrefix.put(uuid, text);
+        lastTeamPrefix.remove(uuid); // force a team-packet refresh next tick
+    }
+
+    /** Set a per-player nametag suffix override (runtime). Pass null/empty to clear it. */
+    public void setPlayerNametagSuffixOverride(UUID uuid, String text) {
+        if (text == null || text.isEmpty()) playerNametagSuffix.remove(uuid);
+        else playerNametagSuffix.put(uuid, text);
+        lastTeamSuffix.remove(uuid);
+    }
+
+    /** Clear all per-player tablist overrides (header + footer + nametag prefix/suffix). */
+    public void clearPlayerOverrides(UUID uuid) {
+        playerHeaderFrames.remove(uuid);
+        playerFooterFrames.remove(uuid);
+        playerNametagPrefix.remove(uuid);
+        playerNametagSuffix.remove(uuid);
+        lastTeamPrefix.remove(uuid);
+        lastTeamSuffix.remove(uuid);
+    }
+
+    // ── Per-group overrides ───────────────────────────────────────────────────
+    public void setGroupHeaderOverride(String group, String text) {
+        if (text == null || text.isEmpty()) groupHeaderFrames.remove(group);
+        else groupHeaderFrames.put(group, Collections.singletonList(text));
+    }
+
+    public void setGroupFooterOverride(String group, String text) {
+        if (text == null || text.isEmpty()) groupFooterFrames.remove(group);
+        else groupFooterFrames.put(group, Collections.singletonList(text));
+    }
+
+    /** Set a per-group nametag prefix override (runtime). Pass null/empty to clear it. */
+    public void setGroupNametagPrefixOverride(String group, String text) {
+        if (text == null || text.isEmpty()) groupNametagPrefix.remove(group);
+        else groupNametagPrefix.put(group, text);
+        lastTeamPrefix.clear(); // group-wide change — cheapest correct option is a full refresh
+    }
+
+    /** Set a per-group nametag suffix override (runtime). Pass null/empty to clear it. */
+    public void setGroupNametagSuffixOverride(String group, String text) {
+        if (text == null || text.isEmpty()) groupNametagSuffix.remove(group);
+        else groupNametagSuffix.put(group, text);
+        lastTeamSuffix.clear();
+    }
+
+    public void clearGroupOverrides(String group) {
+        groupHeaderFrames.remove(group);
+        groupFooterFrames.remove(group);
+        groupNametagPrefix.remove(group);
+        groupNametagSuffix.remove(group);
+        lastTeamPrefix.clear();
+        lastTeamSuffix.clear();
+    }
+
+    public Set<String> getGroupsWithOverrides() {
+        Set<String> groups = new LinkedHashSet<>();
+        groups.addAll(groupHeaderFrames.keySet());
+        groups.addAll(groupFooterFrames.keySet());
+        return groups;
+    }
+
+    // ── Nick system integration ───────────────────────────────────────────────
     /** Set a per-player custom tab display name (used by /nick). */
+    @SuppressWarnings("unused")
     public void setCustomName(UUID uuid, String name) {
         if (name == null || name.isEmpty()) customNames.remove(uuid);
         else customNames.put(uuid, name);
@@ -384,31 +1137,39 @@ public class TablistManager {
 
     public void clearCustomName(UUID uuid) { customNames.remove(uuid); }
 
+    @SuppressWarnings("unused")
     public String getAfkSuffix() { return afkSuffix; }
+    @SuppressWarnings("unused")
     public boolean isShowAfkIndicator() { return showAfkIndicator; }
 
-    /** Called when a player joins — send initial tablist update. */
+    /** Called when a player joins — record session start and send initial tablist update. */
     public void onPlayerJoin(ServerPlayer player, MinecraftServer server) {
-        // Small delay to ensure the client is fully ready
-        server.execute(() -> updatePlayer(player, server));
+        sessionStartTimes.put(player.getUUID(), System.currentTimeMillis());
+        ProxyIntegration.getInstance().onPlayerJoin(player, server);
+        server.execute(() -> {
+            updatePlayer(player, server);
+            updatePlayerTeam(player, server);
+        });
     }
 
-    /** Called when a player leaves — update all remaining players' online count. */
+    /** Called when a player leaves — clean up and update all remaining players. */
+    public void onPlayerQuit(ServerPlayer player, MinecraftServer server) {
+        UUID uuid = player.getUUID();
+        sessionStartTimes.remove(uuid);
+        // Clear dirty-check cache so the next login starts fresh
+        lastTeamName.remove(uuid);
+        lastTeamPrefix.remove(uuid);
+        lastTeamSuffix.remove(uuid);
+        lastNicknameOverride.remove(uuid);
+        ProxyIntegration.getInstance().onPlayerQuit(uuid);
+        FakePlayerManager.getInstance().removeForPlayer(player);
+        FakePlayerManager.getInstance().removeColumnSlotsForPlayer(player);
+        server.execute(() -> updateAll(server));
+    }
+
+    /** @deprecated Use {@link #onPlayerQuit(ServerPlayer, MinecraftServer)} */
+    @Deprecated
     public void onPlayerQuit(MinecraftServer server) {
         server.execute(() -> updateAll(server));
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-

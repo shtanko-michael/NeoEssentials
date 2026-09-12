@@ -1,7 +1,24 @@
 {
-  "_configVersion": 5,
-  "_configVersion_comment": "DO NOT MODIFY: This field is used by NeoEssentials for automatic config updates. Changing this may cause config corruption.",
+  // DO NOT MODIFY: Used by NeoEssentials for automatic config updates.
+  "_configVersion": 7,
+
+  /* ================================================================
+     NeoEssentials — Permissions  (permissions.json)
+
+     IMPORTANT: this file is only read ONCE, on first boot, to seed the
+     active storage backend (json/yaml/sqlite/mysql, see storage.type in
+     config.json) with these starter groups — and only when using the
+     internal permission system (permissions.useExternalPermissions:
+     false in config.json). After that one-time import, this file is
+     never read again — editing it later, then running /permissions
+     reload, does nothing. Once a server has real permission data, manage
+     groups/permissions with the /permissions in-game commands or the
+     dashboard instead; they write straight to the active backend.
+  ================================================================ */
+
+  // The group assigned to players with no explicit group
   "defaultGroup": "default",
+
   "groups": [
     {
       "name": "default",
@@ -37,7 +54,8 @@
         "neoessentials.teleport.request.cancel",
         "neoessentials.teleport.back",
         "neoessentials.teleport.top",
-        "neoessentials.info"
+        "neoessentials.info",
+        "neoessentials.help"
       ],
       "inherits": []
     },
@@ -50,15 +68,10 @@
         "neoessentials.economy.admin",
         "neoessentials.item.*",
         "neoessentials.chat.mute",
-        "neoessentials.chat.unmute",
-        "neoessentials.chat.mutelist",
         "neoessentials.chat.socialspy",
         "neoessentials.afk.exempt",
         "neoessentials.permissions.reload",
         "neoessentials.permissions.list",
-        "neoessentials.kits.admin.create",
-        "neoessentials.kits.admin.delete",
-        "neoessentials.kits.admin.list",
         "neoessentials.teleport.admin.tp",
         "neoessentials.teleport.admin.tphere",
         "neoessentials.teleport.admin.tppos",
@@ -68,7 +81,32 @@
         "neoessentials.teleport.spawn.set",
         "neoessentials.teleport.jump",
         "neoessentials.teleport.jumpto",
-        "neoessentials.teleport.tpr"
+        "neoessentials.teleport.tpr",
+        "neoessentials.invsee",
+        "neoessentials.enderchest",
+        "neoessentials.moderation.kick",
+        "neoessentials.moderation.kickall",
+        "neoessentials.moderation.ban",
+        "neoessentials.moderation.banip",
+        "neoessentials.moderation.banlist",
+        "neoessentials.moderation.tempban",
+        "neoessentials.moderation.tempbanip",
+        "neoessentials.moderation.unban",
+        "neoessentials.moderation.unbanip",
+        "neoessentials.moderation.mute",
+        "neoessentials.moderation.unmute",
+        "neoessentials.moderation.freeze",
+        "neoessentials.moderation.unfreeze",
+        "neoessentials.moderation.freezelist",
+        "neoessentials.moderation.vanish",
+        "neoessentials.moderation.seevanished",
+        "neoessentials.moderation.jail",
+        "neoessentials.moderation.unjail",
+        "neoessentials.moderation.jaillist",
+        "neoessentials.moderation.jailinfo",
+        "neoessentials.moderation.notifications",
+        "neoessentials.moderation.warn",
+        "neoessentials.moderation.warnings"
       ],
       "inherits": ["default"]
     },

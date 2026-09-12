@@ -6,6 +6,8 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import com.zerog.neoessentials.config.ConfigSplitter;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import com.zerog.neoessentials.util.MessageUtil;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -15,7 +17,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Main NeoEssentials mod command providing system management and command routing functionality.
@@ -58,18 +59,20 @@ public class ModRootCommand {
     private static final Logger LOGGER = LoggerFactory.getLogger(ModRootCommand.class);
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        LOGGER.info("Registering /neoe and /neoessentials root commands");
+        NeoLog.info(LOGGER, LogCategory.COMMANDS, "Registering /neoe and /neoessentials root commands");
+        com.zerog.neoessentials.config.ConfigManager cfg = com.zerog.neoessentials.config.ConfigManager.getInstance();
+        if (cfg.isCommandEnabled("neoe")) {
         dispatcher.register(
             Commands.literal("neoe")
                 .requires(source -> {
                     boolean result = hasBaseCommandPermission(source);
-                    LOGGER.debug("/neoe permission check for {}: {}", source.getTextName(), result);
+                    NeoLog.debug(LOGGER, LogCategory.COMMANDS, "/neoe permission check for {}: {}", source.getTextName(), result);
                     return result;
                 })
                 .then(Commands.literal("reload")
                     .requires(source -> {
                         boolean result = hasAdminPermission(source);
-                        LOGGER.debug("/neoe reload admin permission for {}: {}", source.getTextName(), result);
+                        NeoLog.debug(LOGGER, LogCategory.COMMANDS, "/neoe reload admin permission for {}: {}", source.getTextName(), result);
                         return result;
                     })
                     .executes(ModRootCommand::reloadConfiguration)
@@ -77,11 +80,20 @@ public class ModRootCommand {
                 .then(Commands.literal("config")
                     .requires(source -> {
                         boolean result = hasAdminPermission(source);
-                        LOGGER.debug("/neoe config admin permission for {}: {}", source.getTextName(), result);
+                        NeoLog.debug(LOGGER, LogCategory.COMMANDS, "/neoe config admin permission for {}: {}", source.getTextName(), result);
                         return result;
                     })
                     .then(Commands.literal("split")
                         .executes(ModRootCommand::splitConfiguration)
+                    )
+                    .then(Commands.literal("validate")
+                        .executes(ModRootCommand::validateConfiguration)
+                    )
+                    .then(Commands.literal("repair")
+                        .executes(ModRootCommand::repairConfiguration)
+                    )
+                    .then(Commands.literal("status")
+                        .executes(ModRootCommand::configStatus)
                     )
                 )
                 .then(Commands.argument("command", StringArgumentType.greedyString())
@@ -90,17 +102,19 @@ public class ModRootCommand {
                 )
                 .executes(ModRootCommand::showAvailableCommands) // Show help when no args
         );
+        }
+        if (cfg.isCommandEnabled("neoessentials")) {
         dispatcher.register(
             Commands.literal("neoessentials")
                 .requires(source -> {
                     boolean result = hasBaseCommandPermission(source);
-                    LOGGER.debug("/neoessentials permission check for {}: {}", source.getTextName(), result);
+                    NeoLog.debug(LOGGER, LogCategory.COMMANDS, "/neoessentials permission check for {}: {}", source.getTextName(), result);
                     return result;
                 })
                 .then(Commands.literal("reload")
                     .requires(source -> {
                         boolean result = hasAdminPermission(source);
-                        LOGGER.debug("/neoessentials reload admin permission for {}: {}", source.getTextName(), result);
+                        NeoLog.debug(LOGGER, LogCategory.COMMANDS, "/neoessentials reload admin permission for {}: {}", source.getTextName(), result);
                         return result;
                     })
                     .executes(ModRootCommand::reloadConfiguration)
@@ -108,11 +122,20 @@ public class ModRootCommand {
                 .then(Commands.literal("config")
                     .requires(source -> {
                         boolean result = hasAdminPermission(source);
-                        LOGGER.debug("/neoessentials config admin permission for {}: {}", source.getTextName(), result);
+                        NeoLog.debug(LOGGER, LogCategory.COMMANDS, "/neoessentials config admin permission for {}: {}", source.getTextName(), result);
                         return result;
                     })
                     .then(Commands.literal("split")
                         .executes(ModRootCommand::splitConfiguration)
+                    )
+                    .then(Commands.literal("validate")
+                        .executes(ModRootCommand::validateConfiguration)
+                    )
+                    .then(Commands.literal("repair")
+                        .executes(ModRootCommand::repairConfiguration)
+                    )
+                    .then(Commands.literal("status")
+                        .executes(ModRootCommand::configStatus)
                     )
                 )
                 .then(Commands.argument("command", StringArgumentType.greedyString())
@@ -121,8 +144,9 @@ public class ModRootCommand {
                 )
                 .executes(ModRootCommand::showAvailableCommands) // Show help when no args
         );
+        }
     }
-    
+
     /**
      * Check if the command source has permission to use the base NeoEssentials commands.
      * @param source Command source to check
@@ -160,7 +184,7 @@ public class ModRootCommand {
         CommandRegistry registry = CommandRegistry.getInstance();
         List<String> commandNames = registry.getAllCommandNames().stream()
             .sorted()
-            .collect(Collectors.toList());
+            .toList();
         
         return net.minecraft.commands.SharedSuggestionProvider.suggest(commandNames, builder);
     }
@@ -177,77 +201,99 @@ public class ModRootCommand {
             totalCount++;
             try {
                 com.zerog.neoessentials.config.ConfigManager.loadAll();
-                LOGGER.info("✓ Configuration files reloaded");
+                NeoLog.info(LOGGER, LogCategory.COMMANDS, "✓ Configuration files reloaded");
                 successCount++;
             } catch (Exception e) {
-                LOGGER.error("✗ Failed to reload configuration files: {}", e.getMessage(), e);
-                source.sendFailure(MessageUtil.error("commands.neoessentials.root.reload_config_failed", e.getMessage()));
+                NeoLog.error(LOGGER, LogCategory.COMMANDS, "✗ Failed to reload configuration files: {}", e.getMessage(), e);
+                final String fMsg = e.getMessage();
+                source.sendFailure(MessageUtil.error("commands.neoessentials.root.reload_error_config", fMsg));
             }
 
             // Reload translations
             totalCount++;
             try {
                 com.zerog.neoessentials.util.MessageUtil.reloadTranslations();
-                LOGGER.info("✓ Translations reloaded");
+                NeoLog.info(LOGGER, LogCategory.COMMANDS, "✓ Translations reloaded");
                 successCount++;
             } catch (Exception e) {
-                LOGGER.error("✗ Failed to reload translations: {}", e.getMessage(), e);
-                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_translations_failed", e.getMessage()));
+                NeoLog.error(LOGGER, LogCategory.COMMANDS, "✗ Failed to reload translations: {}", e.getMessage(), e);
+                final String fMsg = e.getMessage();
+                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_error_translations", fMsg));
             }
             
             // Reload permissions if enabled
             totalCount++;
             try {
-                com.zerog.neoessentials.api.permissions.PermissionAPI.reload();
-                LOGGER.info("✓ Permission system reloaded");
+                // PermissionAPI.reload() only re-reads data into an ALREADY-initialized manager
+                // (or external adapter) — it throws if neither exists. That's exactly the state
+                // a boot-time initialization failure (e.g. a config that couldn't be parsed yet)
+                // leaves things in, and it's permanent: every prefix/suffix/permission check
+                // keeps silently failing for the rest of the session with no way to recover
+                // short of a full restart. If reload() finds nothing to work with, fall back to
+                // a full re-initialization instead — it re-runs the same external/internal
+                // detection initialize() does at boot, so a config fixed after the fact (or a
+                // permission plugin that finished loading late) actually gets picked up.
+                if (com.zerog.neoessentials.api.permissions.PermissionAPI.getManager() == null
+                        && !com.zerog.neoessentials.api.permissions.PermissionAPI.isUsingExternal()) {
+                    NeoLog.warn(LOGGER, LogCategory.COMMANDS, "Permission system was never fully initialized — re-initializing from scratch instead of a plain reload");
+                    com.zerog.neoessentials.permissions.PermissionSystem.reinitialize();
+                } else {
+                    com.zerog.neoessentials.api.permissions.PermissionAPI.reload();
+                }
+                NeoLog.info(LOGGER, LogCategory.COMMANDS, "✓ Permission system reloaded");
                 successCount++;
             } catch (Exception e) {
-                LOGGER.error("✗ Failed to reload permissions: {}", e.getMessage(), e);
-                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_permissions_failed", e.getMessage()));
+                NeoLog.error(LOGGER, LogCategory.COMMANDS, "✗ Failed to reload permissions: {}", e.getMessage(), e);
+                final String fMsg = e.getMessage();
+                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_error_permissions", fMsg));
             }
             
             // Reload KitManager
             totalCount++;
             try {
                 com.zerog.neoessentials.kits.KitManager.getInstance().reload();
-                LOGGER.info("✓ Kit system reloaded");
+                NeoLog.info(LOGGER, LogCategory.COMMANDS, "✓ Kit system reloaded");
                 successCount++;
             } catch (Exception e) {
-                LOGGER.error("✗ Failed to reload kit system: {}", e.getMessage(), e);
-                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_kits_failed", e.getMessage()));
+                NeoLog.error(LOGGER, LogCategory.COMMANDS, "✗ Failed to reload kit system: {}", e.getMessage(), e);
+                final String fMsg = e.getMessage();
+                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_error_kits", fMsg));
             }
 
             // Reload HomeManager
             totalCount++;
             try {
                 com.zerog.neoessentials.teleportation.HomeManager.getInstance().reload();
-                LOGGER.info("✓ Home system reloaded");
+                NeoLog.info(LOGGER, LogCategory.COMMANDS, "✓ Home system reloaded");
                 successCount++;
             } catch (Exception e) {
-                LOGGER.error("✗ Failed to reload home system: {}", e.getMessage(), e);
-                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_homes_failed", e.getMessage()));
+                NeoLog.error(LOGGER, LogCategory.COMMANDS, "✗ Failed to reload home system: {}", e.getMessage(), e);
+                final String fMsg = e.getMessage();
+                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_error_homes", fMsg));
             }
 
             // Reload WarpManager
             totalCount++;
             try {
                 com.zerog.neoessentials.teleportation.Warp.WarpManager.getInstance().reload();
-                LOGGER.info("✓ Warp system reloaded");
+                NeoLog.info(LOGGER, LogCategory.COMMANDS, "✓ Warp system reloaded");
                 successCount++;
             } catch (Exception e) {
-                LOGGER.error("✗ Failed to reload warp system: {}", e.getMessage(), e);
-                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_warps_failed", e.getMessage()));
+                NeoLog.error(LOGGER, LogCategory.COMMANDS, "✗ Failed to reload warp system: {}", e.getMessage(), e);
+                final String fMsg = e.getMessage();
+                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_error_warps", fMsg));
             }
 
             // Reload SpawnManager
             totalCount++;
             try {
                 com.zerog.neoessentials.teleportation.Spawn.SpawnManager.getInstance().reload();
-                LOGGER.info("✓ Spawn system reloaded");
+                NeoLog.info(LOGGER, LogCategory.COMMANDS, "✓ Spawn system reloaded");
                 successCount++;
             } catch (Exception e) {
-                LOGGER.error("✗ Failed to reload spawn system: {}", e.getMessage(), e);
-                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_spawn_failed", e.getMessage()));
+                NeoLog.error(LOGGER, LogCategory.COMMANDS, "✗ Failed to reload spawn system: {}", e.getMessage(), e);
+                final String fMsg = e.getMessage();
+                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_error_spawn", fMsg));
             }
 
             // Reload ChatManager configuration
@@ -262,54 +308,275 @@ public class ModRootCommand {
                 com.zerog.neoessentials.chat.ChatManager chatManager = new com.zerog.neoessentials.chat.ChatManager(chatObj, commandsObj);
                 com.zerog.neoessentials.api.ChatAPI.setChatManager(chatManager);
                 
-                LOGGER.info("✓ Chat system reloaded");
+                NeoLog.info(LOGGER, LogCategory.COMMANDS, "✓ Chat system reloaded");
                 successCount++;
             } catch (Exception e) {
-                LOGGER.error("✗ Failed to reload chat system: {}", e.getMessage(), e);
-                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_chat_failed", e.getMessage()));
+                NeoLog.error(LOGGER, LogCategory.COMMANDS, "✗ Failed to reload chat system: {}", e.getMessage(), e);
+                final String fMsg = e.getMessage();
+                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_error_chat", fMsg));
             }
             
             // Reload AfkManager
             totalCount++;
             try {
                 com.zerog.neoessentials.chat.AfkManager.getInstance().reload();
-                LOGGER.info("✓ AFK system reloaded");
+                NeoLog.info(LOGGER, LogCategory.COMMANDS, "✓ AFK system reloaded");
                 successCount++;
             } catch (Exception e) {
-                LOGGER.error("✗ Failed to reload AFK system: {}", e.getMessage(), e);
-                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_afk_failed", e.getMessage()));
+                NeoLog.error(LOGGER, LogCategory.COMMANDS, "✗ Failed to reload AFK system: {}", e.getMessage(), e);
+                final String fMsg = e.getMessage();
+                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_error_afk", fMsg));
             }
 
             // Reload JailManager
             totalCount++;
             try {
                 com.zerog.neoessentials.moderation.JailManager.getInstance().reload();
-                LOGGER.info("✓ Jail system reloaded");
+                NeoLog.info(LOGGER, LogCategory.COMMANDS, "✓ Jail system reloaded");
                 successCount++;
             } catch (Exception e) {
-                LOGGER.error("✗ Failed to reload jail system: {}", e.getMessage(), e);
-                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_jail_failed", e.getMessage()));
+                NeoLog.error(LOGGER, LogCategory.COMMANDS, "✗ Failed to reload jail system: {}", e.getMessage(), e);
+                final String fMsg = e.getMessage();
+                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_error_jail", fMsg));
+            }
+
+            // Reload TablistManager (was missing – fixes "disable tablist in config, reload, no effect")
+            totalCount++;
+            try {
+                com.zerog.neoessentials.tablist.TablistManager tablistMgr =
+                    com.zerog.neoessentials.tablist.TablistManager.getInstance();
+                tablistMgr.loadConfig();
+                // Push the updated header/footer to all online players immediately
+                net.minecraft.server.MinecraftServer reloadServer =
+                    net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
+                if (reloadServer != null) {
+                    tablistMgr.updateAll(reloadServer);
+                }
+                NeoLog.info(LOGGER, LogCategory.COMMANDS, "✓ Tablist system reloaded");
+                successCount++;
+            } catch (Exception e) {
+                NeoLog.error(LOGGER, LogCategory.COMMANDS, "✗ Failed to reload tablist system: {}", e.getMessage(), e);
+                final String fMsg = e.getMessage();
+                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_error_tablist", fMsg));
+            }
+
+            // Reload ScoreboardManager (had the identical "config changed, /neoe reload does
+            // nothing" gap tablist just got fixed for above — ConfigManager.loadAll() only
+            // clears the JSON cache, it never told ScoreboardManager's own in-memory board
+            // list to re-parse scoreboard.json, so edited boards/titles/lines stayed stale
+            // until an explicit /scoreboard reload or a full restart).
+            totalCount++;
+            try {
+                com.zerog.neoessentials.sidebar.ScoreboardManager scoreboardMgr =
+                    com.zerog.neoessentials.sidebar.ScoreboardManager.getInstance();
+                scoreboardMgr.loadConfig();
+                // Push the updated boards to all online players immediately
+                net.minecraft.server.MinecraftServer scoreboardReloadServer =
+                    net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
+                if (scoreboardReloadServer != null) {
+                    scoreboardMgr.updateAll(scoreboardReloadServer);
+                }
+                NeoLog.info(LOGGER, LogCategory.COMMANDS, "✓ Scoreboard system reloaded");
+                successCount++;
+            } catch (Exception e) {
+                NeoLog.error(LOGGER, LogCategory.COMMANDS, "✗ Failed to reload scoreboard system: {}", e.getMessage(), e);
+                final String fMsg = e.getMessage();
+                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_error_scoreboard", fMsg));
+            }
+
+            // Recover EconomyManager if it never finished initializing at boot (e.g. a config
+            // that couldn't be parsed yet at the moment the singleton was first touched) — see
+            // EconomyManager.initializeIfEnabled()'s javadoc. Unlike permissions this has no
+            // loud failure mode: balances keep working perfectly in memory, they just silently
+            // never persist, so there's nothing to visibly "fail to reload" — only something to
+            // quietly recover if it's actually broken.
+            totalCount++;
+            try {
+                if (com.zerog.neoessentials.economy.managers.EconomyManager.getInstance().reinitialize()) {
+                    NeoLog.warn(LOGGER, LogCategory.COMMANDS, "Economy system was never fully initialized — re-initialized from scratch");
+                }
+                NeoLog.info(LOGGER, LogCategory.COMMANDS, "✓ Economy system reloaded");
+                successCount++;
+            } catch (Exception e) {
+                NeoLog.error(LOGGER, LogCategory.COMMANDS, "✗ Failed to reload economy system: {}", e.getMessage(), e);
+                final String fMsg = e.getMessage();
+                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_error_economy", fMsg));
+            }
+
+            // Reload HologramScheduler's tick rates (hologram.pollIntervalTicks/animationInterval)
+            totalCount++;
+            try {
+                com.zerog.neoessentials.hologram.HologramScheduler.restart();
+                NeoLog.info(LOGGER, LogCategory.COMMANDS, "✓ Hologram scheduler reloaded");
+                successCount++;
+            } catch (Exception e) {
+                NeoLog.error(LOGGER, LogCategory.COMMANDS, "✗ Failed to reload hologram scheduler: {}", e.getMessage(), e);
+                final String fMsg = e.getMessage();
+                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_error_hologram", fMsg));
+            }
+
+            // Reload LeaderboardConfigLoader (leaderboard.json — was missing, so editing a
+            // board's refreshInterval/definition and running /neoe reload silently did nothing;
+            // only the dedicated /leaderboard reload picked it up, unlike every sibling system
+            // above which /neoe reload already covers).
+            totalCount++;
+            try {
+                com.zerog.neoessentials.leaderboard.config.LeaderboardConfigLoader.load();
+                NeoLog.info(LOGGER, LogCategory.COMMANDS, "✓ Leaderboard config reloaded");
+                successCount++;
+            } catch (Exception e) {
+                NeoLog.error(LOGGER, LogCategory.COMMANDS, "✗ Failed to reload leaderboard config: {}", e.getMessage(), e);
+                final String fMsg = e.getMessage();
+                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_error_leaderboard", fMsg));
+            }
+
+            // Reload WorthManager (item sell prices)
+            totalCount++;
+            try {
+                com.zerog.neoessentials.economy.worth.WorthManager.getInstance().reload();
+                NeoLog.info(LOGGER, LogCategory.COMMANDS, "✓ Worth system reloaded");
+                successCount++;
+            } catch (Exception e) {
+                NeoLog.error(LOGGER, LogCategory.COMMANDS, "✗ Failed to reload worth system: {}", e.getMessage(), e);
+                final String fMsg = e.getMessage();
+                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_error_worth", fMsg));
+            }
+
+            // Reload RulesCommand (server rules from rules_data.json)
+            totalCount++;
+            try {
+                com.zerog.neoessentials.util.commands.RulesCommand.reload();
+                NeoLog.info(LOGGER, LogCategory.COMMANDS, "✓ Rules system reloaded");
+                successCount++;
+            } catch (Exception e) {
+                NeoLog.error(LOGGER, LogCategory.COMMANDS, "✗ Failed to reload rules system: {}", e.getMessage(), e);
+                final String fMsg = e.getMessage();
+                source.sendFailure(MessageUtil.warning("commands.neoessentials.root.reload_error_rules", fMsg));
             }
 
             // Build success message
-            final int finalSuccessCount = successCount;
-            final int finalTotalCount = totalCount;
+            final int fSuccessCount = successCount, fTotalCount = totalCount;
 
             if (successCount == totalCount) {
-                source.sendSuccess(() -> MessageUtil.success("commands.neoessentials.root.reload_complete", finalSuccessCount, finalTotalCount), true);
+                source.sendSuccess(() -> MessageUtil.success("commands.neoessentials.root.reload_complete_success", fSuccessCount, fTotalCount), true);
             } else {
-                source.sendSuccess(() -> MessageUtil.warning("commands.neoessentials.root.reload_complete_with_errors", finalSuccessCount, finalTotalCount), true);
+                source.sendSuccess(() -> MessageUtil.warning("commands.neoessentials.root.reload_complete_errors", fSuccessCount, fTotalCount), true);
             }
 
-            LOGGER.info("Configuration reload completed: {}/{} systems reloaded successfully by {}",
+            // Command/module toggles are decided once at server start (whether a command is
+            // even registered with the dispatcher) — reload only refreshes data, it can't add
+            // or remove already-registered commands. Make that limitation visible instead of
+            // letting an admin assume a config toggle silently "didn't work".
+            source.sendSuccess(() -> MessageUtil.component("commands.neoessentials.root.reload_modules_notice"), false);
+
+            // Re-send the Brigadier command tree to all online players so that any
+            // permission-gated commands appear/disappear correctly in tab-completion
+            // without requiring a relog.
+            try {
+                net.minecraft.server.MinecraftServer cmdServer =
+                    net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
+                if (cmdServer != null) {
+                    for (net.minecraft.server.level.ServerPlayer onlinePlayer :
+                            cmdServer.getPlayerList().getPlayers()) {
+                        cmdServer.getCommands().sendCommands(onlinePlayer);
+                    }
+                    NeoLog.info(LOGGER, LogCategory.COMMANDS, "✓ Command trees re-sent to {} online player(s)",
+                        cmdServer.getPlayerList().getPlayerCount());
+                }
+            } catch (Exception e) {
+                NeoLog.warn(LOGGER, LogCategory.COMMANDS, "Could not re-sync command trees to players after reload: {}", e.getMessage());
+            }
+
+            NeoLog.info(LOGGER, LogCategory.COMMANDS, "Configuration reload completed: {}/{} systems reloaded successfully by {}",
                 successCount, totalCount, source.getTextName());
             return 1;
             
         } catch (Exception e) {
-            LOGGER.error("CRITICAL: Failed to reload configuration: {}", e.getMessage(), e);
-            source.sendFailure(MessageUtil.error("commands.neoessentials.root.reload_config_failed", e.getMessage()));
+            NeoLog.error(LOGGER, LogCategory.COMMANDS, "CRITICAL: Failed to reload configuration: {}", e.getMessage(), e);
+            source.sendFailure(MessageUtil.error("commands.neoessentials.root.reload_error_config", e.getMessage()));
             return 0;
         }
+    }
+
+    private static int validateConfiguration(CommandContext<CommandSourceStack> ctx) {
+        CommandSourceStack source = ctx.getSource();
+        List<String> problems = ConfigSplitter.validateSplitConfigs();
+        if (problems.isEmpty()) {
+            source.sendSuccess(() -> MessageUtil.success("commands.neoessentials.root.config_valid"), false);
+        } else {
+            final int fCount = problems.size();
+            source.sendSuccess(() -> MessageUtil.warning("commands.neoessentials.root.config_validation_problems", fCount), false);
+            for (String problem : problems) {
+                source.sendSuccess(() -> MessageUtil.component("commands.neoessentials.root.config_problem_line", problem), false);
+            }
+            source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.config_repair_hint"), false);
+        }
+        return problems.isEmpty() ? 1 : 0;
+    }
+
+    private static int repairConfiguration(CommandContext<CommandSourceStack> ctx) {
+        CommandSourceStack source = ctx.getSource();
+        if (!ConfigSplitter.isSplittingEnabled()) {
+            source.sendFailure(MessageUtil.error("commands.neoessentials.root.config_repair_not_enabled"));
+            return 0;
+        }
+        source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.config_repairing"), false);
+        int repaired = ConfigSplitter.repairSplitConfigs();
+        if (repaired == 0) {
+            source.sendSuccess(() -> MessageUtil.success("commands.neoessentials.root.config_repair_none_needed"), false);
+        } else {
+            final int r = repaired;
+            source.sendSuccess(() -> MessageUtil.success(
+                "commands.neoessentials.root.config_repaired_count", r), false);
+        }
+        List<String> remaining = ConfigSplitter.validateSplitConfigs();
+        if (!remaining.isEmpty()) {
+            final int fRemaining = remaining.size();
+            source.sendSuccess(() -> MessageUtil.warning(
+                "commands.neoessentials.root.config_repair_remaining", fRemaining), false);
+            for (String p : remaining) {
+                source.sendSuccess(() -> MessageUtil.component("commands.neoessentials.root.config_problem_line", p), false);
+            }
+        }
+        return 1;
+    }
+
+    private static int configStatus(CommandContext<CommandSourceStack> ctx) {
+        CommandSourceStack source = ctx.getSource();
+        boolean splitEnabled = ConfigSplitter.isSplittingEnabled();
+        source.sendSuccess(() -> MessageUtil.component("commands.neoessentials.root.config_status_title"), false);
+        final String fMode = splitEnabled ? "commands.neoessentials.root.config_status_mode_split" : "commands.neoessentials.root.config_status_mode_mono";
+        source.sendSuccess(() -> MessageUtil.component("commands.neoessentials.root.config_status_mode", MessageUtil.localize(fMode)), false);
+        if (splitEnabled) {
+            source.sendSuccess(() -> MessageUtil.component("commands.neoessentials.root.config_status_files_header"), false);
+            for (java.util.Map.Entry<String, java.util.List<String>> e :
+                    ConfigSplitter.FILE_SECTIONS_MAP.entrySet()) {
+                String file = e.getKey();
+                java.io.File f = com.zerog.neoessentials.util.ResourceUtil.getConfigFile(file);
+                boolean exists = f.exists();
+                final String fPrefix = exists ? "  §a✔ " : "  §c✘ ";
+                final String fJoined = String.join(", ", e.getValue());
+                source.sendSuccess(() -> MessageUtil.component(
+                    "commands.neoessentials.root.config_status_file_line", fPrefix, file, fJoined), false);
+            }
+            List<String> problems = ConfigSplitter.validateSplitConfigs();
+            if (problems.isEmpty()) {
+                source.sendSuccess(() -> MessageUtil.component("commands.neoessentials.root.config_status_all_valid"), false);
+            } else {
+                final int n = problems.size();
+                source.sendSuccess(() -> MessageUtil.component(
+                    "commands.neoessentials.root.config_status_problems", n), false);
+            }
+        } else {
+            java.io.File mainCfg = com.zerog.neoessentials.util.ResourceUtil.getConfigFile("config.json");
+            final String fPresence = mainCfg.exists() ? "commands.neoessentials.root.config_status_mono_present" : "commands.neoessentials.root.config_status_mono_missing";
+            source.sendSuccess(() -> MessageUtil.component(
+                "commands.neoessentials.root.config_status_mono_file", MessageUtil.localize(fPresence)), false);
+            source.sendSuccess(() -> MessageUtil.component(
+                "commands.neoessentials.root.config_status_split_tip"), false);
+        }
+        source.sendSuccess(() -> MessageUtil.component("commands.neoessentials.root.config_status_footer"), false);
+        return 1;
     }
 
     private static int splitConfiguration(CommandContext<CommandSourceStack> ctx) {
@@ -318,43 +585,45 @@ public class ModRootCommand {
         try {
             // Check if already using split configs
             if (ConfigSplitter.isSplittingEnabled()) {
-                source.sendSuccess(() -> MessageUtil.warning("commands.neoessentials.root.split_already_enabled"), false);
-                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.split_already_split"), false);
+                source.sendSuccess(() -> MessageUtil.warning("commands.neoessentials.root.config_split_already"), false);
+                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.config_split_already_info"), false);
                 return 0;
             }
 
-            source.sendSuccess(() -> MessageUtil.info("§6" + "─".repeat(40)), false);
-            source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.split_migrating"), false);
-            source.sendSuccess(() -> MessageUtil.info("§6" + "─".repeat(40)), false);
+            final String fSeparator = "─".repeat(40);
+            source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.config_split_separator", fSeparator), false);
+            source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.config_split_migrating"), false);
+            source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.config_split_separator", fSeparator), false);
 
             // Perform the migration
             boolean success = ConfigSplitter.migrateToSplitConfigs();
 
             if (success) {
-                source.sendSuccess(() -> MessageUtil.success("commands.neoessentials.root.split_success"), false);
-                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.split_files_header"), false);
-                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.split_file_main"), false);
-                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.split_file_commands"), false);
-                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.split_file_chat"), false);
-                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.split_file_teleportation"), false);
-                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.split_file_moderation"), false);
-                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.split_file_webdashboard"), false);
-                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.split_file_items"), false);
-                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.split_file_afk"), false);
-                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.split_file_security"), false);
-                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.split_backup"), false);
-                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.split_reload_hint"), false);
-                
-                LOGGER.info("Configuration split completed successfully by {}", source.getTextName());
+                source.sendSuccess(() -> MessageUtil.success("commands.neoessentials.root.config_split_success"), false);
+                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.config_split_info_header"), false);
+                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.config_split_file_main"), false);
+                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.config_split_file_commands"), false);
+                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.config_split_file_chat"), false);
+                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.config_split_file_teleportation"), false);
+                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.config_split_file_moderation"), false);
+                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.config_split_file_items"), false);
+                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.config_split_file_afk"), false);
+                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.config_split_file_security"), false);
+                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.config_split_file_tablist"), false);
+                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.config_split_file_discord_embed"), false);
+                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.config_split_backup_note"), false);
+                source.sendSuccess(() -> MessageUtil.info("commands.neoessentials.root.config_split_reload_hint"), false);
+
+                NeoLog.info(LOGGER, LogCategory.COMMANDS, "Configuration split completed successfully by {}", source.getTextName());
                 return 1;
             } else {
-                source.sendFailure(MessageUtil.error("commands.neoessentials.root.split_failed"));
+                source.sendFailure(MessageUtil.error("commands.neoessentials.root.config_split_failed"));
                 return 0;
             }
-            
+
         } catch (Exception e) {
-            LOGGER.error("Failed to split configuration: {}", e.getMessage(), e);
-            source.sendFailure(MessageUtil.error("commands.neoessentials.root.split_error", e.getMessage()));
+            NeoLog.error(LOGGER, LogCategory.COMMANDS, "Failed to split configuration: {}", e.getMessage(), e);
+            source.sendFailure(MessageUtil.error("commands.neoessentials.root.config_split_error", e.getMessage()));
             return 0;
         }
     }
@@ -378,7 +647,7 @@ public class ModRootCommand {
         
         // Double-check that the command actually exists in the dispatcher
         if (!registry.isCommandActuallyRegistered(commandName, dispatcher)) {
-            LOGGER.warn("Command '{}' is in registry but not in dispatcher - possible registration issue", commandName);
+            NeoLog.warn(LOGGER, LogCategory.COMMANDS, "Command '{}' is in registry but not in dispatcher - possible registration issue", commandName);
             source.sendFailure(MessageUtil.error("commands.neoessentials.root.unknown_command", commandName));
             source.sendFailure(MessageUtil.info("commands.neoessentials.root.help_hint"));
             return 0;
@@ -394,22 +663,22 @@ public class ModRootCommand {
             
             if (parseResults.getReader().canRead()) {
                 // Command has additional arguments that weren't consumed
-                LOGGER.warn("Command '{}' has unconsumed arguments: '{}'", commandString, parseResults.getReader().getRemaining());
+                NeoLog.warn(LOGGER, LogCategory.COMMANDS, "Command '{}' has unconsumed arguments: '{}'", commandString, parseResults.getReader().getRemaining());
             }
             
             // Execute the parsed command
             int result = dispatcher.execute(parseResults);
-            LOGGER.debug("Successfully executed command '{}' with result: {}", commandString, result);
+            NeoLog.debug(LOGGER, LogCategory.COMMANDS, "Successfully executed command '{}' with result: {}", commandString, result);
             return result;
             
         } catch (com.mojang.brigadier.exceptions.CommandSyntaxException e) {
             // Handle command syntax errors gracefully
-            LOGGER.warn("Command syntax error for '{}': {}", commandString, e.getMessage());
+            NeoLog.warn(LOGGER, LogCategory.COMMANDS, "Command syntax error for '{}': {}", commandString, e.getMessage());
             source.sendFailure(MessageUtil.error("commands.neoessentials.root.syntax_error", commandString, e.getMessage()));
             return 0;
         } catch (Exception e) {
             // Handle any other execution errors
-            LOGGER.error("Failed to execute command '{}': {}", commandString, e.getMessage(), e);
+            NeoLog.error(LOGGER, LogCategory.COMMANDS, "Failed to execute command '{}': {}", commandString, e.getMessage(), e);
             source.sendFailure(MessageUtil.error("commands.neoessentials.root.execution_failed", commandString));
             return 0;
         }
@@ -449,13 +718,14 @@ public class ModRootCommand {
         }
         
         for (CommandRegistry.CommandInfo info : availableCommands) {
+            String localizedDesc = getLocalizedDescription(info);
             if (info.hasAliases()) {
                 String aliases = String.join(", /", info.getAliases());
                 source.sendSuccess(() -> MessageUtil.component("commands.neoessentials.root.command_with_aliases", 
-                    info.getName(), aliases, info.getDescription()), false);
+                    info.getName(), aliases, localizedDesc), false);
             } else {
                 source.sendSuccess(() -> MessageUtil.component("commands.neoessentials.root.command_simple", 
-                    info.getName(), info.getDescription()), false);
+                    info.getName(), localizedDesc), false);
             }
         }
         
@@ -464,6 +734,20 @@ public class ModRootCommand {
         return 1;
     }
     
+    /**
+     * Get a localized description for a command.
+     * Checks for a translation key "commands.neoessentials.cmd.NAME.description" first;
+     * falls back to the registered English description if not found.
+     */
+    private static String getLocalizedDescription(CommandRegistry.CommandInfo cmd) {
+        String descKey = "commands.neoessentials.cmd." + cmd.getName().toLowerCase() + ".description";
+        if (com.zerog.neoessentials.util.MessageUtil.hasTranslation(descKey)) {
+            return com.zerog.neoessentials.util.MessageUtil.localize(descKey);
+        }
+        String fallback = cmd.getDescription();
+        return (fallback != null && !fallback.isEmpty()) ? fallback : "NeoEssentials command";
+    }
+
     /**
      * Check if a player has permission to use a specific command.
      * @param player Player to check

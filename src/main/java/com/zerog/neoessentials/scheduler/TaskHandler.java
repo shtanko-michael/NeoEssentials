@@ -7,6 +7,8 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,7 +24,7 @@ import java.util.*;
  */
 public class TaskHandler implements HttpHandler {
     private static final Logger LOGGER = LoggerFactory.getLogger(TaskHandler.class);
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
     
     @Override
     public void handle(HttpExchange exchange) throws IOException {
@@ -380,6 +382,7 @@ public class TaskHandler implements HttpHandler {
                 response.add("nextExecutions", nextExecutions);
                 
             } catch (Exception e) {
+                NeoLog.debug(LOGGER, LogCategory.GENERAL, "Failed to compute next executions for cron '{}'", cronExpression, e);
                 response.addProperty("error", e.getMessage());
             }
         } else {
@@ -419,6 +422,7 @@ public class TaskHandler implements HttpHandler {
             CronParser parser = new CronParser(task.getCronExpression());
             obj.addProperty("cronDescription", parser.getDescription());
         } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Failed to describe cron expression '{}'", task.getCronExpression(), e);
             obj.addProperty("cronDescription", "Invalid expression");
         }
         

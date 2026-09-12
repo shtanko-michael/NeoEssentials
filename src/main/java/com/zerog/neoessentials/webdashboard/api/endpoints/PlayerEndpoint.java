@@ -1,11 +1,16 @@
 package com.zerog.neoessentials.webdashboard.api.endpoints;
 
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import com.zerog.neoessentials.webdashboard.data.PlayerDataCollector;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.GameType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,11 +36,18 @@ public class PlayerEndpoint implements HttpHandler {
     }
     
     /**
-     * Convert username to UUID (must be called from server thread)
+     * Convert username to UUID (must be called from server thread). Falls back to the
+     * profile cache for offline players — without this, profile/stats/inventory/xp/
+     * location all silently 404'd for anyone not currently online, even though the
+     * underlying collector methods already support reading offline player data.
      */
     private UUID usernameToUuid(String username) {
         ServerPlayer player = server.getPlayerList().getPlayerByName(username);
-        return player != null ? player.getUUID() : null;
+        if (player != null) return player.getUUID();
+
+        var cache = server.getProfileCache();
+        if (cache == null) return null;
+        return cache.get(username).map(com.mojang.authlib.GameProfile::getId).orElse(null);
     }
     
     @Override
@@ -43,10 +55,78 @@ public class PlayerEndpoint implements HttpHandler {
         String path = exchange.getRequestURI().getPath();
         String method = exchange.getRequestMethod();
         
-        LOGGER.debug("PlayerEndpoint handling request: {} {}", method, path);
+        NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "PlayerEndpoint handling request: {} {}", method, path);
 
         try {
-            // Only allow GET requests
+            // Route POST requests
+            if ("POST".equals(method)) {
+                if (path.matches("/api/player/kick/.*")) {
+                    String username = path.substring("/api/player/kick/".length());
+                    handleKick(exchange, username);
+                } else if (path.matches("/api/player/gamemode/.*")) {
+                    String username = path.substring("/api/player/gamemode/".length());
+                    handleGamemode(exchange, username);
+                } else if (path.matches("/api/player/teleport/.*")) {
+                    String username = path.substring("/api/player/teleport/".length());
+                    handleTeleport(exchange, username);
+                } else if (path.matches("/api/player/heal/.*")) {
+                    String username = path.substring("/api/player/heal/".length());
+                    handleHeal(exchange, username);
+                } else if (path.matches("/api/player/fly/.*")) {
+                    String username = path.substring("/api/player/fly/".length());
+                    handleFly(exchange, username);
+                } else if (path.matches("/api/player/god/.*")) {
+                    String username = path.substring("/api/player/god/".length());
+                    handleGod(exchange, username);
+                } else if (path.matches("/api/player/feed/.*")) {
+                    String username = path.substring("/api/player/feed/".length());
+                    handleFeed(exchange, username);
+                } else if (path.matches("/api/player/extinguish/.*")) {
+                    String username = path.substring("/api/player/extinguish/".length());
+                    handleExtinguish(exchange, username);
+                } else if (path.matches("/api/player/speed/.*")) {
+                    String username = path.substring("/api/player/speed/".length());
+                    handleSpeed(exchange, username);
+                } else if (path.matches("/api/player/nickname/.*")) {
+                    String username = path.substring("/api/player/nickname/".length());
+                    handleNickname(exchange, username);
+                } else if (path.matches("/api/player/give/.*")) {
+                    String username = path.substring("/api/player/give/".length());
+                    handleGive(exchange, username);
+                } else if (path.matches("/api/player/burn/.*")) {
+                    String username = path.substring("/api/player/burn/".length());
+                    handleBurn(exchange, username);
+                } else if (path.matches("/api/player/kill/.*")) {
+                    String username = path.substring("/api/player/kill/".length());
+                    handleKill(exchange, username);
+                } else if (path.matches("/api/player/effect/.*")) {
+                    String username = path.substring("/api/player/effect/".length());
+                    handleEffect(exchange, username);
+                } else if (path.matches("/api/player/lightning/.*")) {
+                    String username = path.substring("/api/player/lightning/".length());
+                    handleLightning(exchange, username);
+                } else if (path.matches("/api/player/spawnmob/.*")) {
+                    String username = path.substring("/api/player/spawnmob/".length());
+                    handleSpawnMob(exchange, username);
+                } else if (path.matches("/api/player/sudo/.*")) {
+                    String username = path.substring("/api/player/sudo/".length());
+                    handleSudo(exchange, username);
+                } else if (path.matches("/api/player/clearinventory/.*")) {
+                    String username = path.substring("/api/player/clearinventory/".length());
+                    handleClearInventory(exchange, username);
+                } else if (path.matches("/api/player/ptime/.*")) {
+                    String username = path.substring("/api/player/ptime/".length());
+                    handleSetPtime(exchange, username);
+                } else if (path.matches("/api/player/pweather/.*")) {
+                    String username = path.substring("/api/player/pweather/".length());
+                    handleSetPweather(exchange, username);
+                } else {
+                    sendResponse(exchange, 404, "{\"error\":\"Endpoint not found\"}");
+                }
+                return;
+            }
+
+            // Only allow GET requests beyond this point
             if (!"GET".equals(method)) {
                 sendResponse(exchange, 405, "{\"error\":\"Method not allowed\"}");
                 return;
@@ -55,10 +135,10 @@ public class PlayerEndpoint implements HttpHandler {
             // Execute data collection on server thread for thread safety
             CompletableFuture<JsonObject> future = CompletableFuture.supplyAsync(() -> {
                 try {
-                    LOGGER.debug("Collecting player data for endpoint: {}", path);
+                    NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Collecting player data for endpoint: {}", path);
                     return getResponse(path);
                 } catch (Exception e) {
-                    LOGGER.error("Error collecting player data for path: {}", path, e);
+                    NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Error collecting player data for path: {}", path, e);
                     JsonObject error = new JsonObject();
                     error.addProperty("error", e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
                     return error;
@@ -69,13 +149,13 @@ public class PlayerEndpoint implements HttpHandler {
             JsonObject response;
             try {
                 response = future.get(10, TimeUnit.SECONDS);
-                LOGGER.debug("Player data collected successfully for: {}", path);
+                NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Player data collected successfully for: {}", path);
             } catch (java.util.concurrent.TimeoutException e) {
-                LOGGER.error("Timeout waiting for player data collection: {}", path);
+                NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Timeout waiting for player data collection: {}", path);
                 response = new JsonObject();
                 response.addProperty("error", "Request timeout - server may be overloaded");
             } catch (java.util.concurrent.ExecutionException e) {
-                LOGGER.error("Execution error during player data collection: {}", path, e);
+                NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Execution error during player data collection: {}", path, e);
                 response = new JsonObject();
                 response.addProperty("error", "Internal server error: " + (e.getCause() != null ? e.getCause().getMessage() : e.getMessage()));
             }
@@ -95,35 +175,1045 @@ public class PlayerEndpoint implements HttpHandler {
             // IOException often means client disconnected - don't try to send error response
             String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
             if (errorMsg.contains("stream is closed") || errorMsg.contains("Broken pipe") || errorMsg.contains("Connection reset")) {
-                LOGGER.warn("Client disconnected during request: {} {} - {}", method, path, errorMsg);
+                NeoLog.warn(LOGGER, LogCategory.WEB_DASHBOARD, "Client disconnected during request: {} {} - {}", method, path, errorMsg);
             } else {
-                LOGGER.error("IOException handling request: {} {}", method, path, e);
+                NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "IOException handling request: {} {}", method, path, e);
                 try {
                     String errorResponse = String.format("{\"error\":\"IO Error: %s\"}", errorMsg);
                     sendResponse(exchange, 500, errorResponse);
                 } catch (IOException e2) {
-                    LOGGER.debug("Could not send error response (client likely disconnected): {}", e2.getMessage());
+                    NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Could not send error response (client likely disconnected): {}", e2.getMessage());
                 }
             }
         } catch (Exception e) {
-            LOGGER.error("Unexpected error handling request: {} {}", method, path, e);
+            NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Unexpected error handling request: {} {}", method, path, e);
             try {
                 String errorMsg = e.getMessage() != null ? e.getMessage().replace("\"", "\\\"") : "Unknown error";
                 String errorResponse = String.format("{\"error\":\"%s\"}", errorMsg);
                 sendResponse(exchange, 500, errorResponse);
             } catch (IOException e2) {
-                LOGGER.debug("Could not send error response (client likely disconnected): {}", e2.getMessage());
+                NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Could not send error response (client likely disconnected): {}", e2.getMessage());
             }
         } finally {
             // Safely close exchange - don't log error if already closed
             try {
                 exchange.close();
             } catch (Exception e) {
-                // Ignore - exchange may already be closed
+                NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Exchange already closed: {}", e.getMessage());
             }
         }
     }
     
+    // ── POST /api/player/kick/{username} ────────────────────────────────────
+
+    private void handleKick(HttpExchange exchange, String username) throws IOException {
+        if (!isAdmin(exchange)) {
+            sendResponse(exchange, 403, "{\"success\":false,\"error\":\"Admin permission required\"}");
+            return;
+        }
+        String bodyJson = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        String reason;
+        try {
+            JsonObject body = JsonParser.parseString(bodyJson).getAsJsonObject();
+            reason = body.has("reason") ? body.get("reason").getAsString() : "Kicked by dashboard admin";
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Invalid kick request body for {}, using default reason: {}", username, e.getMessage());
+            reason = "Kicked by dashboard admin";
+        }
+        final String finalReason = reason;
+        final String kickedBy = (String) exchange.getAttribute("auth-username");
+
+        CompletableFuture<JsonObject> future = CompletableFuture.supplyAsync(() -> {
+            JsonObject resp = new JsonObject();
+            try {
+                ServerPlayer player = server.getPlayerList().getPlayerByName(username);
+                if (player == null) {
+                    resp.addProperty("success", false);
+                    resp.addProperty("error", "Player '" + username + "' is not online");
+                    return resp;
+                }
+                player.connection.disconnect(Component.literal(finalReason));
+                // Record via KickManager so dashboard-initiated kicks show up in kick
+                // history alongside /kick-command kicks, instead of leaving no trace.
+                com.zerog.neoessentials.moderation.KickManager.getInstance()
+                    .recordKick(username, player.getUUID(), finalReason, kickedBy != null ? kickedBy : "dashboard");
+                resp.addProperty("success", true);
+                resp.addProperty("message", username + " was kicked: " + finalReason);
+            } catch (Exception e) {
+                NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Player action failed for {}: {}", username, e.getMessage(), e);
+                resp.addProperty("success", false);
+                resp.addProperty("error", e.getMessage());
+            }
+            return resp;
+        }, server);
+
+        JsonObject result;
+        try {
+            result = future.get(8, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Timeout or server error waiting for player action on {}: {}", username, e.getMessage(), e);
+            result = new JsonObject();
+            result.addProperty("success", false);
+            result.addProperty("error", "Timeout or server error: " + e.getMessage());
+        }
+        int status = result.has("success") && result.get("success").getAsBoolean() ? 200 : 400;
+        sendResponse(exchange, status, result.toString());
+    }
+
+    // ── POST /api/player/gamemode/{username} ─────────────────────────────────
+    // Body: {"gamemode": "creative"}  (survival / creative / adventure / spectator)
+
+    private void handleGamemode(HttpExchange exchange, String username) throws IOException {
+        if (!isAdmin(exchange)) {
+            sendResponse(exchange, 403, "{\"success\":false,\"error\":\"Admin permission required\"}");
+            return;
+        }
+        String bodyJson = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        GameType targetMode;
+        try {
+            JsonObject body = JsonParser.parseString(bodyJson).getAsJsonObject();
+            String gm = body.has("gamemode") ? body.get("gamemode").getAsString().toLowerCase() : "survival";
+            targetMode = switch (gm) {
+                case "creative"   -> GameType.CREATIVE;
+                case "adventure"  -> GameType.ADVENTURE;
+                case "spectator"  -> GameType.SPECTATOR;
+                default           -> GameType.SURVIVAL;
+            };
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Invalid gamemode request body for {}: {}", username, e.getMessage());
+            sendResponse(exchange, 400, "{\"success\":false,\"error\":\"Invalid body or gamemode\"}");
+            return;
+        }
+        final GameType finalMode = targetMode;
+
+        CompletableFuture<JsonObject> future = CompletableFuture.supplyAsync(() -> {
+            JsonObject resp = new JsonObject();
+            try {
+                ServerPlayer player = server.getPlayerList().getPlayerByName(username);
+                if (player == null) {
+                    resp.addProperty("success", false);
+                    resp.addProperty("error", "Player '" + username + "' is not online");
+                    return resp;
+                }
+                player.setGameMode(finalMode);
+                resp.addProperty("success", true);
+                resp.addProperty("message", username + "'s game mode is now " + finalMode.getName());
+            } catch (Exception e) {
+                NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Player action failed for {}: {}", username, e.getMessage(), e);
+                resp.addProperty("success", false);
+                resp.addProperty("error", e.getMessage());
+            }
+            return resp;
+        }, server);
+
+        JsonObject result;
+        try {
+            result = future.get(8, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Timeout or server error waiting for player action on {}: {}", username, e.getMessage(), e);
+            result = new JsonObject();
+            result.addProperty("success", false);
+            result.addProperty("error", "Timeout or server error: " + e.getMessage());
+        }
+        int status = result.has("success") && result.get("success").getAsBoolean() ? 200 : 400;
+        sendResponse(exchange, status, result.toString());
+    }
+
+    // ── POST /api/player/teleport/{username} ─────────────────────────────────
+    // Body: {"targetUsername": "..."} OR {"x":, "y":, "z":, "world"?: "minecraft:overworld"}
+
+    private void handleTeleport(HttpExchange exchange, String username) throws IOException {
+        if (!isAdmin(exchange)) {
+            sendResponse(exchange, 403, "{\"success\":false,\"error\":\"Admin permission required\"}");
+            return;
+        }
+        String bodyJson = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        JsonObject body;
+        try {
+            body = JsonParser.parseString(bodyJson).getAsJsonObject();
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Invalid teleport request body for {}: {}", username, e.getMessage());
+            sendResponse(exchange, 400, "{\"success\":false,\"error\":\"Invalid JSON body\"}");
+            return;
+        }
+        final JsonObject finalBody = body;
+
+        CompletableFuture<JsonObject> future = CompletableFuture.supplyAsync(() -> {
+            JsonObject resp = new JsonObject();
+            try {
+                ServerPlayer player = server.getPlayerList().getPlayerByName(username);
+                if (player == null) {
+                    resp.addProperty("success", false);
+                    resp.addProperty("error", "Player '" + username + "' is not online");
+                    return resp;
+                }
+
+                if (finalBody.has("targetUsername")) {
+                    String targetName = finalBody.get("targetUsername").getAsString();
+                    ServerPlayer target = server.getPlayerList().getPlayerByName(targetName);
+                    if (target == null) {
+                        resp.addProperty("success", false);
+                        resp.addProperty("error", "Target player '" + targetName + "' is not online");
+                        return resp;
+                    }
+                    player.teleportTo(com.zerog.neoessentials.util.LevelCompat.of(target), target.getX(), target.getY(), target.getZ(),
+                        player.getYRot(), player.getXRot());
+                    resp.addProperty("success", true);
+                    resp.addProperty("message", username + " teleported to " + targetName);
+                } else if (finalBody.has("x") && finalBody.has("y") && finalBody.has("z")) {
+                    net.minecraft.server.level.ServerLevel level = com.zerog.neoessentials.util.LevelCompat.of(player);
+                    if (finalBody.has("world")) {
+                        String worldName = finalBody.get("world").getAsString();
+                        net.minecraft.resources.ResourceLocation worldKey = worldName.contains(":")
+                            ? net.minecraft.resources.ResourceLocation.parse(worldName)
+                            : net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("minecraft", worldName);
+                        net.minecraft.server.level.ServerLevel requested = server.getLevel(
+                            net.minecraft.resources.ResourceKey.create(
+                                net.minecraft.core.registries.Registries.DIMENSION, worldKey));
+                        if (requested != null) level = requested;
+                    }
+                    double x = finalBody.get("x").getAsDouble();
+                    double y = finalBody.get("y").getAsDouble();
+                    double z = finalBody.get("z").getAsDouble();
+                    player.teleportTo(level, x, y, z, player.getYRot(), player.getXRot());
+                    resp.addProperty("success", true);
+                    resp.addProperty("message", username + " teleported to " + x + ", " + y + ", " + z);
+                } else {
+                    resp.addProperty("success", false);
+                    resp.addProperty("error", "Body must contain 'targetUsername' or 'x'/'y'/'z'");
+                }
+            } catch (Exception e) {
+                NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Player action failed for {}: {}", username, e.getMessage(), e);
+                resp.addProperty("success", false);
+                resp.addProperty("error", e.getMessage());
+            }
+            return resp;
+        }, server);
+
+        JsonObject result;
+        try {
+            result = future.get(8, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Timeout or server error waiting for player action on {}: {}", username, e.getMessage(), e);
+            result = new JsonObject();
+            result.addProperty("success", false);
+            result.addProperty("error", "Timeout or server error: " + e.getMessage());
+        }
+        int status = result.has("success") && result.get("success").getAsBoolean() ? 200 : 400;
+        sendResponse(exchange, status, result.toString());
+    }
+
+    // ── POST /api/player/heal/{username} ──────────────────────────────────────
+    // Heals to full health and feeds to full hunger/saturation.
+
+    private void handleHeal(HttpExchange exchange, String username) throws IOException {
+        if (!isAdmin(exchange)) {
+            sendResponse(exchange, 403, "{\"success\":false,\"error\":\"Admin permission required\"}");
+            return;
+        }
+
+        CompletableFuture<JsonObject> future = CompletableFuture.supplyAsync(() -> {
+            JsonObject resp = new JsonObject();
+            try {
+                ServerPlayer player = server.getPlayerList().getPlayerByName(username);
+                if (player == null) {
+                    resp.addProperty("success", false);
+                    resp.addProperty("error", "Player '" + username + "' is not online");
+                    return resp;
+                }
+                player.setHealth(player.getMaxHealth());
+                player.getFoodData().setFoodLevel(20);
+                player.getFoodData().setSaturation(20.0f);
+                resp.addProperty("success", true);
+                resp.addProperty("message", username + " healed and fed");
+            } catch (Exception e) {
+                NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Player action failed for {}: {}", username, e.getMessage(), e);
+                resp.addProperty("success", false);
+                resp.addProperty("error", e.getMessage());
+            }
+            return resp;
+        }, server);
+
+        JsonObject result;
+        try {
+            result = future.get(8, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Timeout or server error waiting for player action on {}: {}", username, e.getMessage(), e);
+            result = new JsonObject();
+            result.addProperty("success", false);
+            result.addProperty("error", "Timeout or server error: " + e.getMessage());
+        }
+        int status = result.has("success") && result.get("success").getAsBoolean() ? 200 : 400;
+        sendResponse(exchange, status, result.toString());
+    }
+
+    // ── POST /api/player/fly/{username} ───────────────────────────────────────
+    // Body (optional): {"enable": true|false} — omit to toggle current state.
+
+    private void handleFly(HttpExchange exchange, String username) throws IOException {
+        if (!isAdmin(exchange)) {
+            sendResponse(exchange, 403, "{\"success\":false,\"error\":\"Admin permission required\"}");
+            return;
+        }
+        Boolean enable = readOptionalBoolean(exchange, "enable");
+
+        CompletableFuture<JsonObject> future = CompletableFuture.supplyAsync(() -> {
+            JsonObject resp = new JsonObject();
+            try {
+                ServerPlayer player = server.getPlayerList().getPlayerByName(username);
+                if (player == null) {
+                    resp.addProperty("success", false);
+                    resp.addProperty("error", "Player '" + username + "' is not online");
+                    return resp;
+                }
+                boolean newState = com.zerog.neoessentials.util.commands.PlayerStateCommands.setFly(player, enable);
+                resp.addProperty("success", true);
+                resp.addProperty("enabled", newState);
+                resp.addProperty("message", username + "'s flight is now " + (newState ? "enabled" : "disabled"));
+            } catch (Exception e) {
+                NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Player action failed for {}: {}", username, e.getMessage(), e);
+                resp.addProperty("success", false);
+                resp.addProperty("error", e.getMessage());
+            }
+            return resp;
+        }, server);
+
+        sendFutureResult(exchange, future);
+    }
+
+    // ── POST /api/player/god/{username} ───────────────────────────────────────
+    // Body (optional): {"enable": true|false} — omit to toggle current state.
+
+    private void handleGod(HttpExchange exchange, String username) throws IOException {
+        if (!isAdmin(exchange)) {
+            sendResponse(exchange, 403, "{\"success\":false,\"error\":\"Admin permission required\"}");
+            return;
+        }
+        Boolean enable = readOptionalBoolean(exchange, "enable");
+
+        CompletableFuture<JsonObject> future = CompletableFuture.supplyAsync(() -> {
+            JsonObject resp = new JsonObject();
+            try {
+                ServerPlayer player = server.getPlayerList().getPlayerByName(username);
+                if (player == null) {
+                    resp.addProperty("success", false);
+                    resp.addProperty("error", "Player '" + username + "' is not online");
+                    return resp;
+                }
+                boolean newState = com.zerog.neoessentials.util.commands.PlayerStateCommands.setGod(player, enable);
+                resp.addProperty("success", true);
+                resp.addProperty("enabled", newState);
+                resp.addProperty("message", username + "'s god mode is now " + (newState ? "enabled" : "disabled"));
+            } catch (Exception e) {
+                NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Player action failed for {}: {}", username, e.getMessage(), e);
+                resp.addProperty("success", false);
+                resp.addProperty("error", e.getMessage());
+            }
+            return resp;
+        }, server);
+
+        sendFutureResult(exchange, future);
+    }
+
+    // ── POST /api/player/feed/{username} ──────────────────────────────────────
+
+    private void handleFeed(HttpExchange exchange, String username) throws IOException {
+        if (!isAdmin(exchange)) {
+            sendResponse(exchange, 403, "{\"success\":false,\"error\":\"Admin permission required\"}");
+            return;
+        }
+
+        CompletableFuture<JsonObject> future = CompletableFuture.supplyAsync(() -> {
+            JsonObject resp = new JsonObject();
+            try {
+                ServerPlayer player = server.getPlayerList().getPlayerByName(username);
+                if (player == null) {
+                    resp.addProperty("success", false);
+                    resp.addProperty("error", "Player '" + username + "' is not online");
+                    return resp;
+                }
+                com.zerog.neoessentials.util.commands.PlayerStateCommands.feedPlayer(player);
+                resp.addProperty("success", true);
+                resp.addProperty("message", username + " fed");
+            } catch (Exception e) {
+                NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Player action failed for {}: {}", username, e.getMessage(), e);
+                resp.addProperty("success", false);
+                resp.addProperty("error", e.getMessage());
+            }
+            return resp;
+        }, server);
+
+        sendFutureResult(exchange, future);
+    }
+
+    // ── POST /api/player/extinguish/{username} ────────────────────────────────
+
+    private void handleExtinguish(HttpExchange exchange, String username) throws IOException {
+        if (!isAdmin(exchange)) {
+            sendResponse(exchange, 403, "{\"success\":false,\"error\":\"Admin permission required\"}");
+            return;
+        }
+
+        CompletableFuture<JsonObject> future = CompletableFuture.supplyAsync(() -> {
+            JsonObject resp = new JsonObject();
+            try {
+                ServerPlayer player = server.getPlayerList().getPlayerByName(username);
+                if (player == null) {
+                    resp.addProperty("success", false);
+                    resp.addProperty("error", "Player '" + username + "' is not online");
+                    return resp;
+                }
+                com.zerog.neoessentials.util.commands.PlayerStateCommands.extinguishPlayer(player);
+                resp.addProperty("success", true);
+                resp.addProperty("message", username + " extinguished");
+            } catch (Exception e) {
+                NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Player action failed for {}: {}", username, e.getMessage(), e);
+                resp.addProperty("success", false);
+                resp.addProperty("error", e.getMessage());
+            }
+            return resp;
+        }, server);
+
+        sendFutureResult(exchange, future);
+    }
+
+    // ── POST /api/player/speed/{username} ─────────────────────────────────────
+    // Body: {"type": "walk"|"fly", "speed": 0-10}
+
+    private void handleSpeed(HttpExchange exchange, String username) throws IOException {
+        if (!isAdmin(exchange)) {
+            sendResponse(exchange, 403, "{\"success\":false,\"error\":\"Admin permission required\"}");
+            return;
+        }
+        String bodyJson = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        boolean fly;
+        float speed;
+        try {
+            JsonObject body = JsonParser.parseString(bodyJson).getAsJsonObject();
+            fly = body.has("type") && "fly".equalsIgnoreCase(body.get("type").getAsString());
+            speed = body.has("speed") ? body.get("speed").getAsFloat() : 1f;
+            speed = Math.max(0f, Math.min(10f, speed));
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Invalid speed request body for {}: {}", username, e.getMessage());
+            sendResponse(exchange, 400, "{\"success\":false,\"error\":\"Invalid body\"}");
+            return;
+        }
+        final boolean finalFly = fly;
+        final float finalSpeed = speed;
+
+        CompletableFuture<JsonObject> future = CompletableFuture.supplyAsync(() -> {
+            JsonObject resp = new JsonObject();
+            try {
+                ServerPlayer player = server.getPlayerList().getPlayerByName(username);
+                if (player == null) {
+                    resp.addProperty("success", false);
+                    resp.addProperty("error", "Player '" + username + "' is not online");
+                    return resp;
+                }
+                com.zerog.neoessentials.util.commands.PlayerStateCommands.setSpeed(player, finalFly, finalSpeed);
+                resp.addProperty("success", true);
+                resp.addProperty("message", username + "'s " + (finalFly ? "fly" : "walk") + " speed set to " + finalSpeed);
+            } catch (Exception e) {
+                NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Player action failed for {}: {}", username, e.getMessage(), e);
+                resp.addProperty("success", false);
+                resp.addProperty("error", e.getMessage());
+            }
+            return resp;
+        }, server);
+
+        sendFutureResult(exchange, future);
+    }
+
+    // ── POST /api/player/nickname/{username} ──────────────────────────────────
+    // Body: {"nickname": "..."} — omit/blank/"reset"/"off" clears the nickname.
+
+    private void handleNickname(HttpExchange exchange, String username) throws IOException {
+        if (!isAdmin(exchange)) {
+            sendResponse(exchange, 403, "{\"success\":false,\"error\":\"Admin permission required\"}");
+            return;
+        }
+        String bodyJson = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        String nickname = null;
+        try {
+            if (!bodyJson.isBlank()) {
+                JsonObject body = JsonParser.parseString(bodyJson).getAsJsonObject();
+                if (body.has("nickname") && !body.get("nickname").isJsonNull()) {
+                    nickname = body.get("nickname").getAsString();
+                }
+            }
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Invalid nickname request body for {}: {}", username, e.getMessage());
+            sendResponse(exchange, 400, "{\"success\":false,\"error\":\"Invalid body\"}");
+            return;
+        }
+        final String finalNickname = nickname;
+
+        CompletableFuture<JsonObject> future = CompletableFuture.supplyAsync(() -> {
+            JsonObject resp = new JsonObject();
+            try {
+                ServerPlayer player = server.getPlayerList().getPlayerByName(username);
+                if (player == null) {
+                    resp.addProperty("success", false);
+                    resp.addProperty("error", "Player '" + username + "' is not online");
+                    return resp;
+                }
+                String error = com.zerog.neoessentials.util.commands.NickCommand.setNicknameAdmin(player, finalNickname);
+                if (error != null) {
+                    resp.addProperty("success", false);
+                    resp.addProperty("error", error);
+                } else {
+                    resp.addProperty("success", true);
+                    resp.addProperty("message", "Nickname updated for " + username);
+                }
+            } catch (Exception e) {
+                NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Player action failed for {}: {}", username, e.getMessage(), e);
+                resp.addProperty("success", false);
+                resp.addProperty("error", e.getMessage());
+            }
+            return resp;
+        }, server);
+
+        sendFutureResult(exchange, future);
+    }
+
+    // ── POST /api/player/give/{username} ──────────────────────────────────────
+    // Body: {"item": "minecraft:diamond_sword", "amount": 1}
+
+    private void handleGive(HttpExchange exchange, String username) throws IOException {
+        if (!isAdmin(exchange)) {
+            sendResponse(exchange, 403, "{\"success\":false,\"error\":\"Admin permission required\"}");
+            return;
+        }
+        String bodyJson = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        String itemId;
+        int amount;
+        try {
+            JsonObject body = JsonParser.parseString(bodyJson).getAsJsonObject();
+            itemId = body.has("item") ? body.get("item").getAsString() : "";
+            amount = body.has("amount") ? Math.max(1, Math.min(3456, body.get("amount").getAsInt())) : 1;
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Invalid give request body for {}: {}", username, e.getMessage());
+            sendResponse(exchange, 400, "{\"success\":false,\"error\":\"Invalid body\"}");
+            return;
+        }
+        if (itemId.isBlank()) {
+            sendResponse(exchange, 400, "{\"success\":false,\"error\":\"Missing 'item'\"}");
+            return;
+        }
+        final String finalItemId = itemId;
+        final int finalAmount = amount;
+
+        CompletableFuture<JsonObject> future = CompletableFuture.supplyAsync(() -> {
+            JsonObject resp = new JsonObject();
+            try {
+                ServerPlayer player = server.getPlayerList().getPlayerByName(username);
+                if (player == null) {
+                    resp.addProperty("success", false);
+                    resp.addProperty("error", "Player '" + username + "' is not online");
+                    return resp;
+                }
+                net.minecraft.world.item.ItemStack stack = com.zerog.neoessentials.economy.worth.WorthManager.resolveItem(finalItemId);
+                if (stack == null) {
+                    resp.addProperty("success", false);
+                    resp.addProperty("error", "Unknown item: " + finalItemId);
+                    return resp;
+                }
+                int remaining = finalAmount;
+                int maxStack = stack.getMaxStackSize();
+                while (remaining > 0) {
+                    int give = Math.min(remaining, maxStack);
+                    net.minecraft.world.item.ItemStack toGive = stack.copyWithCount(give);
+                    if (!player.getInventory().add(toGive)) {
+                        player.drop(toGive, false);
+                    }
+                    remaining -= give;
+                }
+                resp.addProperty("success", true);
+                resp.addProperty("message", "Gave " + finalAmount + "x " + finalItemId + " to " + username);
+            } catch (Exception e) {
+                NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Player action failed for {}: {}", username, e.getMessage(), e);
+                resp.addProperty("success", false);
+                resp.addProperty("error", e.getMessage());
+            }
+            return resp;
+        }, server);
+
+        sendFutureResult(exchange, future);
+    }
+
+    // ── POST /api/player/burn/{username} ──────────────────────────────────────
+    // Body (optional): {"seconds": 10}
+
+    private void handleBurn(HttpExchange exchange, String username) throws IOException {
+        if (!isAdmin(exchange)) {
+            sendResponse(exchange, 403, "{\"success\":false,\"error\":\"Admin permission required\"}");
+            return;
+        }
+        String bodyJson = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        int seconds = 10;
+        try {
+            if (!bodyJson.isBlank()) {
+                JsonObject body = JsonParser.parseString(bodyJson).getAsJsonObject();
+                if (body.has("seconds")) seconds = Math.max(1, Math.min(600, body.get("seconds").getAsInt()));
+            }
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Invalid 'seconds' in burn request body, using default: {}", e.getMessage());
+        }
+        final int finalSeconds = seconds;
+
+        CompletableFuture<JsonObject> future = CompletableFuture.supplyAsync(() -> {
+            JsonObject resp = new JsonObject();
+            try {
+                ServerPlayer player = server.getPlayerList().getPlayerByName(username);
+                if (player == null) {
+                    resp.addProperty("success", false);
+                    resp.addProperty("error", "Player '" + username + "' is not online");
+                    return resp;
+                }
+                player.setRemainingFireTicks(finalSeconds * 20);
+                resp.addProperty("success", true);
+                resp.addProperty("message", username + " set on fire for " + finalSeconds + "s");
+            } catch (Exception e) {
+                NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Player action failed for {}: {}", username, e.getMessage(), e);
+                resp.addProperty("success", false);
+                resp.addProperty("error", e.getMessage());
+            }
+            return resp;
+        }, server);
+
+        sendFutureResult(exchange, future);
+    }
+
+    // ── POST /api/player/kill/{username} ──────────────────────────────────────
+
+    private void handleKill(HttpExchange exchange, String username) throws IOException {
+        if (!isAdmin(exchange)) {
+            sendResponse(exchange, 403, "{\"success\":false,\"error\":\"Admin permission required\"}");
+            return;
+        }
+
+        CompletableFuture<JsonObject> future = CompletableFuture.supplyAsync(() -> {
+            JsonObject resp = new JsonObject();
+            try {
+                ServerPlayer player = server.getPlayerList().getPlayerByName(username);
+                if (player == null) {
+                    resp.addProperty("success", false);
+                    resp.addProperty("error", "Player '" + username + "' is not online");
+                    return resp;
+                }
+                player.hurt(player.damageSources().genericKill(), Float.MAX_VALUE);
+                resp.addProperty("success", true);
+                resp.addProperty("message", username + " killed");
+            } catch (Exception e) {
+                NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Player action failed for {}: {}", username, e.getMessage(), e);
+                resp.addProperty("success", false);
+                resp.addProperty("error", e.getMessage());
+            }
+            return resp;
+        }, server);
+
+        sendFutureResult(exchange, future);
+    }
+
+    // ── POST /api/player/effect/{username} ────────────────────────────────────
+    // Body: {"clear": true} OR {"effect": "speed", "duration": 30, "amplifier": 0}
+
+    private void handleEffect(HttpExchange exchange, String username) throws IOException {
+        if (!isAdmin(exchange)) {
+            sendResponse(exchange, 403, "{\"success\":false,\"error\":\"Admin permission required\"}");
+            return;
+        }
+        String bodyJson = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        JsonObject body;
+        try {
+            body = JsonParser.parseString(bodyJson).getAsJsonObject();
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Invalid effect request body for {}: {}", username, e.getMessage());
+            sendResponse(exchange, 400, "{\"success\":false,\"error\":\"Invalid body\"}");
+            return;
+        }
+        final boolean clear = body.has("clear") && body.get("clear").getAsBoolean();
+        final String effectId = body.has("effect") ? body.get("effect").getAsString() : null;
+        final int duration = body.has("duration") ? Math.max(1, body.get("duration").getAsInt()) : 30;
+        final int amplifier = body.has("amplifier") ? Math.max(0, Math.min(255, body.get("amplifier").getAsInt())) : 0;
+
+        if (!clear && (effectId == null || effectId.isBlank())) {
+            sendResponse(exchange, 400, "{\"success\":false,\"error\":\"Body must contain 'clear':true or an 'effect'\"}");
+            return;
+        }
+
+        CompletableFuture<JsonObject> future = CompletableFuture.supplyAsync(() -> {
+            JsonObject resp = new JsonObject();
+            try {
+                ServerPlayer player = server.getPlayerList().getPlayerByName(username);
+                if (player == null) {
+                    resp.addProperty("success", false);
+                    resp.addProperty("error", "Player '" + username + "' is not online");
+                    return resp;
+                }
+                if (clear) {
+                    player.removeAllEffects();
+                    resp.addProperty("success", true);
+                    resp.addProperty("message", "Cleared all effects on " + username);
+                    return resp;
+                }
+                String id = effectId.contains(":") ? effectId : "minecraft:" + effectId;
+                net.minecraft.resources.ResourceLocation loc = net.minecraft.resources.ResourceLocation.tryParse(id);
+                var effectHolder = loc != null ? net.minecraft.core.registries.BuiltInRegistries.MOB_EFFECT.get(loc) : null;
+                if (effectHolder == null) {
+                    effectHolder = net.minecraft.core.registries.BuiltInRegistries.MOB_EFFECT.entrySet().stream()
+                        .filter(e -> e.getKey().location().getPath().equals(effectId.toLowerCase()))
+                        .map(java.util.Map.Entry::getValue)
+                        .findFirst().orElse(null);
+                }
+                if (effectHolder == null) {
+                    resp.addProperty("success", false);
+                    resp.addProperty("error", "Unknown effect: " + effectId);
+                    return resp;
+                }
+                player.addEffect(new net.minecraft.world.effect.MobEffectInstance(
+                    net.minecraft.core.Holder.direct(effectHolder), duration * 20, amplifier, false, true));
+                resp.addProperty("success", true);
+                resp.addProperty("message", "Applied " + effectId + " (amp " + amplifier + ", " + duration + "s) to " + username);
+            } catch (Exception e) {
+                NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Player action failed for {}: {}", username, e.getMessage(), e);
+                resp.addProperty("success", false);
+                resp.addProperty("error", e.getMessage());
+            }
+            return resp;
+        }, server);
+
+        sendFutureResult(exchange, future);
+    }
+
+    // ── POST /api/player/lightning/{username} ─────────────────────────────────
+    // Strikes lightning at the player's current position.
+
+    private void handleLightning(HttpExchange exchange, String username) throws IOException {
+        if (!isAdmin(exchange)) {
+            sendResponse(exchange, 403, "{\"success\":false,\"error\":\"Admin permission required\"}");
+            return;
+        }
+
+        CompletableFuture<JsonObject> future = CompletableFuture.supplyAsync(() -> {
+            JsonObject resp = new JsonObject();
+            try {
+                ServerPlayer player = server.getPlayerList().getPlayerByName(username);
+                if (player == null) {
+                    resp.addProperty("success", false);
+                    resp.addProperty("error", "Player '" + username + "' is not online");
+                    return resp;
+                }
+                var level = com.zerog.neoessentials.util.LevelCompat.of(player);
+                net.minecraft.world.entity.LightningBolt bolt =
+                    com.zerog.neoessentials.util.EntityTypeCompat.create(net.minecraft.world.entity.EntityType.LIGHTNING_BOLT, level);
+                if (bolt != null) {
+                    bolt.moveTo(player.getX(), player.getY(), player.getZ());
+                    level.addFreshEntity(bolt);
+                }
+                resp.addProperty("success", true);
+                resp.addProperty("message", "Lightning struck " + username);
+            } catch (Exception e) {
+                NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Player action failed for {}: {}", username, e.getMessage(), e);
+                resp.addProperty("success", false);
+                resp.addProperty("error", e.getMessage());
+            }
+            return resp;
+        }, server);
+
+        sendFutureResult(exchange, future);
+    }
+
+    // ── POST /api/player/spawnmob/{username} ──────────────────────────────────
+    // Body: {"mob": "zombie", "amount": 1} — spawned at the player's current location.
+
+    @SuppressWarnings("deprecation")
+    private void handleSpawnMob(HttpExchange exchange, String username) throws IOException {
+        if (!isAdmin(exchange)) {
+            sendResponse(exchange, 403, "{\"success\":false,\"error\":\"Admin permission required\"}");
+            return;
+        }
+        String bodyJson = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        String mobId;
+        int amount;
+        try {
+            JsonObject body = JsonParser.parseString(bodyJson).getAsJsonObject();
+            mobId = body.has("mob") ? body.get("mob").getAsString() : "";
+            amount = body.has("amount") ? Math.max(1, Math.min(100, body.get("amount").getAsInt())) : 1;
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Invalid spawnmob request body for {}: {}", username, e.getMessage());
+            sendResponse(exchange, 400, "{\"success\":false,\"error\":\"Invalid body\"}");
+            return;
+        }
+        if (mobId.isBlank()) {
+            sendResponse(exchange, 400, "{\"success\":false,\"error\":\"Missing 'mob'\"}");
+            return;
+        }
+        final String finalMobId = mobId;
+        final int finalAmount = amount;
+
+        CompletableFuture<JsonObject> future = CompletableFuture.supplyAsync(() -> {
+            JsonObject resp = new JsonObject();
+            try {
+                ServerPlayer player = server.getPlayerList().getPlayerByName(username);
+                if (player == null) {
+                    resp.addProperty("success", false);
+                    resp.addProperty("error", "Player '" + username + "' is not online");
+                    return resp;
+                }
+                String id = finalMobId.contains(":") ? finalMobId : "minecraft:" + finalMobId;
+                net.minecraft.resources.ResourceLocation loc = net.minecraft.resources.ResourceLocation.tryParse(id);
+                var typeOpt = loc != null
+                    ? net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getOptional(loc)
+                    : java.util.Optional.<net.minecraft.world.entity.EntityType<?>>empty();
+                if (typeOpt.isEmpty()) {
+                    typeOpt = net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.entrySet().stream()
+                        .filter(e -> e.getKey().location().getPath().equals(finalMobId.toLowerCase()))
+                        .<net.minecraft.world.entity.EntityType<?>>map(java.util.Map.Entry::getValue)
+                        .findFirst();
+                }
+                if (typeOpt.isEmpty()) {
+                    resp.addProperty("success", false);
+                    resp.addProperty("error", "Unknown mob: " + finalMobId);
+                    return resp;
+                }
+                var entityType = typeOpt.get();
+                var level = com.zerog.neoessentials.util.LevelCompat.of(player);
+                int spawned = 0;
+                for (int i = 0; i < finalAmount; i++) {
+                    var entity = com.zerog.neoessentials.util.EntityTypeCompat.create(entityType, level);
+                    if (entity == null) break;
+                    entity.moveTo(player.getX(), player.getY(), player.getZ(), player.getYRot(), 0f);
+                    if (entity instanceof net.minecraft.world.entity.Mob mob) {
+                        mob.finalizeSpawn(level, level.getCurrentDifficultyAt(player.blockPosition()),
+                            net.minecraft.world.entity.MobSpawnType.COMMAND, null);
+                    }
+                    level.addFreshEntity(entity);
+                    spawned++;
+                }
+                resp.addProperty("success", true);
+                resp.addProperty("message", "Spawned " + spawned + "x " + finalMobId + " at " + username);
+            } catch (Exception e) {
+                NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Player action failed for {}: {}", username, e.getMessage(), e);
+                resp.addProperty("success", false);
+                resp.addProperty("error", e.getMessage());
+            }
+            return resp;
+        }, server);
+
+        sendFutureResult(exchange, future);
+    }
+
+    // ── POST /api/player/sudo/{username} ──────────────────────────────────────
+    // Body: {"command": "say hi", "isChat": false}
+
+    private void handleSudo(HttpExchange exchange, String username) throws IOException {
+        if (!isAdmin(exchange)) {
+            sendResponse(exchange, 403, "{\"success\":false,\"error\":\"Admin permission required\"}");
+            return;
+        }
+        String bodyJson = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        String command;
+        boolean isChat;
+        try {
+            JsonObject body = JsonParser.parseString(bodyJson).getAsJsonObject();
+            command = body.has("command") ? body.get("command").getAsString() : "";
+            isChat = body.has("isChat") && body.get("isChat").getAsBoolean();
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Invalid sudo request body for {}: {}", username, e.getMessage());
+            sendResponse(exchange, 400, "{\"success\":false,\"error\":\"Invalid body\"}");
+            return;
+        }
+        if (command.isBlank()) {
+            sendResponse(exchange, 400, "{\"success\":false,\"error\":\"Missing 'command'\"}");
+            return;
+        }
+        final String finalCommand = command;
+        final boolean finalIsChat = isChat;
+
+        CompletableFuture<JsonObject> future = CompletableFuture.supplyAsync(() -> {
+            JsonObject resp = new JsonObject();
+            try {
+                ServerPlayer player = server.getPlayerList().getPlayerByName(username);
+                if (player == null) {
+                    resp.addProperty("success", false);
+                    resp.addProperty("error", "Player '" + username + "' is not online");
+                    return resp;
+                }
+                String error = com.zerog.neoessentials.util.commands.PlayerStateCommands.runSudoAdmin(player, finalCommand, finalIsChat);
+                if (error != null) {
+                    resp.addProperty("success", false);
+                    resp.addProperty("error", error);
+                } else {
+                    resp.addProperty("success", true);
+                    resp.addProperty("message", "Ran on " + username + ": " + finalCommand);
+                }
+            } catch (Exception e) {
+                NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Player action failed for {}: {}", username, e.getMessage(), e);
+                resp.addProperty("success", false);
+                resp.addProperty("error", e.getMessage());
+            }
+            return resp;
+        }, server);
+
+        sendFutureResult(exchange, future);
+    }
+
+    // ── POST /api/player/clearinventory/{username} ────────────────────────────
+
+    private void handleClearInventory(HttpExchange exchange, String username) throws IOException {
+        if (!isAdmin(exchange)) {
+            sendResponse(exchange, 403, "{\"success\":false,\"error\":\"Admin permission required\"}");
+            return;
+        }
+
+        CompletableFuture<JsonObject> future = CompletableFuture.supplyAsync(() -> {
+            JsonObject resp = new JsonObject();
+            try {
+                ServerPlayer player = server.getPlayerList().getPlayerByName(username);
+                if (player == null) {
+                    resp.addProperty("success", false);
+                    resp.addProperty("error", "Player '" + username + "' is not online");
+                    return resp;
+                }
+                int[] cleared = com.zerog.neoessentials.items.commands.ClearInventoryCommand.clear(player);
+                resp.addProperty("success", true);
+                resp.addProperty("message", "Cleared " + cleared[0] + " main, " + cleared[1] + " armor, " + cleared[2] + " offhand item(s) from " + username);
+            } catch (Exception e) {
+                NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Player action failed for {}: {}", username, e.getMessage(), e);
+                resp.addProperty("success", false);
+                resp.addProperty("error", e.getMessage());
+            }
+            return resp;
+        }, server);
+
+        sendFutureResult(exchange, future);
+    }
+
+    // ── POST /api/player/ptime/{username} ─────────────────────────────────────
+    // Body: {"ticks": 6000} — omit/null resets to real world time.
+
+    private void handleSetPtime(HttpExchange exchange, String username) throws IOException {
+        if (!isAdmin(exchange)) {
+            sendResponse(exchange, 403, "{\"success\":false,\"error\":\"Admin permission required\"}");
+            return;
+        }
+        String bodyJson = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        Long ticks = null;
+        try {
+            if (!bodyJson.isBlank()) {
+                JsonObject body = JsonParser.parseString(bodyJson).getAsJsonObject();
+                if (body.has("ticks") && !body.get("ticks").isJsonNull()) ticks = body.get("ticks").getAsLong();
+            }
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Invalid ptime request body for {}: {}", username, e.getMessage());
+            sendResponse(exchange, 400, "{\"success\":false,\"error\":\"Invalid body\"}");
+            return;
+        }
+        final Long finalTicks = ticks;
+
+        CompletableFuture<JsonObject> future = CompletableFuture.supplyAsync(() -> {
+            JsonObject resp = new JsonObject();
+            try {
+                ServerPlayer player = server.getPlayerList().getPlayerByName(username);
+                if (player == null) {
+                    resp.addProperty("success", false);
+                    resp.addProperty("error", "Player '" + username + "' is not online");
+                    return resp;
+                }
+                com.zerog.neoessentials.util.commands.UtilityCommands.setPtime(player, finalTicks);
+                resp.addProperty("success", true);
+                resp.addProperty("message", finalTicks == null ? "Reset " + username + "'s ptime" : "Set " + username + "'s ptime to " + finalTicks);
+            } catch (Exception e) {
+                NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Player action failed for {}: {}", username, e.getMessage(), e);
+                resp.addProperty("success", false);
+                resp.addProperty("error", e.getMessage());
+            }
+            return resp;
+        }, server);
+
+        sendFutureResult(exchange, future);
+    }
+
+    // ── POST /api/player/pweather/{username} ──────────────────────────────────
+    // Body: {"type": "sun"|"storm"} — omit/null resets to server weather.
+
+    private void handleSetPweather(HttpExchange exchange, String username) throws IOException {
+        if (!isAdmin(exchange)) {
+            sendResponse(exchange, 403, "{\"success\":false,\"error\":\"Admin permission required\"}");
+            return;
+        }
+        String bodyJson = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        String type = null;
+        try {
+            if (!bodyJson.isBlank()) {
+                JsonObject body = JsonParser.parseString(bodyJson).getAsJsonObject();
+                if (body.has("type") && !body.get("type").isJsonNull()) type = body.get("type").getAsString();
+            }
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Invalid pweather request body for {}: {}", username, e.getMessage());
+            sendResponse(exchange, 400, "{\"success\":false,\"error\":\"Invalid body\"}");
+            return;
+        }
+        final String finalType = type;
+
+        CompletableFuture<JsonObject> future = CompletableFuture.supplyAsync(() -> {
+            JsonObject resp = new JsonObject();
+            try {
+                ServerPlayer player = server.getPlayerList().getPlayerByName(username);
+                if (player == null) {
+                    resp.addProperty("success", false);
+                    resp.addProperty("error", "Player '" + username + "' is not online");
+                    return resp;
+                }
+                com.zerog.neoessentials.util.commands.UtilityCommands.setPweather(player, finalType);
+                resp.addProperty("success", true);
+                resp.addProperty("message", finalType == null ? "Reset " + username + "'s weather" : "Set " + username + "'s weather to " + finalType);
+            } catch (Exception e) {
+                NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Player action failed for {}: {}", username, e.getMessage(), e);
+                resp.addProperty("success", false);
+                resp.addProperty("error", e.getMessage());
+            }
+            return resp;
+        }, server);
+
+        sendFutureResult(exchange, future);
+    }
+
+    /** Reads an optional boolean field from the request body; returns null if absent/blank/invalid. */
+    private Boolean readOptionalBoolean(HttpExchange exchange, String field) throws IOException {
+        String bodyJson = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        if (bodyJson.isBlank()) return null;
+        try {
+            JsonObject body = JsonParser.parseString(bodyJson).getAsJsonObject();
+            return body.has(field) && !body.get(field).isJsonNull() ? body.get(field).getAsBoolean() : null;
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Could not parse optional boolean field '{}': {}", field, e.getMessage());
+            return null;
+        }
+    }
+
+    /** Waits on a future built the same way every handler above builds it, and sends the result. */
+    private void sendFutureResult(HttpExchange exchange, CompletableFuture<JsonObject> future) throws IOException {
+        JsonObject result;
+        try {
+            result = future.get(8, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Timeout or server error waiting for player action: {}", e.getMessage(), e);
+            result = new JsonObject();
+            result.addProperty("success", false);
+            result.addProperty("error", "Timeout or server error: " + e.getMessage());
+        }
+        int status = result.has("success") && result.get("success").getAsBoolean() ? 200 : 400;
+        sendResponse(exchange, status, result.toString());
+    }
+
+    /** Returns true if the exchange was authenticated as an admin. */
+    private boolean isAdmin(HttpExchange exchange) {
+        Object adminAttr = exchange.getAttribute("auth-admin");
+        return Boolean.TRUE.equals(adminAttr);
+    }
+
     private JsonObject getResponse(String path) {
         JsonObject response;
             
@@ -205,12 +1295,27 @@ public class PlayerEndpoint implements HttpHandler {
                 response = playerCollector.getPlayerHomes(username);
             } else if (path.equals("/api/player/online")) {
                 response = playerCollector.getOnlinePlayers();
+            } else if (path.matches("/api/player/lookup/.*")) {
+                String username = path.substring("/api/player/lookup/".length());
+                response = playerCollector.lookupPlayer(username);
+            } else if (path.matches("/api/player/ptime/.*")) {
+                String username = path.substring("/api/player/ptime/".length());
+                UUID uuid = usernameToUuid(username);
+                response = new JsonObject();
+                Long ticks = uuid != null ? com.zerog.neoessentials.util.commands.UtilityCommands.getPtime(uuid) : null;
+                if (ticks != null) response.addProperty("ticks", ticks); else response.add("ticks", com.google.gson.JsonNull.INSTANCE);
+            } else if (path.matches("/api/player/pweather/.*")) {
+                String username = path.substring("/api/player/pweather/".length());
+                UUID uuid = usernameToUuid(username);
+                response = new JsonObject();
+                String type = uuid != null ? com.zerog.neoessentials.util.commands.UtilityCommands.getPweather(uuid) : null;
+                if (type != null) response.addProperty("type", type); else response.add("type", com.google.gson.JsonNull.INSTANCE);
             } else {
                 response = new JsonObject();
                 response.addProperty("error", "Endpoint not found");
                 return response;
             }
-            
+
             return response;
     }
     

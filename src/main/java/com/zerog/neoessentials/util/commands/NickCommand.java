@@ -4,22 +4,28 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
 import net.minecraft.server.level.ServerPlayer;
 import com.zerog.neoessentials.config.ConfigManager;
 import com.zerog.neoessentials.util.CommandSourceHelper;
 import com.zerog.neoessentials.util.MessageUtil;
 import com.zerog.neoessentials.util.PermissionValidator;
+import com.zerog.neoessentials.util.ResourceUtil;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import javax.annotation.Nullable;
+import java.util.Collections;
+import java.util.EnumSet;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.regex.Pattern;
 
 /**
@@ -28,8 +34,8 @@ import java.util.regex.Pattern;
  */
 public class NickCommand {
     private static final Map<UUID, String> NICKNAMES = new ConcurrentHashMap<>();
-    private static final Path NICK_DATA_FILE = Paths.get("config", "neoessentials", "nickname_data.json");
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final Path NICK_DATA_FILE = ResourceUtil.getConfigPath("nickname_data.json");
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
     // Updated to allow hex color codes like &#5d6a2c
     private static final Pattern VALID_NICK_PATTERN = Pattern.compile("^[a-zA-Z0-9_&§#]{1,32}$");
     private static final Pattern COLOR_CODE_PATTERN = Pattern.compile("&[0-9a-fk-or]|&#[0-9a-fA-F]{6}");
@@ -38,11 +44,11 @@ public class NickCommand {
      * Register the /nick command
      */
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        if (!ConfigManager.getInstance().isCommandEnabled("nick")) return;
-        
         // Load nickname data on registration
         loadNicknameData();
-        
+
+        boolean nickEnabled = ConfigManager.getInstance().isCommandEnabled("nick");
+        if (nickEnabled) {
         dispatcher.register(
             Commands.literal("nick")
                 // /nick <nickname> - Set nickname
@@ -109,11 +115,14 @@ public class NickCommand {
                     return showCurrentNickname(player);
                 })
         );
-        
+        }
+
         // Admin command to set other players' nicknames
+        if (ConfigManager.getInstance().isCommandEnabled("setnick")) {
         dispatcher.register(
             Commands.literal("setnick")
                 .then(Commands.argument("player", StringArgumentType.word())
+                    .suggests((ctx, b) -> net.minecraft.commands.SharedSuggestionProvider.suggest(ctx.getSource().getServer().getPlayerNames(), b))
                     .then(Commands.argument("nickname", StringArgumentType.greedyString())
                         .executes(ctx -> {
                             PermissionValidator.PermissionResult permResult = 
@@ -143,6 +152,12 @@ public class NickCommand {
                     )
                 )
         );
+        }
+
+        // /nickname alias — mirrors /nick exactly (requires /nick itself to be registered)
+        if (nickEnabled && ConfigManager.getInstance().isCommandEnabled("nickname")) {
+            dispatcher.register(Commands.literal("nickname").redirect(dispatcher.getRoot().getChild("nick")));
+        }
     }
     
     /**
@@ -155,7 +170,7 @@ public class NickCommand {
         }
         
         // Validate nickname
-        if (!isValidNickname(nickname)) {
+        if (isInvalidNickname(nickname)) {
             player.sendSystemMessage(MessageUtil.error("commands.neoessentials.nick.invalid_format"));
             return 0;
         }
@@ -249,7 +264,7 @@ public class NickCommand {
         }
         
         // Validate nickname
-        if (!isValidNickname(nickname)) {
+        if (isInvalidNickname(nickname)) {
             source.sendFailure(MessageUtil.error("commands.neoessentials.nick.invalid_format"));
             return 0;
         }
@@ -309,26 +324,113 @@ public class NickCommand {
     }
     
     /**
-     * Update player's display name based on nickname
+     * Update player's visible name everywhere:
+     *   1. Tab-list display name — sent via ClientboundPlayerInfoUpdatePacket to all online players.
+     *   2. Chat & placeholder resolution — handled by DefaultPlaceholderExpansion reading NICKNAMES.
+     * Note: setCustomName() is intentionally NOT used here.  On players it only adds a floating
+     * second label above the real name, has no effect on the tab list, and is invisible in chat.
      */
     private static void updatePlayerDisplayName(ServerPlayer player) {
         String nickname = NICKNAMES.get(player.getUUID());
+        net.minecraft.server.MinecraftServer server = player.getServer();
+        if (server == null) return;
 
+        // Build the tab-list display name. IMPORTANT: this can't be just the bare nickname —
+        // vanilla's tab-list rendering (PlayerTabOverlay.getNameForDisplay) only wraps a row
+        // with the scoreboard team's prefix/suffix when there is NO display-name override; a
+        // raw override is shown completely verbatim, bypassing the team entirely. So the
+        // prefix/suffix must already be baked into the override text itself, or they silently
+        // vanish from the tab list the moment a nickname is set — see
+        // TablistManager.updateNicknameOverridePacket()'s javadoc for the full story. Falls
+        // back to the bare-nickname behavior only if TablistManager can't resolve it (e.g. the
+        // tablist system is disabled), which is strictly better than not nicknaming at all.
+        Component tabDisplayName = null;
         if (nickname != null) {
-            String formattedNick = nickname.replace("&", "§");
-            player.setCustomName(com.zerog.neoessentials.util.MessageUtil.coloredText(formattedNick));
-            player.setCustomNameVisible(true);
-        } else {
-            player.setCustomName(null);
-            player.setCustomNameVisible(false);
+            String composed = com.zerog.neoessentials.tablist.TablistManager.getInstance()
+                .resolveNicknameOverrideRaw(player, server);
+            tabDisplayName = composed != null
+                ? com.zerog.neoessentials.chat.RichTextFormatter.processTablistText(composed)
+                : MessageUtil.coloredText(nickname.replace("&", "§"));
         }
+
+        // Broadcast UPDATE_DISPLAY_NAME to every connected player (including the nick owner)
+        broadcastTabListDisplayName(player, tabDisplayName, server);
+    }
+
+    /**
+     * Sends a {@code ClientboundPlayerInfoUpdatePacket} that overwrites the tab-list
+     * display name for {@code subject} on every connected client. Public so
+     * {@code TablistManager} can keep this in sync whenever a nicknamed player's
+     * permission-group prefix/suffix changes (promotion, AFK toggle, config reload, ...) —
+     * not just at the moment {@code /nick} is run.
+     *
+     * @param subject     the player whose tab entry should be updated
+     * @param displayName the new name to show, or {@code null} to revert to the game-profile name
+     * @param server      the running server instance
+     */
+    public static void sendTabListDisplayName(ServerPlayer subject,
+                                                @Nullable Component displayName,
+                                                net.minecraft.server.MinecraftServer server) {
+        broadcastTabListDisplayName(subject, displayName, server);
+    }
+
+    private static void broadcastTabListDisplayName(ServerPlayer subject,
+                                                     @Nullable Component displayName,
+                                                     net.minecraft.server.MinecraftServer server) {
+        try {
+            ClientboundPlayerInfoUpdatePacket.Entry entry = new ClientboundPlayerInfoUpdatePacket.Entry(
+                subject.getUUID(),
+                subject.getGameProfile(),
+                true,
+                subject.connection.latency(),
+                subject.gameMode.getGameModeForPlayer(),
+                displayName,   // null → client falls back to the profile name
+                null           // no chat session
+            );
+
+            EnumSet<ClientboundPlayerInfoUpdatePacket.Action> actions =
+                EnumSet.of(ClientboundPlayerInfoUpdatePacket.Action.UPDATE_DISPLAY_NAME);
+
+            ClientboundPlayerInfoUpdatePacket packet = buildNickPacket(actions, List.of(entry));
+            if (packet == null) return;
+
+            for (ServerPlayer viewer : server.getPlayerList().getPlayers()) {
+                viewer.connection.send(packet);
+            }
+        } catch (Exception e) {
+            System.err.println("[NeoEssentials] Failed to broadcast tab display name for "
+                + subject.getName().getString() + ": " + e.getMessage());
+        }
+    }
+
+    /**
+     * Builds a {@link ClientboundPlayerInfoUpdatePacket} with custom entries via reflection,
+     * using the same technique as {@code FakePlayerManager}.
+     */
+    private static ClientboundPlayerInfoUpdatePacket buildNickPacket(
+            EnumSet<ClientboundPlayerInfoUpdatePacket.Action> actions,
+            List<ClientboundPlayerInfoUpdatePacket.Entry> entries) {
+        try {
+            ClientboundPlayerInfoUpdatePacket packet =
+                new ClientboundPlayerInfoUpdatePacket(actions, Collections.emptyList());
+            for (java.lang.reflect.Field f : ClientboundPlayerInfoUpdatePacket.class.getDeclaredFields()) {
+                if (List.class.isAssignableFrom(f.getType())) {
+                    f.setAccessible(true);
+                    f.set(packet, List.copyOf(entries));
+                    return packet;
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("[NeoEssentials] buildNickPacket reflection error: " + e.getMessage());
+        }
+        return null;
     }
     
     /**
-     * Check if nickname is valid format
+     * Check if nickname is invalid format
      */
-    private static boolean isValidNickname(String nickname) {
-        return VALID_NICK_PATTERN.matcher(nickname).matches();
+    private static boolean isInvalidNickname(String nickname) {
+        return !VALID_NICK_PATTERN.matcher(nickname).matches();
     }
     
     /**
@@ -361,6 +463,34 @@ public class NickCommand {
      */
     public static String getNickname(UUID playerId) {
         return NICKNAMES.get(playerId);
+    }
+
+    /**
+     * Set a player's nickname from a non-command caller (the dashboard) — same validation
+     * and tab-list broadcast as {@code /setnick}, just without a CommandSourceStack to reply
+     * through. Returns a human-readable error message, or {@code null} on success.
+     */
+    public static String setNicknameAdmin(ServerPlayer target, String nickname) {
+        if (nickname == null || nickname.isBlank() || nickname.equalsIgnoreCase("off") || nickname.equalsIgnoreCase("reset")) {
+            return resetNicknameAdmin(target);
+        }
+        if (isInvalidNickname(nickname)) return "Invalid nickname format.";
+        String withoutColors = removeColorCodes(nickname);
+        if (withoutColors.length() > 16 || withoutColors.length() < 3) return "Nickname must be 3-16 characters (excluding color codes).";
+        if (isNicknameTaken(nickname, target.getUUID())) return "That nickname is already taken.";
+
+        NICKNAMES.put(target.getUUID(), nickname);
+        saveNicknameData();
+        updatePlayerDisplayName(target);
+        return null;
+    }
+
+    /** Reset a player's nickname from a non-command caller (the dashboard). Always succeeds. */
+    public static String resetNicknameAdmin(ServerPlayer target) {
+        NICKNAMES.remove(target.getUUID());
+        saveNicknameData();
+        updatePlayerDisplayName(target);
+        return null;
     }
     
     /**
@@ -421,10 +551,34 @@ public class NickCommand {
     }
     
     /**
-     * Apply nicknames to all online players (call on server start)
+     * Apply nicknames to all online players (call on server start / reload).
+     * Sends tab-list display-name packets so every viewer sees the correct nickname immediately.
      */
     public static void applyNicknamesToOnlinePlayers(net.minecraft.server.MinecraftServer server) {
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            updatePlayerDisplayName(player);
+        }
+    }
+
+    /**
+     * Called when a player joins the server.
+     *
+     * <p>Restores the joining player's own tab-list display name if they had a nickname before
+     * logging out (broadcast to everyone, including themselves). But that alone isn't enough:
+     * every <em>other</em> already-nicknamed online player's override packet was only ever sent
+     * to whoever was connected <em>at the time</em> {@code /nick} last changed something for
+     * them — a player who joins afterward was never part of that broadcast and never receives
+     * it, so their client falls back to showing that player's raw game-profile name (the bug
+     * reported as "I see their real IGN in tab instead of the nick" for a specific other
+     * player). So every join also re-sends every currently-nicknamed player's override, which
+     * reaches the new joiner along with everyone else already in sync (a harmless no-op packet
+     * for them).
+     */
+    public static void onPlayerJoin(ServerPlayer player) {
+        var server = player.getServer();
+        if (server != null) {
+            applyNicknamesToOnlinePlayers(server);
+        } else if (NICKNAMES.containsKey(player.getUUID())) {
             updatePlayerDisplayName(player);
         }
     }

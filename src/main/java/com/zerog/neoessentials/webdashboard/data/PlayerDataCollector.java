@@ -10,6 +10,8 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.world.item.ItemStack;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import com.zerog.neoessentials.teleportation.HomeManager;
 import com.zerog.neoessentials.teleportation.TeleportLocation;
 import org.slf4j.Logger;
@@ -127,7 +129,7 @@ public class PlayerDataCollector {
                         profile.addProperty("lastSeen", lastModified);
                     }
                 } catch (Exception e) {
-                    LOGGER.debug("Could not get last seen time for {}: {}", playerUuid, e.getMessage());
+                    NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Could not get last seen time for {}: {}", playerUuid, e.getMessage());
                 }
             } else {
                 profile.addProperty("gameMode", "unknown");
@@ -351,19 +353,84 @@ public class PlayerDataCollector {
             java.nio.file.Path worldPath = overworld.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.PLAYER_DATA_DIR);
             java.nio.file.Path playerDataFile = worldPath.resolve(playerUuid + ".dat");
 
-            LOGGER.debug("Loading offline player data from: {}", playerDataFile);
+            NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Loading offline player data from: {}", playerDataFile);
 
             if (java.nio.file.Files.exists(playerDataFile)) {
                 return NbtIo.readCompressed(playerDataFile, net.minecraft.nbt.NbtAccounter.unlimitedHeap());
             } else {
-                LOGGER.debug("Player data file not found: {}", playerDataFile);
+                NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Player data file not found: {}", playerDataFile);
             }
         } catch (IOException e) {
             LOGGER.error("Failed to load offline player data for UUID: {}", playerUuid, e);
         }
         return null;
     }
-    
+
+    /**
+     * Total playtime in minutes, from vanilla's {@code Stats.PLAY_TIME} — works for online
+     * players directly, and for offline players by reading their stats file (persists across
+     * restarts/relogs regardless of whether NeoEssentials was tracking them).
+     */
+    public int getPlaytimeMinutes(UUID playerUuid) {
+        ServerPlayer online = server.getPlayerList().getPlayer(playerUuid);
+        int ticks = online != null
+            ? online.getStats().getValue(net.minecraft.stats.Stats.CUSTOM.get(net.minecraft.stats.Stats.PLAY_TIME))
+            : readOfflinePlayTimeTicks(playerUuid);
+        return ticks / 20 / 60;
+    }
+
+    private int readOfflinePlayTimeTicks(UUID playerUuid) {
+        try {
+            java.nio.file.Path statsFile = server.getWorldPath(new net.minecraft.world.level.storage.LevelResource("stats"))
+                .resolve(playerUuid + ".json");
+            if (!java.nio.file.Files.exists(statsFile)) return 0;
+            JsonObject root = com.google.gson.JsonParser.parseString(java.nio.file.Files.readString(statsFile)).getAsJsonObject();
+            JsonObject stats = root.has("stats") ? root.getAsJsonObject("stats") : null;
+            JsonObject custom = stats != null && stats.has("minecraft:custom") ? stats.getAsJsonObject("minecraft:custom") : null;
+            if (custom != null && custom.has("minecraft:play_time")) {
+                return custom.get("minecraft:play_time").getAsInt();
+            }
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Could not read offline playtime stat for {}: {}", playerUuid, e.getMessage());
+        }
+        return 0;
+    }
+
+    /**
+     * Epoch millis of the player's first join, approximated via their playerdata file's
+     * filesystem creation time — that file is written once on first join and only ever
+     * modified (never recreated) afterward, so its birth time is a good stand-in for a real
+     * "first joined" record without needing a dedicated event-tracked history. Returns
+     * {@code null} if unknown (no playerdata file yet, or the filesystem doesn't report
+     * creation time — notably, restoring a backup via plain file copy can reset this on some
+     * filesystems, e.g. Windows NTFS).
+     */
+    public Long getFirstJoinedMillis(UUID playerUuid) {
+        try {
+            java.nio.file.Path playerDataFile = server.overworld().getServer()
+                .getWorldPath(net.minecraft.world.level.storage.LevelResource.PLAYER_DATA_DIR)
+                .resolve(playerUuid + ".dat");
+            if (!java.nio.file.Files.exists(playerDataFile)) return null;
+            var attrs = java.nio.file.Files.readAttributes(playerDataFile, java.nio.file.attribute.BasicFileAttributes.class);
+            long creationMillis = attrs.creationTime().toMillis();
+            return creationMillis > 0 ? creationMillis : null;
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Could not read first-joined time for {}: {}", playerUuid, e.getMessage());
+            return null;
+        }
+    }
+
+    /** Uppercase gamemode name (SURVIVAL/CREATIVE/ADVENTURE/SPECTATOR) from a playerdata NBT tag's {@code playerGameType} field. */
+    private String gameTypeNameFromNbt(CompoundTag playerData) {
+        int id = playerData.getInt("playerGameType");
+        return switch (id) {
+            case 1 -> "CREATIVE";
+            case 2 -> "ADVENTURE";
+            case 3 -> "SPECTATOR";
+            default -> "SURVIVAL";
+        };
+    }
+
     /**
      * Parse inventory data from NBT
      */
@@ -712,7 +779,7 @@ public class PlayerDataCollector {
         JsonArray onlinePlayers = new JsonArray();
         JsonArray offlinePlayers = new JsonArray();
         
-        LOGGER.info("=== Starting getOnlinePlayers data collection ===");
+        NeoLog.info(LOGGER, LogCategory.WEB_DASHBOARD, "=== Starting getOnlinePlayers data collection ===");
         
         // Get online players
         List<ServerPlayer> online = server.getPlayerList().getPlayers();
@@ -725,14 +792,25 @@ public class PlayerDataCollector {
             playerObj.addProperty("displayName", player.getDisplayName().getString());
             playerObj.addProperty("ping", player.connection.latency());
             playerObj.addProperty("gameMode", player.gameMode.getGameModeForPlayer().getName());
+            playerObj.addProperty("gamemode", player.gameMode.getGameModeForPlayer().name());
             playerObj.addProperty("health", player.getHealth());
             playerObj.addProperty("foodLevel", player.getFoodData().getFoodLevel());
             playerObj.addProperty("experienceLevel", player.experienceLevel);
+            playerObj.addProperty("x", player.getX());
+            playerObj.addProperty("y", player.getY());
+            playerObj.addProperty("z", player.getZ());
+            playerObj.addProperty("dimension", player.level().dimension().location().toString());
+            playerObj.addProperty("operator", player.hasPermissions(4));
+            playerObj.addProperty("maxHealth", player.getMaxHealth());
+            playerObj.addProperty("playtimeMinutes", getPlaytimeMinutes(player.getUUID()));
+            Long onlineFirstJoined = getFirstJoinedMillis(player.getUUID());
+            if (onlineFirstJoined != null) playerObj.addProperty("firstJoined", onlineFirstJoined);
+            else playerObj.add("firstJoined", com.google.gson.JsonNull.INSTANCE);
             onlinePlayers.add(playerObj);
             onlineUsernames.add(player.getName().getString());
         });
         
-        LOGGER.info("Found {} online players", onlinePlayers.size());
+        NeoLog.info(LOGGER, LogCategory.WEB_DASHBOARD, "Found {} online players", onlinePlayers.size());
         
         // Get offline players from playerdata directory
         try {
@@ -740,12 +818,12 @@ public class PlayerDataCollector {
             net.minecraft.server.level.ServerLevel overworld = server.overworld();
 
             java.nio.file.Path playerDataDir = overworld.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.PLAYER_DATA_DIR);
-            LOGGER.info("Looking for offline players in: {}", playerDataDir);
+            NeoLog.info(LOGGER, LogCategory.WEB_DASHBOARD, "Looking for offline players in: {}", playerDataDir);
             
             if (java.nio.file.Files.exists(playerDataDir)) {
                 net.minecraft.server.players.GameProfileCache cache = server.getProfileCache();
                 
-                LOGGER.info("Player data directory exists, cache available: {}", (cache != null));
+                NeoLog.info(LOGGER, LogCategory.WEB_DASHBOARD, "Player data directory exists, cache available: {}", (cache != null));
                 
                 // Limit to last 50 offline players to avoid performance issues
                 int maxOffline = 50;
@@ -790,7 +868,7 @@ public class PlayerDataCollector {
                                             username = playerData.getString("lastKnownName");
                                         }
                                     } catch (Exception e) {
-                                        LOGGER.debug("Could not load username from NBT for {}: {}", uuid, e.getMessage());
+                                        NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Could not load username from NBT for {}: {}", uuid, e.getMessage());
                                     }
                                 }
 
@@ -805,22 +883,37 @@ public class PlayerDataCollector {
                                         long lastModified = java.nio.file.Files.getLastModifiedTime(path).toMillis();
                                         playerObj.addProperty("lastSeen", formatLastSeenTimestamp(lastModified));
                                     } catch (Exception e) {
+                                        NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Could not read lastModified for player data file {}", path.getFileName(), e);
                                         playerObj.addProperty("lastSeen", "Unknown");
                                     }
+
+                                    playerObj.addProperty("playtimeMinutes", getPlaytimeMinutes(uuid));
+                                    Long offlineFirstJoined = getFirstJoinedMillis(uuid);
+                                    if (offlineFirstJoined != null) playerObj.addProperty("firstJoined", offlineFirstJoined);
+                                    else playerObj.add("firstJoined", com.google.gson.JsonNull.INSTANCE);
+
+                                    String gamemodeName = "SURVIVAL";
+                                    try {
+                                        CompoundTag nbtForGamemode = NbtIo.readCompressed(path, net.minecraft.nbt.NbtAccounter.unlimitedHeap());
+                                        if (nbtForGamemode != null) gamemodeName = gameTypeNameFromNbt(nbtForGamemode);
+                                    } catch (Exception e) {
+                                        NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Could not read gamemode from NBT for {}: {}", uuid, e.getMessage());
+                                    }
+                                    playerObj.addProperty("gamemode", gamemodeName);
 
                                     offlinePlayers.add(playerObj);
                                 }
                             }
                         } catch (Exception e) {
                             // Skip invalid files
-                            LOGGER.debug("Skipping invalid player data file: {}", path.getFileName());
+                            NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Skipping invalid player data file: {}", path.getFileName());
                         }
                     });
                 } catch (java.io.IOException ioEx) {
                     LOGGER.warn("Error reading player data directory: {}", ioEx.getMessage());
                 }
 
-                LOGGER.info("Found {} offline players", offlinePlayers.size());
+                NeoLog.info(LOGGER, LogCategory.WEB_DASHBOARD, "Found {} offline players", offlinePlayers.size());
             } else {
                 LOGGER.warn("Player data directory does not exist: {}", playerDataDir);
             }
@@ -835,12 +928,109 @@ public class PlayerDataCollector {
         response.addProperty("offlineCount", offlinePlayers.size());
         response.addProperty("max", server.getMaxPlayers());
         
-        LOGGER.info("=== Completed getOnlinePlayers: {} online, {} offline ===", 
+        NeoLog.info(LOGGER, LogCategory.WEB_DASHBOARD, "=== Completed getOnlinePlayers: {} online, {} offline ===", 
             onlinePlayers.size(), offlinePlayers.size());
         
         return response;
     }
     
+    /**
+     * Look up a single player by name whether or not they're online, in the recent-offline
+     * roster {@link #getOnlinePlayers()} already returns (capped at 50), or have ever even
+     * joined this server — resolves via the online player list, then the profile cache, then
+     * falls back to Mojang's API for a name that's real but has never connected here. Powers
+     * the dashboard's "look up a player" search, which exists specifically for servers with
+     * more players than that 50-entry cap.
+     */
+    public JsonObject lookupPlayer(String username) {
+        JsonObject response = new JsonObject();
+
+        ServerPlayer online = server.getPlayerList().getPlayerByName(username);
+        UUID uuid = online != null ? online.getUUID() : null;
+        String resolvedName = online != null ? online.getName().getString() : username;
+
+        if (uuid == null) {
+            var profile = server.getProfileCache().get(username);
+            if (profile.isPresent()) {
+                uuid = profile.get().getId();
+                resolvedName = profile.get().getName();
+            }
+        }
+
+        if (uuid == null) {
+            uuid = fetchUuidFromMojangAPI(username);
+        }
+
+        if (uuid == null) {
+            response.addProperty("error", "Player not found");
+            return response;
+        }
+
+        response.addProperty("uuid", uuid.toString());
+        response.addProperty("username", resolvedName);
+        response.addProperty("online", online != null);
+        response.addProperty("playtimeMinutes", getPlaytimeMinutes(uuid));
+        Long lookupFirstJoined = getFirstJoinedMillis(uuid);
+        if (lookupFirstJoined != null) response.addProperty("firstJoined", lookupFirstJoined);
+        else response.add("firstJoined", com.google.gson.JsonNull.INSTANCE);
+
+        if (online != null) {
+            response.addProperty("gamemode", online.gameMode.getGameModeForPlayer().name());
+        }
+
+        if (online == null) {
+            try {
+                java.nio.file.Path playerDataFile = server.overworld().getServer()
+                    .getWorldPath(net.minecraft.world.level.storage.LevelResource.PLAYER_DATA_DIR)
+                    .resolve(uuid + ".dat");
+                if (java.nio.file.Files.exists(playerDataFile)) {
+                    long lastModified = java.nio.file.Files.getLastModifiedTime(playerDataFile).toMillis();
+                    response.addProperty("lastSeen", formatLastSeenTimestamp(lastModified));
+                    CompoundTag playerData = loadOfflinePlayerData(uuid);
+                    response.addProperty("gamemode", playerData != null ? gameTypeNameFromNbt(playerData) : "SURVIVAL");
+                } else {
+                    response.addProperty("lastSeen", "Never joined this server");
+                }
+            } catch (Exception e) {
+                NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Could not determine lastSeen for {}", uuid, e);
+                response.addProperty("lastSeen", "Unknown");
+            }
+        }
+
+        response.addProperty("success", true);
+        return response;
+    }
+
+    /** Fetch a UUID from Mojang's API for a real account that's never joined this server. */
+    private UUID fetchUuidFromMojangAPI(String username) {
+        try {
+            java.net.URL url = new java.net.URL("https://api.mojang.com/users/profiles/minecraft/" + username);
+            java.net.HttpURLConnection connection = (java.net.HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(5000);
+            connection.setReadTimeout(5000);
+
+            if (connection.getResponseCode() != 200) return null;
+
+            try (var reader = new java.io.BufferedReader(new java.io.InputStreamReader(connection.getInputStream()))) {
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) sb.append(line);
+
+                com.google.gson.JsonObject json = com.google.gson.JsonParser.parseString(sb.toString()).getAsJsonObject();
+                String uuidString = json.get("id").getAsString();
+                String formatted = uuidString.replaceFirst(
+                    "(\\p{XDigit}{8})(\\p{XDigit}{4})(\\p{XDigit}{4})(\\p{XDigit}{4})(\\p{XDigit}+)",
+                    "$1-$2-$3-$4-$5"
+                );
+                return UUID.fromString(formatted);
+            }
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Could not resolve UUID for '{}' via Mojang API: {}", username, e.getMessage());
+            return null;
+        }
+    }
+
     private String formatLastSeenTimestamp(long timestamp) {
         long now = System.currentTimeMillis();
         long diff = now - timestamp;
@@ -946,7 +1136,7 @@ public class PlayerDataCollector {
                 return modContainerOpt.get().getModInfo().getDisplayName();
             }
         } catch (Exception e) {
-            LOGGER.debug("Could not get mod name for namespace: {}", namespace);
+            NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Could not get mod name for namespace: {}", namespace);
         }
         
         return null;
@@ -969,6 +1159,7 @@ public class PlayerDataCollector {
                 .getKey(level.getBiome(pos).value());
             return biomeKey != null ? biomeKey.toString() : "Unknown";
         } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Could not resolve biome name at {}", pos, e);
             return "Unknown";
         }
     }

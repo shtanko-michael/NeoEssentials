@@ -1,9 +1,17 @@
 # NeoEssentials — Complete Commands Reference
 
-> **Last Updated:** 2026-03-06 · **Version:** 1.0.2.6  
-> All commands are prefixed with `/`. Permission nodes follow `neoessentials.<node>` pattern.  
+> **Last Updated:** 2026-07-23 (Web Dashboard section only — see note below) · **Version:** 1.0.4+build.16
+> All commands are prefixed with `/`. Permission nodes generally follow a `neoessentials.<node>`
+> pattern, but **not always** — as of build.16, `/help <command>` in-game shows each command's
+> real permission node, which is the authoritative source if this table and `/help` disagree.  
 > `🔒` = op-only by default · `✅` = available to all players by default  
 > Square brackets `[x]` = optional · Angle brackets `<x>` = required · `|` = or
+>
+> ⚠️ **This page predates v1.0.4 and was last fully verified 2026-04-24.** Only the
+> [Web Dashboard](#web-dashboard) section has been re-verified against the current codebase (as
+> of build.16). Every other section may have stale syntax/permission columns — a full re-audit of
+> all ~200 commands against their actual `.requires()` checks is planned but not done yet;
+> `/help <command>` in-game is the reliable source in the meantime.
 
 ---
 
@@ -25,7 +33,8 @@
 14. [AFK](#afk)
 15. [Web Dashboard](#web-dashboard)
 16. [Permissions Management](#permissions-management)
-17. [Miscellaneous](#miscellaneous)
+17. [Mod Root Commands](#mod-root-commands)
+18. [Miscellaneous](#miscellaneous)
 
 ---
 
@@ -33,14 +42,21 @@
 
 | Command | Syntax | Permission | Default | Description |
 |---|---|---|---|---|
-| `/balance` | `/balance [player]` | `neoessentials.economy.balance` / `.balance.others` | ✅ | Check own or another player's balance |
+| `/balance` | `/balance [player]` | none — open to everyone | ✅ | Check own or another player's balance |
 | `/bal` | alias for `/balance` | same | ✅ | Alias |
 | `/pay` | `/pay <player> <amount>` | `neoessentials.economy.pay` | ✅ | Send money to an online player |
-| `/paytoggle` | `/paytoggle` | `neoessentials.economy.pay.toggle` | ✅ | Toggle receiving payments |
-| `/pt` | alias for `/paytoggle` | same | ✅ | Alias |
+| `/paytoggle` | `/paytoggle` | `neoessentials.economy.paytoggle` | ✅ | Toggle receiving payments |
+| `/pt` | alias for `/paytoggle` **or** `/powertool` — see the [ambiguity note](#items) in Items | `neoessentials.economy.paytoggle` (when resolved to paytoggle) | ✅ | Alias |
 | `/baltop` | `/baltop [page]` | `neoessentials.economy.baltop` | ✅ | View top player balances |
 | `/balancetop` | alias for `/baltop` | same | ✅ | Alias |
 | `/eco` | `/eco give\|take\|set\|reset <player> <amount>` | `neoessentials.economy.eco` | 🔒 | Admin economy management |
+| `/payconfirmtoggle` | `/payconfirmtoggle` | `neoessentials.payconfirmtoggle` | ✅ | Toggle a confirmation prompt before sending a payment (was missing from this table) |
+
+> **v1.0.6+:** `/baltop` now sits alongside a generalized `/leaderboard` (alias `/lb`) command
+> covering money, kills, mob kills, playtime, any vanilla-tracked stat, and custom
+> admin-defined boards — see [Leaderboard System](LeaderboardSystem) (full command table
+> there, not duplicated here). `/baltop` itself is unchanged. The sidebar scoreboard
+> (`/scoreboard`) is documented separately at [Scoreboard System](ScoreboardSystem).
 
 ---
 
@@ -49,10 +65,10 @@
 ### Player Teleport
 | Command | Syntax | Permission | Default | Description |
 |---|---|---|---|---|
-| `/tp` | `/tp <player>` or `/tp <x> <y> <z>` | `neoessentials.teleport.admin.tp` | 🔒 | Teleport to a player or coordinates |
-| `/tphere` | `/tphere <player>` | `neoessentials.teleport.admin.tphere` | 🔒 | Teleport a player to you |
+| `/tp` | `/tp <player>` or `/tp <x> <y> <z>` | `neoessentials.teleport.tp` | 🔒 | Teleport to a player or coordinates |
+| `/tphere` | `/tphere <player>` | `neoessentials.teleport.tphere` | 🔒 | Teleport a player to you |
 | `/tpall` | `/tpall` | `neoessentials.teleport.admin.tpall` | 🔒 | Teleport all players to you |
-| `/tppos` | `/tppos <x> <y> <z>` | `neoessentials.teleport.admin.tppos` | 🔒 | Teleport to exact coordinates |
+| `/tppos` | `/tppos <x> <y> <z>` | `neoessentials.teleport.tppos` | 🔒 | Teleport to exact coordinates |
 | `/tpo` | `/tpo <player>` | `neoessentials.teleport.tpo` | 🔒 | Teleport to player, bypassing their tptoggle |
 | `/tpohere` | `/tpohere <player>` | `neoessentials.teleport.tpohere` | 🔒 | Bring player here, bypassing tptoggle |
 | `/tpoffline` | `/tpoffline <player>` | `neoessentials.teleport.tpoffline` | 🔒 | Teleport to an offline player's last position |
@@ -64,20 +80,22 @@
 ### Teleport Requests
 | Command | Syntax | Permission | Default | Description |
 |---|---|---|---|---|
-| `/tpa` | `/tpa <player>` | `neoessentials.teleport.tpa` | ✅ | Request to teleport to a player |
-| `/tpahere` | `/tpahere <player>` | `neoessentials.teleport.tpahere` | ✅ | Request a player teleport to you |
-| `/tpaccept` | `/tpaccept` | `neoessentials.teleport.tpaccept` | ✅ | Accept a pending teleport request |
-| `/tpdeny` | `/tpdeny` | `neoessentials.teleport.tpdeny` | ✅ | Deny a pending teleport request |
-| `/tpacancel` | `/tpacancel` | `neoessentials.teleport.tpacancel` | ✅ | Cancel your outgoing teleport request |
+| `/tpa` | `/tpa <player>` | `neoessentials.teleport.request.tpa` | ✅ | Request to teleport to a player |
+| `/tpahere` | `/tpahere <player>` | `neoessentials.teleport.request.tpahere` | ✅ | Request a player teleport to you |
+| `/tpaccept` | `/tpaccept` | `neoessentials.teleport.request.accept` | ✅ | Accept a pending teleport request |
+| `/tpdeny` | `/tpdeny` | `neoessentials.teleport.request.deny` | ✅ | Deny a pending teleport request |
+| `/tpcancel` | `/tpcancel` | `neoessentials.teleport.request.cancel` | ✅ | Cancel your outgoing teleport request (the `/help` registry previously listed this as `tpacancel`, a name mismatch with the real `tpcancel` literal — fixed) |
 
 ### Random Teleport
 | Command | Syntax | Permission | Default | Description |
 |---|---|---|---|---|
 | `/tpr` | `/tpr [location]` | `neoessentials.teleport.tpr` | ✅ | Teleport to a random location |
-| `/rtp` | alias for `/tpr` | same | ✅ | Alias |
 | `/randomtp` | alias for `/tpr` | same | ✅ | Alias |
 | `/randomteleport` | alias for `/tpr` | same | ✅ | Alias |
-| `/settpr` | `/settpr <name>` | `neoessentials.teleport.settpr` | 🔒 | Set a named RTP centre location |
+
+> ⚠️ `/rtp` and `/settpr` are **not found anywhere in the current codebase** (not registered as
+> commands, aliases, or config toggles) — likely stale/fictional entries from an old doc pass, or
+> a feature that was removed. Don't rely on either existing.
 
 ---
 
@@ -85,11 +103,11 @@
 
 | Command | Syntax | Permission | Default | Description |
 |---|---|---|---|---|
-| `/home` | `/home [name]` | `neoessentials.home` | ✅ | Teleport to your home (or named home) |
-| `/sethome` | `/sethome [name]` | `neoessentials.home.set` | ✅ | Set your home at current location |
-| `/delhome` | `/delhome [name]` | `neoessentials.home.delete` | ✅ | Delete a home |
+| `/home` | `/home [name]` | `neoessentials.teleport.home` | ✅ | Teleport to your home (or named home) |
+| `/sethome` | `/sethome [name]` | `neoessentials.teleport.home.set` | ✅ | Set your home at current location |
+| `/delhome` | `/delhome [name]` | `neoessentials.teleport.home.delete` | ✅ | Delete a home |
 | `/deletehome` | alias for `/delhome` | same | ✅ | Alias |
-| `/homes` | `/homes` | `neoessentials.home.list` | ✅ | List all your homes |
+| `/homes` | `/homes` | `neoessentials.teleport.home.list` | ✅ | List all your homes |
 
 ---
 
@@ -98,18 +116,19 @@
 ### Server Warps
 | Command | Syntax | Permission | Default | Description |
 |---|---|---|---|---|
-| `/warp` | `/warp <name>` | `neoessentials.warp` | ✅ | Teleport to a named warp |
-| `/setwarp` | `/setwarp <name>` | `neoessentials.warp.set` | 🔒 | Create a warp at current location |
-| `/delwarp` | `/delwarp <name>` | `neoessentials.warp.delete` | 🔒 | Delete a warp |
-| `/warps` | `/warps [page]` | `neoessentials.warp.list` | ✅ | List all available warps |
+| `/warp` | `/warp <name>` | `neoessentials.teleport.warp` | ✅ | Teleport to a named warp |
+| `/setwarp` | `/setwarp <name>` | `neoessentials.teleport.warp.create` | 🔒 | Create a warp at current location |
+| `/delwarp` | `/delwarp <name>` | `neoessentials.teleport.warp.delete` | 🔒 | Delete a warp |
+| `/warps` | `/warps [page]` | `neoessentials.teleport.warp.list` | ✅ | List all available warps |
+| `/warpinfo` | `/warpinfo <name>` | `neoessentials.warpinfo` | 🔒 | Show warp coordinates and world |
 
 ### Player Warps
 | Command | Syntax | Permission | Default | Description |
 |---|---|---|---|---|
-| `/pwarp` | `/pwarp <name>` | `neoessentials.pwarp` | ✅ | Teleport to a player warp |
-| `/setpwarp` | `/setpwarp <name>` | `neoessentials.pwarp.set` | ✅ | Create your own player warp |
-| `/delpwarp` | `/delpwarp <name>` | `neoessentials.pwarp.delete` | ✅ | Delete one of your player warps |
-| `/pwarps` | `/pwarps` | `neoessentials.pwarp.list` | ✅ | List your player warps |
+| `/pwarp` | `/pwarp <name>` | `neoessentials.teleport.pwarp` | ✅ | Teleport to a player warp |
+| `/setpwarp` | `/setpwarp <name>` | `neoessentials.teleport.pwarp.create` | ✅ | Create your own player warp |
+| `/delpwarp` | `/delpwarp <name>` | `neoessentials.teleport.pwarp.delete` | ✅ | Delete one of your player warps |
+| `/pwarps` | `/pwarps` | `neoessentials.teleport.pwarp.list` | ✅ | List your player warps |
 
 ---
 
@@ -117,8 +136,8 @@
 
 | Command | Syntax | Permission | Default | Description |
 |---|---|---|---|---|
-| `/spawn` | `/spawn` | `neoessentials.spawn` | ✅ | Teleport to server spawn |
-| `/setspawn` | `/setspawn` | `neoessentials.spawn.set` | 🔒 | Set the server spawn at your location |
+| `/spawn` | `/spawn` | `neoessentials.teleport.spawn` | ✅ | Teleport to server spawn |
+| `/setspawn` | `/setspawn` | `neoessentials.teleport.spawn.set` | 🔒 | Set the server spawn at your location |
 
 ---
 
@@ -178,15 +197,22 @@
 | `/banip` | `/banip <player\|ip>` | `neoessentials.moderation.banip` | 🔒 | Ban a player's IP address |
 | `/unbanip` | `/unbanip <ip>` | `neoessentials.moderation.unbanip` | 🔒 | Unban an IP address |
 | `/banlist` | `/banlist [page]` | `neoessentials.moderation.banlist` | 🔒 | View all banned players |
+| `/tempbanip` | `/tempbanip <ip> <duration> [reason]` | `neoessentials.moderation.tempbanip` | 🔒 | Temporarily ban an IP address (was missing from this table) |
 
 ### Kicking & Muting
 | Command | Syntax | Permission | Default | Description |
 |---|---|---|---|---|
 | `/kick` | `/kick <player> [reason]` | `neoessentials.moderation.kick` | 🔒 | Kick a player from the server |
 | `/kickall` | `/kickall [reason]` | `neoessentials.moderation.kickall` | 🔒 | Kick all online players |
-| `/mute` | `/mute <player> [duration] [reason]` | `neoessentials.moderation.mute` | 🔒 | Mute a player |
-| `/unmute` | `/unmute <player>` | `neoessentials.moderation.unmute` | 🔒 | Unmute a player |
-| `/mutelist` | `/mutelist` | `neoessentials.moderation.mutelist` | 🔒 | List all muted players |
+| `/mute` | `/mute <player> [duration] [reason]` | none at the command level — see note | 🔒 (by convention, not enforced at the root) | Mute a player |
+| `/unmute` | `/unmute <player>` | none at the command level | 🔒 | Unmute a player |
+| `/mutelist` | `/mutelist` | none at the command level | 🔒 | List all muted players |
+
+> ⚠️ Unlike every other moderation command, `/mute`/`/unmute`/`/mutelist` have **no root
+> permission gate at all** — anyone can run them (the actual `neoessentials.chat.mute` node is
+> only checked deep inside the command body, not at registration). This means they're visible to
+> everyone in `/help` and not blocked from being attempted, though the body-level check should
+> still reject unauthorized use — worth a closer look if you rely on this being restricted.
 
 ### Jail
 | Command | Syntax | Permission | Default | Description |
@@ -195,21 +221,42 @@
 | `/jailfor` | `/jailfor <player> <jail> <duration> [reason]` | `neoessentials.moderation.jail.timed` | 🔒 | Jail a player for a duration |
 | `/unjail` | `/unjail <player>` | `neoessentials.moderation.unjail` | 🔒 | Release a player from jail |
 | `/setjail` | `/setjail <name>` | `neoessentials.moderation.setjail` | 🔒 | Create a jail at current location |
-| `/deljail` | `/deljail <name>` | `neoessentials.moderation.deljail` | 🔒 | Delete a jail location |
+| `/deljail` | `/deljail <name>` | `neoessentials.moderation.setjail` | 🔒 | Delete a jail location (shares `setjail`'s node, not a separate `.deljail`) |
 | `/jaillist` | `/jaillist` | `neoessentials.moderation.jaillist` | 🔒 | List all jail locations and jailed players |
+| `/jails` | alias for `/jaillist` | same | 🔒 | Alias (was missing from this table) |
+| `/jailinfo` | `/jailinfo <name>` | `neoessentials.moderation.jailinfo` | 🔒 | Show info about a specific jail (was missing from this table) |
+| `/togglejail` | `/togglejail <player>` | `neoessentials.moderation.jail` | 🔒 | Toggle a player's jailed state (was missing from this table) |
 
 ### Freeze & Vanish
 | Command | Syntax | Permission | Default | Description |
 |---|---|---|---|---|
 | `/freeze` | `/freeze <player>` | `neoessentials.moderation.freeze` | 🔒 | Freeze a player in place |
 | `/unfreeze` | `/unfreeze <player>` | `neoessentials.moderation.unfreeze` | 🔒 | Unfreeze a player |
-| `/freezeall` | `/freezeall` | `neoessentials.moderation.freeze` | 🔒 | Freeze all online players |
-| `/unfreezeall` | `/unfreezeall` | `neoessentials.moderation.unfreeze` | 🔒 | Unfreeze all players |
+| `/freezeall` | `/freezeall` | `neoessentials.moderation.freezeall` | 🔒 | Freeze all online players |
+| `/unfreezeall` | `/unfreezeall` | `neoessentials.moderation.unfreezeall` | 🔒 | Unfreeze all players |
 | `/freezelist` | `/freezelist` | `neoessentials.moderation.freezelist` | 🔒 | List all frozen players |
 | `/vanish` | `/vanish [on\|off]` | `neoessentials.moderation.vanish` | 🔒 | Toggle vanish mode (invisible to other players) |
 | `/v` | alias for `/vanish` | same | 🔒 | Alias |
 | `/unvanish` | `/unvanish` | `neoessentials.moderation.vanish` | 🔒 | Disable vanish mode |
-| `/vanishlist` | `/vanishlist` | `neoessentials.moderation.vanish` | 🔒 | List all vanished players |
+| `/vanishlist` | `/vanishlist` | `neoessentials.moderation.vanishlist` | 🔒 | List all vanished players |
+
+### Warnings, Notes & Reports
+| Command | Syntax | Permission | Default | Description |
+|---|---|---|---|---|
+| `/warn` | `/warn <player> [reason]` | `neoessentials.moderation.warn` | 🔒 | Issue a warning to a player |
+| `/warnings` | `/warnings <player>` | `neoessentials.moderation.warnings` | 🔒 | View a player's warnings |
+| `/clearwarnings` | `/clearwarnings <player>` | `neoessentials.moderation.warn` | 🔒 | Clear all warnings for a player |
+| `/removewarn` | `/removewarn <player> <warnId>` | `neoessentials.moderation.warn` | 🔒 | Remove a single warning by ID |
+| `/note` | `/note <player> <text>` | `neoessentials.moderation.note` | 🔒 | Add a staff note to a player's record |
+| `/notes` | `/notes <player>` | `neoessentials.moderation.notes` | 🔒 | View a player's staff notes |
+| `/removenote` | `/removenote <player> <noteId>` | `neoessentials.moderation.note` | 🔒 | Remove a staff note by ID |
+| `/report` | `/report <player> <reason>` | `neoessentials.moderation.report` | ✅ | Report a player, even while staff are offline |
+| `/reports` | `/reports` | `neoessentials.moderation.reports` | 🔒 | View the pending report queue |
+| `/reviewreport` | `/reviewreport <id> <accept\|dismiss> [notes]` | `neoessentials.moderation.reports` | 🔒 | Accept or dismiss a report |
+| `/modhistory` | `/modhistory <player>` | `neoessentials.moderation.history` | 🔒 | View a player's full moderation history — bans/mutes/kicks/warns (was missing from this table) |
+| `/history` | alias for `/modhistory` | same | 🔒 | Alias (was missing from this table) |
+
+See [Moderation System](ModerationSystem) for full details on history/audit trails and the pluggable storage backend (`config.json` → `storage`).
 
 ---
 
@@ -217,21 +264,26 @@
 
 | Command | Syntax | Permission | Default | Description |
 |---|---|---|---|---|
-| `/msg` | `/msg <player> <message>` | `neoessentials.chat.msg` | ✅ | Send a private message to a player |
+| `/msg` | `/msg <player> <message>` | none | ✅ | Send a private message to a player |
 | `/tell` | alias for `/msg` | same | ✅ | Alias |
 | `/whisper` | alias for `/msg` | same | ✅ | Alias |
 | `/message` | alias for `/msg` | same | ✅ | Alias |
 | `/w` | alias for `/msg` | same | ✅ | Alias |
-| `/reply` | `/reply <message>` | `neoessentials.chat.reply` | ✅ | Reply to the last private message received |
+| `/reply` | `/reply <message>` | none | ✅ | Reply to the last private message received |
 | `/r` | alias for `/reply` | same | ✅ | Alias |
-| `/msgtoggle` | `/msgtoggle` | `neoessentials.chat.msgtoggle` | ✅ | Toggle receiving private messages |
-| `/socialspy` | `/socialspy [on\|off]` | `neoessentials.chat.socialspy` | 🔒 | See all private messages between players |
-| `/ignore` | `/ignore <player>` | `neoessentials.chat.ignore` | ✅ | Ignore a player's messages |
-| `/unignore` | `/unignore <player>` | `neoessentials.chat.unignore` | ✅ | Stop ignoring a player |
-| `/mail` | `/mail send\|read\|clear\|sendall [args]` | `neoessentials.mail` | ✅ | In-game mail system |
+| `/msgtoggle` | `/msgtoggle` | none | ✅ | Toggle receiving private messages |
+| `/socialspy` | `/socialspy [on\|off]` | none | 🔒 (by convention, not enforced at the root) | See all private messages between players |
+| `/ignore` | `/ignore <player>` | none | ✅ | Ignore a player's messages |
+| `/unignore` | `/unignore <player>` | none | ✅ | Stop ignoring a player |
+| `/mail` | `/mail read [page]\|send <player> <msg>\|sendtemp <player> <duration> <msg>\|sendall <msg>\|sendtempall <duration> <msg>\|delete <id>\|clear [index\|player [index]]\|clearall` | `neoessentials.mail` (send/sendtemp need `.mail.send`/`.mail.sendtemp`; sendall/sendtempall need `.mail.sendall`/`.mail.sendtempall`; clear-others needs `.mail.clear.others`; clearall needs `.mail.clearall`) | ✅ (own mailbox) 🔒 (sendall/sendtempall/clearall/clear-others) | In-game mail system (was missing `sendtemp`/`sendtempall`/`delete`/`clearall` from the syntax column) |
 | `/helpop` | `/helpop <message>` | `neoessentials.helpop` | ✅ | Send a help request to all online staff |
 | `/ac` | alias for `/helpop` | same | ✅ | Alias |
 | `/amsg` | alias for `/helpop` | same | ✅ | Alias |
+
+> ⚠️ None of `/msg`/`/reply`/`/msgtoggle`/`/socialspy`/`/ignore`/`/unignore` and their aliases have
+> a root permission gate — every one of them is open to any player to attempt (whatever
+> restriction the "🔒" markers above implied historically isn't actually enforced at the command
+> level for these). `/mail` and `/helpop` are unaffected — both do have a real root permission.
 
 ---
 
@@ -239,12 +291,13 @@
 
 | Command | Syntax | Permission | Default | Description |
 |---|---|---|---|---|
-| `/kit` | `/kit [name] [player]` | `neoessentials.kit` | ✅ | Claim a kit (respects cooldown) |
-| `/kits` | `/kits [page]` | `neoessentials.kit.list` | ✅ | List all available kits |
+| `/kit` | `/kit [name] [player]` | `neoessentials.kits.use` | ✅ | Claim a kit (respects cooldown) |
+| `/kits` | `/kits [page]` | `neoessentials.kits.list` | ✅ | List all available kits |
 | `/listkits` | alias for `/kits` | same | ✅ | Alias |
-| `/createkit` | `/createkit <name> [cooldown]` | `neoessentials.kit.create` | 🔒 | Create a kit from current inventory |
-| `/delkit` | `/delkit <name>` | `neoessentials.kit.delete` | 🔒 | Delete a kit |
-| `/kitreset` | `/kitreset <kit> [player]` | `neoessentials.kit.reset` | 🔒 | Reset a player's kit cooldown |
+| `/createkit` | `/createkit <name> [cooldown]` | `neoessentials.kits.create` | 🔒 | Create a kit from current inventory |
+| `/delkit` | `/delkit <name>` | `neoessentials.kits.delete` | 🔒 | Delete a kit |
+| `/kitreset` | `/kitreset <kit> [player]` | `neoessentials.kitreset` | 🔒 | Reset a player's kit cooldown |
+| `/showkit` | `/showkit <name>` | `neoessentials.showkit` | ✅ | Preview a kit's contents without claiming it (was missing from this table) |
 
 ---
 
@@ -259,26 +312,49 @@
 | `/trash` | alias for `/dispose` | same | ✅ | Alias |
 | `/clearinventory` | `/clearinventory [player]` | `neoessentials.item.clearinventory` | 🔒 | Clear a player's inventory |
 | `/ci` | alias for `/clearinventory` | same | 🔒 | Alias |
-| `/clear` | alias for `/clearinventory` | same | 🔒 | Alias |
+| `/clearinventoryconfirmtoggle` | `/clearinventoryconfirmtoggle` | `neoessentials.ciconfirmtoggle` | ✅ | Toggle a confirmation prompt before `/ci` runs (was missing from this table) |
+| `/ciconfirmtoggle` | alias for `/clearinventoryconfirmtoggle` | same | ✅ | Alias (was missing from this table) |
+| `/customtext` | `/customtext <page>` | `neoessentials.customtext` | ✅ | Display a custom server text page (was missing from this table) |
+| `/ctext` | alias for `/customtext` | same | ✅ | Alias (was missing from this table) |
+| `/item` | `/item <id> [amount]` | `neoessentials.item` | 🔒 | Give yourself an item by registry ID |
+| `/i` | alias for `/item` | same | 🔒 | Alias |
+| `/potion` | `/potion <add\|remove\|clear> <effect> [duration] [amp]` | `neoessentials.potion` | 🔒 | Edit potion effects on held potion |
 | `/powertool` | `/powertool <command>` or `/powertool clear` | `neoessentials.item.powertool` | 🔒 | Bind a command to held item |
-| `/pt` | alias for `/powertool` | same | 🔒 | Alias (also alias for paytoggle — use with care) |
-| `/invsee` | `/invsee <player>` | `neoessentials.item.invsee` | 🔒 | View another player's inventory (read-only) |
+| `/pt` | alias for `/powertool` **or** `/paytoggle` (both register the literal `pt` — see the Economy section) | `neoessentials.item.powertool` (when resolved to powertool) | 🔒 | Alias |
+| `/powertoollist` | `/powertoollist` | `neoessentials.powertoollist` | 🔒 | List all your active powertool bindings (was missing from this table) |
+| `/ptlist` | alias for `/powertoollist` | same | 🔒 | Alias (was missing from this table) |
+
+> ⚠️ `/ptool`, `/powertooltoggle`, and `/ptt` are **not found anywhere in the current codebase** —
+> likely stale/fictional entries from an old doc pass.
+
+> **⚠️ Powertool command filter** — by default, commands containing relative coordinates (`~`), `@` selectors, `{...}` NBT, or shell-like characters are blocked.  
+> Set `allowUnsafeCommands: true` in `security.json` (or `config.json → security`) and run `/neoe reload` to unlock all patterns.  
+> See [Security Configuration](SplitConfigs#security-configuration-securityjson) for the full list of blocked patterns and examples.
+
+| `/invsee` | `/invsee <player>` | `neoessentials.invsee` | 🔒 | View another player's inventory (read-only) |
 | `/inv` | alias for `/invsee` | same | 🔒 | Alias |
-| `/invseeedit` | `/invseeedit <player>` | `neoessentials.item.invsee.edit` | 🔒 | View and edit another player's inventory |
-| `/enderchest` | `/enderchest <player>` | `neoessentials.item.enderchest` | 🔒 | View another player's ender chest |
+| `/invseeedit` | `/invseeedit <player>` | `neoessentials.invsee.edit` | 🔒 | View and edit another player's inventory |
+| `/enderchest` | `/enderchest <player>` | `neoessentials.enderchest` | 🔒 | View another player's ender chest |
 | `/ec` | alias for `/enderchest` | same | 🔒 | Alias |
-| `/enderchestedit` | `/enderchestedit <player>` | `neoessentials.item.enderchest.edit` | 🔒 | View and edit another player's ender chest |
+| `/enderchestedit` | `/enderchestedit <player>` | `neoessentials.enderchest.edit` | 🔒 | View and edit another player's ender chest |
 | `/ecedit` | alias for `/enderchestedit` | same | 🔒 | Alias |
+
+> **⚠️ Security note (build.40)** — `/inv` and `/ec` now require explicit permission. Prior to build.40 these aliases
+> bypassed permission checks due to a Brigadier redirect registration issue.  
+> `neoessentials.invsee` and `neoessentials.enderchest` are granted to the **moderator** group by default.  
+> `neoessentials.invsee.edit` and `neoessentials.enderchest.edit` are **admin-only** (not granted by default).
 
 ### Portable Workstations
 | Command | Syntax | Permission | Default | Description |
 |---|---|---|---|---|
-| `/anvil` | `/anvil` | `neoessentials.item.anvil` | 🔒 | Open portable anvil |
-| `/workbench` | `/workbench` | `neoessentials.item.workbench` | 🔒 | Open portable crafting table |
+| `/anvil` | `/anvil` | `neoessentials.anvil` | 🔒 | Open portable anvil |
+| `/workbench` | `/workbench` | `neoessentials.crafting` | 🔒 | Open portable crafting table |
 | `/crafting` | alias for `/workbench` | same | 🔒 | Alias |
 | `/craft` | alias for `/workbench` | same | 🔒 | Alias |
-| `/grindstone` | `/grindstone` | `neoessentials.item.grindstone` | 🔒 | Open portable grindstone |
-| `/smithing` | `/smithing` | `neoessentials.item.smithing` | 🔒 | Open portable smithing table |
+| `/grindstone` | `/grindstone` | `neoessentials.grindstone` | 🔒 | Open portable grindstone |
+| `/smithing` | `/smithing` | `neoessentials.smithing` | 🔒 | Open portable smithing table |
+| `/stonecutting` | `/stonecutting` | `neoessentials.stonecutting` | 🔒 | Open portable stonecutter |
+| `/stonecutter` | alias for `/stonecutting` | same | 🔒 | Alias |
 | `/loom` | `/loom` | `neoessentials.loom` | 🔒 | Open portable loom |
 | `/cartography` | `/cartography` | `neoessentials.cartography` | 🔒 | Open portable cartography table |
 | `/cartographytable` | alias for `/cartography` | same | 🔒 | Alias |
@@ -341,17 +417,34 @@
 | Command | Syntax | Permission | Default | Description |
 |---|---|---|---|---|
 | `/seen` | `/seen <player>` | `neoessentials.seen` | ✅ | Show if a player is online with location/ping, or offline |
-| `/near` | `/near [radius]` | `neoessentials.near` | ✅ | List players within radius (default 200 blocks) with distance |
+| `/near` | `/near [radius]` | `neoessentials.near` | ✅ | List players within radius (default 100 blocks, max 500) with distance |
 | `/ping` | `/ping [player]` | `neoessentials.ping` / `.ping.others` | ✅ | Show network latency in ms. Green <80ms, yellow <200ms, red otherwise |
 | `/playtime` | `/playtime [player]` | `neoessentials.playtime` / `.playtime.others` | ✅ | Show total server play time (hours/minutes/seconds) from vanilla stats |
 | `/whois` | `/whois <player>` | `neoessentials.whois` | 🔒 | Show UUID, world, coordinates, gamemode, ping, health and food level |
 | `/realname` | `/realname <nickname>` | `neoessentials.realname` | ✅ | Find the real username of a player by their display name/nickname |
 | `/sudo` | `/sudo <player> <command>` | `neoessentials.sudo` | 🔒 | Force a player to run a command. Prefix `c:` to send chat. Respects `neoessentials.sudo.exempt` |
 | `/suicide` | `/suicide` | `neoessentials.suicide` | ✅ | Kill yourself. Broadcasts death message to all online players |
-| `/msgtoggle` | `/msgtoggle [on\|off] [player]` | `neoessentials.msgtoggle` / `.msgtoggle.others` | ✅ | Block or allow incoming private messages. Synced with `MsgToggleManager` |
+| `/msgtoggle` | `/msgtoggle [on\|off] [player]` | none — see the [Chat & Messaging](#chat--messaging) note | ✅ | Block or allow incoming private messages. Synced with `MsgToggleManager` |
 | `/rtoggle` | `/rtoggle [on\|off] [player]` | `neoessentials.rtoggle` / `.rtoggle.others` | ✅ | Toggle whether `/r` replies to the last sender (default on) |
-| `/motd` | `/motd` | `neoessentials.motd` | ✅ | Show the message of the day (configured in `config.json` → `general.motd`) |
+| `/motd` | `/motd` | none — open to everyone | ✅ | Show the active message of the day |
+| `/motd set` | `/motd set <message>` | `neoessentials.motd.set` | 🔒 | Set the active profile's MOTD text |
+| `/motd clear` | `/motd clear` | `neoessentials.motd.set` | 🔒 | Clear the active profile's MOTD |
+| `/motd reload` | `/motd reload` | `neoessentials.motd.reload` | 🔒 | Reload all profiles from disk |
+| `/motd broadcast` | `/motd broadcast` | `neoessentials.motd.broadcast` | 🔒 | Broadcast active MOTD to all online players |
+| `/motd profile list` | `/motd profile list` | `neoessentials.motd.profile` | 🔒 | List all profiles |
+| `/motd profile create` | `/motd profile create <name> <message>` | `neoessentials.motd.profile` | 🔒 | Create or overwrite a profile |
+| `/motd profile delete` | `/motd profile delete <name>` | `neoessentials.motd.profile` | 🔒 | Delete a profile |
+| `/motd profile switch` | `/motd profile switch <name>` | `neoessentials.motd.profile` | 🔒 | Switch the active profile |
+| `/motd profile info` | `/motd profile info [name]` | `neoessentials.motd.profile` | 🔒 | Show profile details |
+| `/motd rotation enable` | `/motd rotation enable <minutes>` | `neoessentials.motd.rotation` | 🔒 | Enable auto-rotation |
+| `/motd rotation disable` | `/motd rotation disable` | `neoessentials.motd.rotation` | 🔒 | Disable auto-rotation |
+| `/motd rotation next` | `/motd rotation next` | `neoessentials.motd.rotation` | 🔒 | Rotate to next profile immediately |
 | `/rules` | `/rules` | `neoessentials.rules` | ✅ | Show server rules (configured in `config.json` → `general.rules`) |
+
+> The base `/motd` command itself has no permission gate (see row above) — the `/motd set\|clear\|
+> reload\|broadcast\|profile\|rotation` subcommand permissions above were **not** re-verified this
+> pass (the root-command audit that fixed everything else on this page doesn't cover internal
+> subcommand-level checks); treat them as unverified until checked individually.
 
 ---
 
@@ -384,8 +477,14 @@
 
 | Command | Syntax | Permission | Default | Description |
 |---|---|---|---|---|
-| `/dashboard` | `/dashboard start\|stop\|restart\|status\|info` | `neoessentials.dashboard` | 🔒 | Manage the web dashboard server |
-| `/dashboardregister` | `/dashboardregister [username] [password]` | `neoessentials.dashboard.register` | ✅ (if permitted) | Register a web dashboard account in-game |
+| `/dashboard` | `/dashboard start\|stop\|restart\|status\|url\|pair "<url>" <code>\|unpair` | `neoessentials.admin.dashboard` | 🔒 | Manage the web dashboard's REST API/WebSocket server |
+| `/dashboardregister` | `/dashboardregister start\|complete <username> <password>\|discord\|status` | `neoessentials.dashboard.access` | 🔒 | Register a web dashboard account in-game |
+| `/apikey` | `/apikey create <label> [role]\|list\|revoke <id>` | `neoessentials.dashboard.apikeys` | 🔒 | Manage long-lived API keys for external dashboard integrations |
+| `/linkaccount` | `/linkaccount <code>` | none | ✅ | Link your Minecraft account to an existing dashboard account, using a code from that account's Settings page |
+
+See [Web Dashboard](WebDashboard) for the full picture of these four command trees, including
+`webDashboard.roleSync` (automatic dashboard-role sync from real in-game permissions) and Minecraft
+account linking from the dashboard's own Settings page.
 
 ---
 
@@ -393,8 +492,41 @@
 
 | Command | Syntax | Permission | Default | Description |
 |---|---|---|---|---|
-| `/permissions` | `/permissions <user\|group> <action> [args]` | `neoessentials.permissions` | 🔒 | Manage user and group permissions |
+| `/permissions` | `/permissions <user\|group> <action> [args]` | none at the root — each subcommand checks its own permission internally (see below; not re-verified this pass) | 🔒 (by convention) | Manage user and group permissions |
 | `/pex` | alias for `/permissions` | same | 🔒 | Alias |
+| `/permissions debug` | `/permissions debug <player>` | `neoessentials.permissions.debug` | 🔒 | Full permission resolution trace for a player (see below) |
+| `/permissions group … setpriority` | `/permissions group <name> setpriority <value>` | `neoessentials.permissions.group.modify` | 🔒 | Set group priority (−999 to 999; higher = checked first in inheritance) |
+| `/permissions group … getpriority` | `/permissions group <name> getpriority` | `neoessentials.permissions.info.group` | 🔒 | Read the current priority of a group |
+| `/permissions user … addtemp` | `/permissions user <player> addtemp <node> <duration>` | `neoessentials.permissions.user.temp` | 🔒 | Grant a time-limited permission to a player (e.g. `1d`, `12h`, `30m`) |
+| `/permissions user … removetemp` | `/permissions user <player> removetemp <node>` | `neoessentials.permissions.user.temp` | 🔒 | Revoke a temporary permission before it expires |
+| `/permissions user … listtemp` | `/permissions user <player> listtemp` | `neoessentials.permissions.info.user` | 🔒 | List all active temporary permissions with time remaining |
+| `/permissions group … addtemp` | `/permissions group <name> addtemp <node> <duration>` | `neoessentials.permissions.group.temp` | 🔒 | Grant a time-limited permission to a group |
+| `/permissions group … removetemp` | `/permissions group <name> removetemp <node>` | `neoessentials.permissions.group.temp` | 🔒 | Revoke a temporary group permission early |
+| `/permissions group … listtemp` | `/permissions group <name> listtemp` | `neoessentials.permissions.info.group` | 🔒 | List all active group temp permissions with time remaining |
+| `/permissions user … context add` | `/permissions user <player> context add <contextKey> <node> allow\|deny` | `neoessentials.permissions.user.context` | 🔒 | Grant or deny a permission node in a specific context (world / time / gamemode) |
+| `/permissions user … context remove` | `/permissions user <player> context remove <contextKey> <node>` | `neoessentials.permissions.user.context` | 🔒 | Remove a contextual override |
+| `/permissions user … context list` | `/permissions user <player> context list` | `neoessentials.permissions.user.context` | 🔒 | List all contextual overrides for a player |
+| `/permissions group … context add` | `/permissions group <name> context add <contextKey> <node> allow\|deny` | `neoessentials.permissions.group.context` | 🔒 | Grant or deny a permission node in a specific context for a group |
+| `/permissions group … context remove` | `/permissions group <name> context remove <contextKey> <node>` | `neoessentials.permissions.group.context` | 🔒 | Remove a contextual group override |
+| `/permissions group … context list` | `/permissions group <name> context list` | `neoessentials.permissions.group.context` | 🔒 | List all contextual overrides for a group |
+
+> The subcommand-level permission nodes in the table above (`.debug`, `.group.modify`,
+> `.info.group`, `.user.temp`, `.group.context`, etc.) were **not** re-verified this pass — the
+> root-command audit that fixed the rest of this page only covers each command's top-level
+> `.requires()` check, not internal per-subcommand checks buried in `PermissionsCommand`'s body.
+> Treat these as unverified until checked individually.
+
+> **`/permissions debug <player>`**  
+> Prints a complete in-game diagnostic for the named player without requiring debug logging:
+> - System mode (Internal · External adapter · EMERGENCY)
+> - Adapter health, detected version, consecutive failures
+> - `opsBypassPermissions` and `vanillaOpFallback` on/off
+> - OP status (works for offline players via profile cache)
+> - Assigned group, direct user permission nodes
+> - Group inheritance chain (recursive, indented)
+> - Numbered resolution summary — shows which step would **GRANT** or **continue** for this player based on current config
+>
+> Useful when players report "I have the group but still can't use the command" — diagnose everything from in-game chat.
 
 ---
 
@@ -412,7 +544,6 @@
 | `/near` | `/near [radius]` | `neoessentials.near` | ✅ | Show nearby players |
 | `/nearby` | alias for `/near` | same | ✅ | Alias |
 | `/ping` | `/ping [player]` | `neoessentials.ping` | ✅ | Check your ping (or another player's) |
-| `/pong` | alias for `/ping` | same | ✅ | Alias |
 | `/playtime` | `/playtime [player]` | `neoessentials.playtime` | ✅ | Check a player's total play time |
 | `/getpos` | `/getpos [player]` | `neoessentials.getpos` | ✅ | Show your current coordinates |
 | `/coords` | alias for `/getpos` | same | ✅ | Alias |
@@ -420,20 +551,26 @@
 | `/compass` | `/compass` | `neoessentials.compass` | ✅ | Show your current facing direction |
 | `/direction` | alias for `/compass` | same | ✅ | Alias |
 | `/depth` | `/depth` | `neoessentials.depth` | ✅ | Show your current depth (Y level relative to sea level) |
-| `/motd` | `/motd` | `neoessentials.motd` | ✅ | View the server message of the day |
+| `/motd` | `/motd [set\|clear\|reload\|broadcast\|profile\|rotation]` | none — open to everyone (base command; subcommands unverified, see [Player Info & Admin Tools](#player-info--admin-tools)) | ✅ | View / manage the server message of the day (see full table above) |
 | `/rules` | `/rules` | `neoessentials.rules` | ✅ | View the server rules |
+
+> ⚠️ `/pong` (previously listed as an alias for `/ping`) is **not found anywhere in the current
+> codebase** — it's declared in the mod's own internal command registry (for `/help` listing
+> purposes) but no class actually registers it as a real Brigadier command, so it doesn't work.
+> Likely a leftover from before `/ping`'s aliases were finalized.
 
 ### Player Actions
 | Command | Syntax | Permission | Default | Description |
 |---|---|---|---|---|
-| `/nick` | `/nick <nickname\|off>` | `neoessentials.nick` | 🔒 | Set your display nickname |
-| `/nickname` | alias for `/nick` | same | 🔒 | Alias |
+| `/nick` | `/nick [<name>\|reset\|off]` | `neoessentials.nick` | ✅ | Set / clear / show your display nickname |
+| `/nickname` | Brigadier redirect → `/nick` | same | ✅ | Functional alias for `/nick` |
+| `/setnick` | `/setnick <player> <name\|reset>` | `neoessentials.nick.others` | 🔒 | Set or clear another player's nickname (admin) |
 | `/realname` | `/realname <nickname>` | `neoessentials.realname` | ✅ | Find a player's real name from their nickname |
 | `/suicide` | `/suicide` | `neoessentials.suicide` | ✅ | Kill yourself |
 | `/killme` | alias for `/suicide` | same | ✅ | Alias |
 | `/sign` | `/sign <line> <text>` | `neoessentials.sign` | 🔒 | Edit sign text |
 | `/book` | `/book` | `neoessentials.book` | 🔒 | Edit or unsign a written book |
-| `/language` | `/language [code]` | `neoessentials.language` | 🔒 | View or switch the server language |
+| `/language` | `/language [code]` | vanilla OP level 4 (not a `neoessentials.*` permission node at all) | 🔒 | View or switch the server language |
 | `/world` | `/world [name] [player]` | `neoessentials.world` / `.world.others` | 🔒 | Teleport to a world/dimension (lists worlds if no arg) |
 | `/spawner` | `/spawner <mob>` | `neoessentials.spawner` | 🔒 | Change the looked-at mob spawner type |
 | `/recipe` | `/recipe [item]` | `neoessentials.recipe` | ✅ | Unlock and show crafting recipe for held or named item |
@@ -443,26 +580,35 @@
 
 ## 📊 Command Count Summary
 
+> Recounted this pass to match the tables above exactly (row counts, including aliases and
+> subcommand rows) — several sections had grown since the last count without the total being
+> updated. A few commands (`/whois`, `/seen`, `/near`, `/ping`, `/playtime`) are intentionally
+> listed in two sections each since they're documented from two angles; this table counts rows,
+> not unique commands, same as before.
+
 | System | Commands (incl. aliases) |
 |---|---|
-| Economy | 8 |
-| Teleportation | 17 |
+| Economy | 9 |
+| Teleportation | 19 |
 | Homes | 5 |
-| Warps | 8 |
+| Warps | 9 |
 | Spawn | 2 |
 | Player State & Admin Tools | 15 |
 | Server Admin | 16 |
-| Moderation | 23 |
-| Chat & Messaging | 13 |
-| Kits | 6 |
-| Items (incl. workstations) | 21 |
+| Moderation | 42 |
+| Chat & Messaging | 15 |
+| Kits | 7 |
+| Items (incl. workstations) | 36 |
 | Worth & Sell | 3 |
 | Utility | 7 |
+| Item Customisation & Miscellaneous Commands | 11 |
+| Player Info & Admin Tools | 24 |
+| World Interaction & Fun Commands | 9 |
 | AFK | 2 |
-| Web Dashboard | 2 |
-| Permissions Management | 2 |
-| Miscellaneous | 22 |
-| **Total** | **~172** |
+| Web Dashboard | 4 |
+| Permissions Management | 17 |
+| Miscellaneous | 31 |
+| **Total** | **~284** |
 
 ---
 
@@ -484,6 +630,24 @@ All commands can be individually enabled or disabled in `config.json` under the 
 Economy-related settings (currency symbol, sell multiplier, etc.) are under the `economy` section.  
 Teleportation settings (delays, safe teleport, random teleport) are under `teleportation`.  
 Web dashboard settings are under `webDashboard`.
+
+---
+
+## Mod Root Commands
+
+Commands for managing NeoEssentials itself — reload, split config management, and routing.
+
+| Command | Syntax | Permission | Default | Description |
+|---|---|---|---|---|
+| `/neoe` | `/neoe` | `neoessentials.use` | ✅ | Show list of available NeoEssentials commands |
+| `/neoe reload` | `/neoe reload` | `neoessentials.admin.reload` | 🔒 | Reload all configs and live systems (chat, kits, homes, tablist, etc.) |
+| `/neoe config split` | `/neoe config split` | `neoessentials.admin.reload` | 🔒 | Migrate monolithic config.json to split files |
+| `/neoe config status` | `/neoe config status` | `neoessentials.admin.reload` | 🔒 | Show ✔/✘ status of every split config file |
+| `/neoe config validate` | `/neoe config validate` | `neoessentials.admin.reload` | 🔒 | Check all split config files for problems |
+| `/neoe config repair` | `/neoe config repair` | `neoessentials.admin.reload` | 🔒 | Auto-regenerate missing/incomplete split config files |
+| `/neoessentials` | alias | same | ✅ | Alias for `/neoe` |
+
+> See [Split Config System](SplitConfigs.md) for the full split config documentation.
 
 ---
 

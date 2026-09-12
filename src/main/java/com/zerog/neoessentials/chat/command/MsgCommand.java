@@ -9,10 +9,12 @@ import net.minecraft.server.level.ServerPlayer;
 import com.zerog.neoessentials.api.ChatAPI;
 import com.zerog.neoessentials.chat.ChatManager;
 import com.zerog.neoessentials.util.MessageUtil;
-import com.zerog.neoessentials.util.ChatDebugUtil;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import net.minecraft.server.MinecraftServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.util.Map;
 
 /**
  * Handles the /msg command for private messaging between players.
@@ -25,14 +27,14 @@ public class MsgCommand {
      * @param dispatcher The command dispatcher
      */
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        ChatDebugUtil.debug("MsgCommand - Registering /msg command");
+        NeoLog.debug(LOGGER, LogCategory.CHAT, "MsgCommand - Registering /msg command");
         // Register with vanilla aliases to override vanilla behavior
         registerCommand(dispatcher, "msg");
         registerCommand(dispatcher, "tell");
         registerCommand(dispatcher, "w");
         
         // Also register with test names to see if custom commands work at all
-        ChatDebugUtil.debug("MsgCommand - Also registering test commands: /message, /pm");
+        NeoLog.debug(LOGGER, LogCategory.CHAT, "MsgCommand - Also registering test commands: /message, /pm");
         registerCommand(dispatcher, "message");
         registerCommand(dispatcher, "pm");
     }
@@ -42,7 +44,7 @@ public class MsgCommand {
             .then(Commands.argument("target", EntityArgument.player())
                 .then(Commands.argument("message", StringArgumentType.greedyString())
                     .executes(ctx -> {
-                        ChatDebugUtil.debug("MsgCommand - Command executed!");
+                        NeoLog.debug(LOGGER, LogCategory.CHAT, "MsgCommand - Command executed!");
                         CommandSourceStack source = ctx.getSource();
                         ServerPlayer target;
                         try {
@@ -66,25 +68,25 @@ public class MsgCommand {
                             return 0;
                         }
                         
-                        ChatDebugUtil.debug("MsgCommand - Processing message from %s to %s", sender.getName().getString(), target.getName().getString());
+                        NeoLog.debug(LOGGER, LogCategory.CHAT, "MsgCommand - Processing message from {} to {}", sender.getName().getString(), target.getName().getString());
                         
                         // Check if messaging self
                         if (sender.equals(target)) {
-                            ChatDebugUtil.debug("MsgCommand - FAILED: Player trying to message self");
+                            NeoLog.debug(LOGGER, LogCategory.CHAT, "MsgCommand - FAILED: Player trying to message self");
                             source.sendFailure(MessageUtil.error("commands.neoessentials.msg.self"));
                             return 0;
                         }
                         
                         // Check if chat module is enabled
                         if (!com.zerog.neoessentials.config.ConfigManager.isChatEnabled()) {
-                            ChatDebugUtil.debug("MsgCommand - FAILED: Chat module is disabled");
+                            NeoLog.debug(LOGGER, LogCategory.CHAT, "MsgCommand - FAILED: Chat module is disabled");
                             source.sendFailure(MessageUtil.error("commands.neoessentials.msg.disabled"));
                             return 0;
                         }
                         
                         // Check if individual msg command is enabled
                         if (!com.zerog.neoessentials.config.ConfigManager.getInstance().isCommandEnabled("msg")) {
-                            ChatDebugUtil.debug("MsgCommand - FAILED: Msg command is disabled");
+                            NeoLog.debug(LOGGER, LogCategory.CHAT, "MsgCommand - FAILED: Msg command is disabled");
                             source.sendFailure(MessageUtil.error("commands.neoessentials.msg.disabled"));
                             return 0;
                         }
@@ -92,16 +94,16 @@ public class MsgCommand {
                         // Legacy check for backwards compatibility
                         ChatManager chatManager = ChatAPI.getChatManager();
                         if (chatManager != null && !chatManager.isMsgEnabled()) {
-                            ChatDebugUtil.debug("MsgCommand - FAILED: Messaging is disabled (legacy check)");
+                            NeoLog.debug(LOGGER, LogCategory.CHAT, "MsgCommand - FAILED: Messaging is disabled (legacy check)");
                             source.sendFailure(MessageUtil.error("commands.neoessentials.msg.disabled"));
                             return 0;
                         }
                         
                         // Proper permission validation using PermissionAPI
                         boolean hasPermission = com.zerog.neoessentials.api.permissions.PermissionAPI.hasPermission(sender.getUUID(), "neoessentials.chat.msg");
-                        ChatDebugUtil.debug("MsgCommand - Permission check for %s: %s", sender.getName().getString(), hasPermission);
+                        NeoLog.debug(LOGGER, LogCategory.CHAT, "MsgCommand - Permission check for {}: {}", sender.getName().getString(), hasPermission);
                         if (!hasPermission) {
-                            ChatDebugUtil.debug("MsgCommand - FAILED: No permission for neoessentials.chat.msg");
+                            NeoLog.debug(LOGGER, LogCategory.CHAT, "MsgCommand - FAILED: No permission for neoessentials.chat.msg");
                             source.sendFailure(MessageUtil.error("commands.neoessentials.msg.no_permission"));
                             return 0;
                         }
@@ -109,17 +111,17 @@ public class MsgCommand {
                         // --- Mute/ignore/msgtoggle check ---
                         String senderName = sender.getName().getString();
                         boolean isMuted = com.zerog.neoessentials.chat.MuteManager.isMuted(sender);
-                        ChatDebugUtil.debug("MsgCommand - Checking mute for %s, result: %s", senderName, isMuted);
+                        NeoLog.debug(LOGGER, LogCategory.CHAT, "MsgCommand - Checking mute for {}, result: {}", senderName, isMuted);
                         if (isMuted) {
                             // Log for debugging
-                            ChatDebugUtil.debug("MsgCommand - FAILED: Player is muted");
-                            LOGGER.debug("Blocked /msg from muted player: {}", senderName);
+                            NeoLog.debug(LOGGER, LogCategory.CHAT, "MsgCommand - FAILED: Player is muted");
+                            NeoLog.debug(LOGGER, LogCategory.CHAT, "Blocked /msg from muted player: {}", senderName);
                             source.sendFailure(MessageUtil.error("commands.neoessentials.msg.sender_muted"));
                             return 0;
                         }
                         
                         if (com.zerog.neoessentials.chat.IgnoreManager.isIgnoring(target, sender)) {
-                            ChatDebugUtil.debug("MsgCommand - FAILED: Target is ignoring sender");
+                            NeoLog.debug(LOGGER, LogCategory.CHAT, "MsgCommand - FAILED: Target is ignoring sender");
                             source.sendFailure(MessageUtil.error("commands.neoessentials.msg.target_ignoring"));
                             return 0;
                         }
@@ -127,31 +129,31 @@ public class MsgCommand {
                         if (com.zerog.neoessentials.chat.MsgToggleManager.isMsgToggled(target)) {
                             // Check if sender has bypass permission
                             if (!sender.hasPermissions(4) && !com.zerog.neoessentials.api.permissions.PermissionAPI.hasPermission(sender.getUUID(), "neoessentials.chat.msgtoggle.bypass")) {
-                                ChatDebugUtil.debug("MsgCommand - FAILED: Target has messaging toggled off and sender lacks bypass");
+                                NeoLog.debug(LOGGER, LogCategory.CHAT, "MsgCommand - FAILED: Target has messaging toggled off and sender lacks bypass");
                                 source.sendFailure(MessageUtil.error("commands.neoessentials.msg.target_toggled_off", target.getName().getString()));
                                 return 0;
                             }
                         }
                         
-                        ChatDebugUtil.debug("MsgCommand - SUCCESS: All checks passed, sending message");
+                        NeoLog.debug(LOGGER, LogCategory.CHAT, "MsgCommand - SUCCESS: All checks passed, sending message");
                         
-                        // Send message using PlaceholderAPI for consistent placeholder support
-                        String toTemplate = MessageUtil.localize("commands.neoessentials.msg.format.to");
-                        String fromTemplate = MessageUtil.localize("commands.neoessentials.msg.format.from");
-                        
-                        // Add MESSAGE placeholder and resolve with PlaceholderAPI
-                        String toMessage = toTemplate.replace("{MESSAGE}", message);
-                        String fromMessage = fromTemplate.replace("{MESSAGE}", message);
-                        
-                        String resolvedToMessage = com.zerog.neoessentials.api.PlaceholderAPI.setPlaceholders(target, toMessage);
-                        String resolvedFromMessage = com.zerog.neoessentials.api.PlaceholderAPI.setPlaceholders(sender, fromMessage);
+                        // Get templates (config override > lang key)
+                        String toTemplate  = getMsgFormat("msgFormatTo",  "commands.neoessentials.msg.format.to");
+                        String fromTemplate = getMsgFormat("msgFormatFrom", "commands.neoessentials.msg.format.from");
+
+                        // Resolve templates: {message}/{MESSAGE} + PlaceholderAPI for remaining tokens.
+                        // Pass target context for "To" message ({neoessentials_displayname} = target name)
+                        // Pass sender context for "From" message ({neoessentials_displayname} = sender name)
+                        Map<String, String> vars = Map.of("message", message, "MESSAGE", message);
+                        String resolvedToMessage   = MessageUtil.resolveTemplate(target, toTemplate,   vars);
+                        String resolvedFromMessage = MessageUtil.resolveTemplate(sender, fromTemplate, vars);
                         
                         target.sendSystemMessage(MessageUtil.coloredText(resolvedFromMessage));
                         sender.sendSystemMessage(MessageUtil.coloredText(resolvedToMessage));
                         
                         // Update last message tracking for reply functionality
                         // Only the target should be able to reply to the sender
-                        ChatDebugUtil.debug("MsgCommand - Setting last messager: %s can reply to %s", target.getName().getString(), sender.getName().getString());
+                        NeoLog.debug(LOGGER, LogCategory.CHAT, "MsgCommand - Setting last messager: {} can reply to {}", target.getName().getString(), sender.getName().getString());
                         com.zerog.neoessentials.chat.LastMessageManager.setLastMessager(target, sender);
                         
                         // --- SocialSpy integration ---
@@ -165,5 +167,30 @@ public class MsgCommand {
                 )
             )
         );
+    }
+
+    /**
+     * Retrieves a private-message format template.
+     * Priority: {@code chat.messaging.<configKey>} in config.json → lang key fallback.
+     *
+     * @param configKey  Key name inside {@code chat.messaging} section of config.json
+     * @param langKey    Translation key fallback
+     */
+    static String getMsgFormat(String configKey, String langKey) {
+        try {
+            com.google.gson.JsonObject chatConfig =
+                com.zerog.neoessentials.config.ConfigManager.getInstance().getConfig("chat");
+            if (chatConfig != null && chatConfig.has("messaging")) {
+                com.google.gson.JsonObject messaging = chatConfig.getAsJsonObject("messaging");
+                if (messaging != null && messaging.has(configKey)) {
+                    String fmt = messaging.get(configKey).getAsString();
+                    if (fmt != null && !fmt.isBlank()) return fmt;
+                }
+            }
+        } catch (Exception e) {
+            com.zerog.neoessentials.logging.NeoLog.debug(LOGGER, com.zerog.neoessentials.logging.LogCategory.CHAT,
+                "Failed to read chat.messaging.{}, falling back to localized default", configKey, e);
+        }
+        return MessageUtil.localize(langKey);
     }
 }

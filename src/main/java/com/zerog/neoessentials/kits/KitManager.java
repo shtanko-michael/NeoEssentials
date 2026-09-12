@@ -1,10 +1,11 @@
 package com.zerog.neoessentials.kits;
 
 import com.google.gson.JsonObject;
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.zerog.neoessentials.api.permissions.PermissionAPI;
 import com.zerog.neoessentials.util.MessageUtil;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import net.minecraft.server.level.ServerPlayer;
@@ -15,9 +16,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.Reader;
-import java.io.Writer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -27,7 +26,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 /**
  * Manages all kit operations including creation, deletion, usage tracking, and cooldowns.
@@ -36,225 +34,290 @@ import java.util.stream.Collectors;
 public class KitManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(KitManager.class);
     private static final KitManager INSTANCE = new KitManager();
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
+    private static final String KIT_COLLECTION = "kits";
+    private static final String COOLDOWN_COLLECTION = "kit_cooldowns";
+    private static final String USAGE_COLLECTION = "kit_usages";
+
+    private final com.zerog.neoessentials.storage.DataStore store;
+
     private final Map<String, Kit> kits = new ConcurrentHashMap<>();
     private final Map<UUID, Map<String, Long>> playerCooldowns = new ConcurrentHashMap<>();
     private final Map<UUID, Map<String, Integer>> playerUsages = new ConcurrentHashMap<>();
-    private final File playerDataFile = com.zerog.neoessentials.util.ResourceUtil.getDataFile("kit_player_data.json");
+    // Guards against a double /kit claim: canUseKit() (read cooldown/usage) and giveKit()'s
+    // actual item-giving + cooldown/usage update are a check-then-act sequence with no lock
+    // held across it, so two rapid /kit <name> invocations (double-tap, macro) could both pass
+    // canUseKit() before either write landed — same class of bug as the click-spam issue fixed
+    // in ShopInteractHandler and the stale-listing issue fixed in AuctionHouseManager.
+    private final Set<UUID> claimsInProgress = ConcurrentHashMap.newKeySet();
     private volatile boolean initialized = false;
-    
-    private KitManager() {}
-    
+
+    private KitManager() {
+        this.store = com.zerog.neoessentials.storage.StorageManager.getInstance().getStore();
+    }
+
     public static KitManager getInstance() {
         return INSTANCE;
     }
-    
+
     /**
      * Initializes the kit manager by loading all kits from configuration.
      */
     public synchronized void initialize() {
         if (initialized) return;
-        
+
         try {
-            LOGGER.info("Initializing Kit Manager...");
+            NeoLog.info(LOGGER, LogCategory.KITS, "Initializing Kit Manager...");
+            migrateLegacyFilesIfNeeded();
             loadKits();
             loadPlayerData();
             initialized = true;
-            LOGGER.info("Kit Manager initialized with {} kits", kits.size());
-        } catch (Exception e) {
+            NeoLog.info(LOGGER, LogCategory.KITS, "Kit Manager initialized with {} kits", kits.size());
+        } catch (Throwable e) {
             LOGGER.error("Failed to initialize Kit Manager: {}", e.getMessage(), e);
         }
     }
     
     /**
-     * Loads all kits from the configuration.
+     * Re-deserializes every kit's items from storage. {@link #initialize()} runs during
+     * {@code RegisterCommandsEvent}, which fires before {@code AuctionComponentSerializer}'s
+     * server reference is set (that happens at {@code ServerStartedEvent}) — so any kit item
+     * carrying saved {@code DataComponentMap} data (enchantments, custom names, etc.) silently
+     * fails to deserialize on that first load and is dropped from the kit. Call this once the
+     * server has started to re-load every kit with components now correctly bound; loadKits()
+     * naturally overwrites each kit's map entry in place, so this is safe to call even if the
+     * first load already partially succeeded.
+     */
+    public void reloadKitItemsAfterServerStart() {
+        if (!initialized) return;
+        NeoLog.debug(LOGGER, LogCategory.KITS, "Re-loading kits now that item components are bound...");
+        loadKits();
+    }
+
+    /**
+     * Loads all kits from the active {@link com.zerog.neoessentials.storage.DataStore}.
      */
     private void loadKits() {
         try {
-            File kitsFile = com.zerog.neoessentials.util.ResourceUtil.getConfigFile("kits.json");
-            
-            if (kitsFile.exists()) {
-                try (Reader reader = new FileReader(kitsFile)) {
-                    JsonObject config = GSON.fromJson(reader, JsonObject.class);
-                    
-                    if (config != null && config.has("kits")) {
-                        JsonElement kitsElement = config.get("kits");
-                        if (kitsElement != null && kitsElement.isJsonArray()) {
-                            JsonArray kitsArray = kitsElement.getAsJsonArray();
-                            int loadedCount = 0;
+            int loadedCount = 0;
+            for (JsonObject obj : store.getAll(KIT_COLLECTION).values()) {
+                try {
+                    Kit kit = Kit.fromJson(obj);
+                    kits.put(kit.getName(), kit);
 
-                            for (JsonElement element : kitsArray) {
-                                if (element.isJsonObject()) {
-                                    try {
-                                        Kit kit = Kit.fromJson(element.getAsJsonObject());
-                                        kits.put(kit.getName(), kit);
-
-                                        // Register kit permission with the permission registry for tab completion
-                                        try {
-                                            com.zerog.neoessentials.api.permissions.PermissionRegistry.getInstance()
-                                                .registerKitPermission(kit.getName());
-                                        } catch (Exception e) {
-                                            LOGGER.warn("Failed to register kit permission for '{}': {}", kit.getName(), e.getMessage());
-                                        }
-
-                                        loadedCount++;
-                                    } catch (Exception e) {
-                                        LOGGER.warn("Failed to load kit from config: {}", e.getMessage());
-                                    }
-                                }
-                            }
-
-                            LOGGER.info("Loaded {} kits from configuration", loadedCount);
-                        }
+                    // Register kit permission with the permission registry for tab completion
+                    try {
+                        com.zerog.neoessentials.api.permissions.PermissionRegistry.getInstance()
+                            .registerKitPermission(kit.getName());
+                    } catch (Throwable e) {
+                        LOGGER.warn("Failed to register kit permission for '{}': {}", kit.getName(), e.getMessage());
                     }
+
+                    loadedCount++;
+                } catch (Throwable e) {
+                    LOGGER.warn("Failed to load kit from storage: {}", e.getMessage());
                 }
-            } else {
-                LOGGER.info("No kits configuration found, starting with empty kit list");
-                // Create default config
-                saveKits();
             }
-        } catch (Exception e) {
-            LOGGER.error("Failed to load kits from configuration: {}", e.getMessage(), e);
+            NeoLog.info(LOGGER, LogCategory.KITS, "Loaded {} kits from storage", loadedCount);
+        } catch (Throwable e) {
+            LOGGER.error("Failed to load kits from storage: {}", e.getMessage(), e);
         }
     }
-    
+
     /**
-     * Saves all kits to the configuration.
+     * Persists a single kit definition to storage. Replaces the previous behavior of
+     * rewriting the entire kits.json file on every create/update — only the changed
+     * kit's record is written now.
      */
-    private void saveKits() {
+    private void saveKit(Kit kit) {
         try {
-            File kitsFile = com.zerog.neoessentials.util.ResourceUtil.getConfigFile("kits.json");
-            
-            // Ensure directory exists
-            File parentDir = kitsFile.getParentFile();
-            if (parentDir != null && !parentDir.exists()) {
-                parentDir.mkdirs();
-            }
-            
-            JsonObject config = new JsonObject();
-            config.addProperty("_configVersion", 1);
-            config.addProperty("_configVersion_comment", 
-                "DO NOT MODIFY: This field is used by NeoEssentials for automatic config updates.");
-            
-            JsonArray kitsArray = new JsonArray();
-            for (Kit kit : kits.values()) {
-                kitsArray.add(kit.toJson());
-            }
-            config.add("kits", kitsArray);
-            
-            try (Writer writer = new FileWriter(kitsFile)) {
-                GSON.toJson(config, writer);
-            }
-            LOGGER.debug("Saved {} kits to configuration", kits.size());
+            store.put(KIT_COLLECTION, kit.getName(), kit.toJson());
         } catch (Exception e) {
-            LOGGER.error("Failed to save kits to configuration: {}", e.getMessage(), e);
+            LOGGER.error("Failed to save kit '{}': {}", kit.getName(), e.getMessage(), e);
         }
     }
-    
+
     /**
-     * Loads player cooldown and usage data.
+     * Loads player cooldown and usage data from the active DataStore.
      */
     private void loadPlayerData() {
         try {
-            if (!playerDataFile.exists()) {
-                LOGGER.debug("No kit player data file found, starting fresh");
-                return;
-            }
-            
-            try (Reader reader = new FileReader(playerDataFile)) {
-                JsonObject data = GSON.fromJson(reader, JsonObject.class);
-                
-                if (data != null) {
-                // Load cooldowns
-                if (data.has("cooldowns")) {
-                    JsonObject cooldownsJson = data.getAsJsonObject("cooldowns");
-                    for (Map.Entry<String, JsonElement> playerEntry : cooldownsJson.entrySet()) {
-                        try {
-                            UUID playerId = UUID.fromString(playerEntry.getKey());
-                            JsonObject playerCooldowns = playerEntry.getValue().getAsJsonObject();
-                            
-                            Map<String, Long> cooldowns = new HashMap<>();
-                            for (Map.Entry<String, JsonElement> kitEntry : playerCooldowns.entrySet()) {
-                                cooldowns.put(kitEntry.getKey(), kitEntry.getValue().getAsLong());
-                            }
-                            this.playerCooldowns.put(playerId, cooldowns);
-                        } catch (Exception e) {
-                            LOGGER.warn("Failed to load cooldown data for player: {}", e.getMessage());
+            for (Map.Entry<String, JsonObject> entry : store.getAll(COOLDOWN_COLLECTION).entrySet()) {
+                try {
+                    UUID playerId = UUID.fromString(entry.getKey());
+                    JsonObject record = entry.getValue();
+                    Map<String, Long> cooldowns = new HashMap<>();
+                    if (record.has("cooldowns")) {
+                        for (Map.Entry<String, JsonElement> kitEntry : record.getAsJsonObject("cooldowns").entrySet()) {
+                            cooldowns.put(kitEntry.getKey(), kitEntry.getValue().getAsLong());
                         }
                     }
-                }
-                
-                // Load usage counts
-                if (data.has("usages")) {
-                    JsonObject usagesJson = data.getAsJsonObject("usages");
-                    for (Map.Entry<String, JsonElement> playerEntry : usagesJson.entrySet()) {
-                        try {
-                            UUID playerId = UUID.fromString(playerEntry.getKey());
-                            JsonObject playerUsages = playerEntry.getValue().getAsJsonObject();
-                            
-                            Map<String, Integer> usages = new HashMap<>();
-                            for (Map.Entry<String, JsonElement> kitEntry : playerUsages.entrySet()) {
-                                usages.put(kitEntry.getKey(), kitEntry.getValue().getAsInt());
-                            }
-                            this.playerUsages.put(playerId, usages);
-                        } catch (Exception e) {
-                            LOGGER.warn("Failed to load usage data for player: {}", e.getMessage());
-                        }
-                    }
-                }
-                
-                    LOGGER.debug("Loaded player data for {} players", 
-                               Math.max(playerCooldowns.size(), playerUsages.size()));
+                    this.playerCooldowns.put(playerId, cooldowns);
+                } catch (Exception e) {
+                    LOGGER.warn("Failed to load cooldown data for player: {}", e.getMessage());
                 }
             }
+
+            for (Map.Entry<String, JsonObject> entry : store.getAll(USAGE_COLLECTION).entrySet()) {
+                try {
+                    UUID playerId = UUID.fromString(entry.getKey());
+                    JsonObject record = entry.getValue();
+                    Map<String, Integer> usages = new HashMap<>();
+                    if (record.has("usages")) {
+                        for (Map.Entry<String, JsonElement> kitEntry : record.getAsJsonObject("usages").entrySet()) {
+                            usages.put(kitEntry.getKey(), kitEntry.getValue().getAsInt());
+                        }
+                    }
+                    this.playerUsages.put(playerId, usages);
+                } catch (Exception e) {
+                    LOGGER.warn("Failed to load usage data for player: {}", e.getMessage());
+                }
+            }
+
+            NeoLog.debug(LOGGER, LogCategory.KITS, "Loaded player data for {} players",
+                       Math.max(playerCooldowns.size(), playerUsages.size()));
         } catch (Exception e) {
             LOGGER.error("Failed to load player kit data: {}", e.getMessage(), e);
         }
     }
-    
+
     /**
-     * Saves player cooldown and usage data.
+     * Persists a single player's cooldown map to the "kit_cooldowns" collection.
+     * Deletes the record if the player no longer has any cooldowns tracked.
      */
-    private void savePlayerData() {
+    private void saveCooldowns(UUID playerId) {
         try {
-            // Ensure directory exists
-            File parentDir = playerDataFile.getParentFile();
-            if (parentDir != null && !parentDir.exists()) {
-                parentDir.mkdirs();
+            Map<String, Long> map = playerCooldowns.get(playerId);
+            if (map == null || map.isEmpty()) {
+                store.delete(COOLDOWN_COLLECTION, playerId.toString());
+                return;
             }
-            
-            JsonObject data = new JsonObject();
-            
-            // Save cooldowns
             JsonObject cooldownsJson = new JsonObject();
-            for (Map.Entry<UUID, Map<String, Long>> playerEntry : playerCooldowns.entrySet()) {
-                JsonObject playerCooldowns = new JsonObject();
-                for (Map.Entry<String, Long> kitEntry : playerEntry.getValue().entrySet()) {
-                    playerCooldowns.addProperty(kitEntry.getKey(), kitEntry.getValue());
-                }
-                cooldownsJson.add(playerEntry.getKey().toString(), playerCooldowns);
+            for (Map.Entry<String, Long> kitEntry : map.entrySet()) {
+                cooldownsJson.addProperty(kitEntry.getKey(), kitEntry.getValue());
             }
-            data.add("cooldowns", cooldownsJson);
-            
-            // Save usage counts
-            JsonObject usagesJson = new JsonObject();
-            for (Map.Entry<UUID, Map<String, Integer>> playerEntry : playerUsages.entrySet()) {
-                JsonObject playerUsages = new JsonObject();
-                for (Map.Entry<String, Integer> kitEntry : playerEntry.getValue().entrySet()) {
-                    playerUsages.addProperty(kitEntry.getKey(), kitEntry.getValue());
-                }
-                usagesJson.add(playerEntry.getKey().toString(), playerUsages);
-            }
-            data.add("usages", usagesJson);
-            
-            try (Writer writer = new FileWriter(playerDataFile)) {
-                GSON.toJson(data, writer);
-            }
-            LOGGER.debug("Saved player kit data");
+            JsonObject record = new JsonObject();
+            record.add("cooldowns", cooldownsJson);
+            store.put(COOLDOWN_COLLECTION, playerId.toString(), record);
         } catch (Exception e) {
-            LOGGER.error("Failed to save player kit data: {}", e.getMessage(), e);
+            LOGGER.error("Failed to save cooldown data for player {}: {}", playerId, e.getMessage(), e);
         }
+    }
+
+    /**
+     * Persists a single player's usage-count map to the "kit_usages" collection.
+     * Deletes the record if the player no longer has any usages tracked.
+     */
+    private void saveUsages(UUID playerId) {
+        try {
+            Map<String, Integer> map = playerUsages.get(playerId);
+            if (map == null || map.isEmpty()) {
+                store.delete(USAGE_COLLECTION, playerId.toString());
+                return;
+            }
+            JsonObject usagesJson = new JsonObject();
+            for (Map.Entry<String, Integer> kitEntry : map.entrySet()) {
+                usagesJson.addProperty(kitEntry.getKey(), kitEntry.getValue());
+            }
+            JsonObject record = new JsonObject();
+            record.add("usages", usagesJson);
+            store.put(USAGE_COLLECTION, playerId.toString(), record);
+        } catch (Exception e) {
+            LOGGER.error("Failed to save usage data for player {}: {}", playerId, e.getMessage(), e);
+        }
+    }
+
+    /**
+     * One-time import of the legacy kits.json (config dir) and kit_player_data.json (data
+     * dir) files into the active DataStore, if all three collections are still empty and
+     * storage.autoMigrate is enabled. Old files are left in place, just no longer written to.
+     */
+    private void migrateLegacyFilesIfNeeded() {
+        if (store.hasAnyData(KIT_COLLECTION) || store.hasAnyData(COOLDOWN_COLLECTION) || store.hasAnyData(USAGE_COLLECTION)) return;
+        if (!com.zerog.neoessentials.config.ConfigManager.getInstance().isStorageAutoMigrateEnabled()) return;
+
+        int migrated = 0;
+        migrated += migrateLegacyKitsFile();
+        migrated += migrateLegacyPlayerDataFile();
+
+        if (migrated > 0) {
+            NeoLog.info(LOGGER, LogCategory.KITS, "KitManager: migrated {} record(s) from legacy files into the '{}' storage backend.",
+                migrated, com.zerog.neoessentials.storage.StorageManager.getInstance().getActiveType());
+        }
+    }
+
+    private int migrateLegacyKitsFile() {
+        File kitsFile = com.zerog.neoessentials.util.ResourceUtil.getConfigFile("kits.json");
+        if (!kitsFile.exists()) return 0;
+
+        int count = 0;
+        try (Reader reader = new FileReader(kitsFile)) {
+            JsonObject config = GSON.fromJson(reader, JsonObject.class);
+            if (config != null && config.has("kits")) {
+                JsonElement kitsElement = config.get("kits");
+                if (kitsElement != null && kitsElement.isJsonArray()) {
+                    for (JsonElement element : kitsElement.getAsJsonArray()) {
+                        if (!element.isJsonObject()) continue;
+                        try {
+                            JsonObject obj = element.getAsJsonObject().deepCopy();
+                            // Reuse Kit.fromJson()'s name sanitization so the storage id matches
+                            // exactly what loadKits()/Kit.getName() will key it under.
+                            String name = obj.has("name")
+                                ? obj.get("name").getAsString().toLowerCase().replaceAll("[^a-z0-9_]", "")
+                                : UUID.randomUUID().toString();
+                            store.put(KIT_COLLECTION, name, obj);
+                            count++;
+                        } catch (Exception e) {
+                            LOGGER.warn("Failed to migrate legacy kit entry: {}", e.getMessage());
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.error("Failed to migrate legacy kits.json: {}", e.getMessage());
+        }
+        return count;
+    }
+
+    private int migrateLegacyPlayerDataFile() {
+        File playerDataFile = com.zerog.neoessentials.util.ResourceUtil.getDataFile("kit_player_data.json");
+        if (!playerDataFile.exists()) return 0;
+
+        int count = 0;
+        try (Reader reader = new FileReader(playerDataFile)) {
+            JsonObject data = GSON.fromJson(reader, JsonObject.class);
+            if (data != null) {
+                if (data.has("cooldowns")) {
+                    JsonObject cooldownsJson = data.getAsJsonObject("cooldowns");
+                    for (Map.Entry<String, JsonElement> playerEntry : cooldownsJson.entrySet()) {
+                        try {
+                            JsonObject record = new JsonObject();
+                            record.add("cooldowns", playerEntry.getValue().getAsJsonObject());
+                            store.put(COOLDOWN_COLLECTION, playerEntry.getKey(), record);
+                            count++;
+                        } catch (Exception e) {
+                            LOGGER.warn("Failed to migrate legacy cooldown entry: {}", e.getMessage());
+                        }
+                    }
+                }
+                if (data.has("usages")) {
+                    JsonObject usagesJson = data.getAsJsonObject("usages");
+                    for (Map.Entry<String, JsonElement> playerEntry : usagesJson.entrySet()) {
+                        try {
+                            JsonObject record = new JsonObject();
+                            record.add("usages", playerEntry.getValue().getAsJsonObject());
+                            store.put(USAGE_COLLECTION, playerEntry.getKey(), record);
+                            count++;
+                        } catch (Exception e) {
+                            LOGGER.warn("Failed to migrate legacy usage entry: {}", e.getMessage());
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.error("Failed to migrate legacy kit_player_data.json: {}", e.getMessage());
+        }
+        return count;
     }
     
     // Kit Management Methods
@@ -267,7 +330,7 @@ public class KitManager {
         try {
             Kit kit = new Kit(name, displayName, description, items, cooldownMillis, permission, -1, true);
             kits.put(kit.getName(), kit);
-            saveKits();
+            saveKit(kit);
             
             // Register kit permission with the permission registry for tab completion
             try {
@@ -277,7 +340,7 @@ public class KitManager {
                 LOGGER.warn("Failed to register kit permission for '{}': {}", kit.getName(), e.getMessage());
             }
             
-            LOGGER.info("Created/updated kit: {}", kit.getName());
+            NeoLog.info(LOGGER, LogCategory.KITS, "Created/updated kit: {}", kit.getName());
             return true;
         } catch (Exception e) {
             LOGGER.error("Failed to create kit '{}': {}", name, e.getMessage(), e);
@@ -291,7 +354,7 @@ public class KitManager {
     public boolean deleteKit(String name) {
         String normalizedName = name.toLowerCase();
         if (kits.remove(normalizedName) != null) {
-            saveKits();
+            store.delete(KIT_COLLECTION, normalizedName);
             
             // Unregister kit permission from the permission registry
             try {
@@ -301,7 +364,7 @@ public class KitManager {
                 LOGGER.warn("Failed to unregister kit permission for '{}': {}", normalizedName, e.getMessage());
             }
             
-            LOGGER.info("Deleted kit: {}", normalizedName);
+            NeoLog.info(LOGGER, LogCategory.KITS, "Deleted kit: {}", normalizedName);
             return true;
         }
         return false;
@@ -352,10 +415,10 @@ public class KitManager {
             initialize();
         }
         return kits.values().stream()
-                .filter(kit -> kit.isEnabled())
-                .filter(kit -> kit.getPermission() == null || 
+                .filter(Kit::isEnabled)
+                .filter(kit -> kit.getPermission() == null ||
                               PermissionAPI.hasPermission(player.getUUID(), kit.getPermission()))
-                .collect(Collectors.toList());
+                .toList();
     }
     
     /**
@@ -365,30 +428,40 @@ public class KitManager {
         // If allowKitOverride is enabled and player has override permission, skip all restrictions
         if (com.zerog.neoessentials.config.ConfigManager.getInstance().isAllowKitOverrideEnabled() &&
             com.zerog.neoessentials.api.permissions.PermissionAPI.hasPermission(player.getUUID(), "neoessentials.kits.override")) {
-            return new KitUsageResult(true, MessageUtil.localize("commands.neoessentials.kits.reason.can_use_override"));
+            NeoLog.debug(LOGGER, LogCategory.KITS, "Kit eligibility bypassed via override permission: player={} kit={}",
+                player.getName().getString(), kitName);
+            return new KitUsageResult(true, MessageUtil.localize("commands.neoessentials.kits.util.usable_override"));
         }
-        
+
         Kit kit = getKit(kitName);
         if (kit == null) {
-            return new KitUsageResult(false, MessageUtil.localize("commands.neoessentials.kits.reason.not_found"));
+            NeoLog.debug(LOGGER, LogCategory.KITS, "Kit eligibility denied: player={} kit={} reason=kit not found",
+                player.getName().getString(), kitName);
+            return new KitUsageResult(false, MessageUtil.localize("commands.neoessentials.kits.util.not_found"));
         }
 
         if (!kit.isEnabled()) {
-            return new KitUsageResult(false, MessageUtil.localize("commands.neoessentials.kits.reason.disabled"));
+            NeoLog.debug(LOGGER, LogCategory.KITS, "Kit eligibility denied: player={} kit={} reason=kit disabled",
+                player.getName().getString(), kitName);
+            return new KitUsageResult(false, MessageUtil.localize("commands.neoessentials.kits.util.disabled"));
         }
-        
+
         // Check permission
         if (kit.getPermission() != null) {
             if (!PermissionAPI.hasPermission(player.getUUID(), kit.getPermission())) {
-                return new KitUsageResult(false, MessageUtil.localize("commands.neoessentials.kits.reason.no_permission"));
+                NeoLog.debug(LOGGER, LogCategory.KITS, "Kit eligibility denied: player={} kit={} reason=missing permission '{}'",
+                    player.getName().getString(), kitName, kit.getPermission());
+                return new KitUsageResult(false, MessageUtil.localize("commands.neoessentials.kits.util.no_permission"));
             }
         }
-        
+
         // Check cooldown (unless player has exemption)
-        if (!hasCooldownExemption(player, kitName)) {
+        if (!isCooldownExempt(player, kitName)) {
             long remainingCooldown = getRemainingCooldown(player.getUUID(), kitName);
             if (remainingCooldown > 0) {
-                return new KitUsageResult(false, MessageUtil.localize("commands.neoessentials.kits.reason.cooldown", formatTime(remainingCooldown)));
+                NeoLog.debug(LOGGER, LogCategory.KITS, "Kit eligibility denied: player={} kit={} reason=on cooldown ({} ms remaining)",
+                    player.getName().getString(), kitName, remainingCooldown);
+                return new KitUsageResult(false, MessageUtil.localize("commands.neoessentials.kits.util.on_cooldown", formatTime(remainingCooldown)));
             }
         }
 
@@ -396,13 +469,15 @@ public class KitManager {
         if (kit.getMaxUses() > 0) {
             int usageCount = getUsageCount(player.getUUID(), kitName);
             if (usageCount >= kit.getMaxUses()) {
-                return new KitUsageResult(false, MessageUtil.localize("commands.neoessentials.kits.reason.max_uses"));
+                NeoLog.debug(LOGGER, LogCategory.KITS, "Kit eligibility denied: player={} kit={} reason=max uses reached ({}/{})",
+                    player.getName().getString(), kitName, usageCount, kit.getMaxUses());
+                return new KitUsageResult(false, MessageUtil.localize("commands.neoessentials.kits.util.max_uses_reached"));
             }
         }
 
         // Enforce maxKitsPerPlayer (active cooldowns)
         int maxKits = com.zerog.neoessentials.config.ConfigManager.getInstance().getMaxKitsPerPlayer();
-        if (maxKits > 0 && !hasCooldownExemption(player, kitName)) {
+        if (maxKits > 0 && !isCooldownExempt(player, kitName)) {
             // Count number of kits with active cooldowns for this player
             int activeCooldowns = 0;
             Map<String, Long> cooldownMap = playerCooldowns.get(player.getUUID());
@@ -423,17 +498,34 @@ public class KitManager {
                 }
             }
             if (!alreadyOnCooldown && activeCooldowns >= maxKits) {
-                return new KitUsageResult(false, MessageUtil.localize("commands.neoessentials.kits.reason.max_kits_cooldown", maxKits));
+                NeoLog.debug(LOGGER, LogCategory.KITS, "Kit eligibility denied: player={} kit={} reason=max kits on cooldown ({}/{})",
+                    player.getName().getString(), kitName, activeCooldowns, maxKits);
+                return new KitUsageResult(false, MessageUtil.localize("commands.neoessentials.kits.util.max_kits_on_cooldown", maxKits));
             }
         }
 
-        return new KitUsageResult(true, MessageUtil.localize("commands.neoessentials.kits.reason.can_use"));
+        NeoLog.debug(LOGGER, LogCategory.KITS, "Kit eligibility check passed: player={} kit={}", player.getName().getString(), kitName);
+        return new KitUsageResult(true, MessageUtil.localize("commands.neoessentials.kits.util.usable"));
     }
     
     /**
      * Gives a kit to a player.
      */
     public KitUsageResult giveKit(ServerPlayer player, String kitName) {
+        NeoLog.debug(LOGGER, LogCategory.KITS, "Kit claim requested: player={} kit={}", player.getName().getString(), kitName);
+        if (!claimsInProgress.add(player.getUUID())) {
+            NeoLog.debug(LOGGER, LogCategory.KITS, "Kit claim rejected: player={} kit={} reason=claim already in progress",
+                player.getName().getString(), kitName);
+            return new KitUsageResult(false, MessageUtil.localize("commands.neoessentials.kits.util.claim_in_progress"));
+        }
+        try {
+            return doGiveKit(player, kitName);
+        } finally {
+            claimsInProgress.remove(player.getUUID());
+        }
+    }
+
+    private KitUsageResult doGiveKit(ServerPlayer player, String kitName) {
         KitUsageResult canUse = canUseKit(player, kitName);
         if (!canUse.isAllowed()) {
             return canUse;
@@ -442,7 +534,7 @@ public class KitManager {
         if (!(com.zerog.neoessentials.config.ConfigManager.getInstance().isAllowKitOverrideEnabled() &&
               com.zerog.neoessentials.api.permissions.PermissionAPI.hasPermission(player.getUUID(), "neoessentials.kits.override"))) {
             int maxKits = com.zerog.neoessentials.config.ConfigManager.getInstance().getMaxKitsPerPlayer();
-            if (maxKits > 0 && !hasCooldownExemption(player, kitName)) {
+            if (maxKits > 0 && !isCooldownExempt(player, kitName)) {
                 Map<String, Long> cooldownMap = playerCooldowns.get(player.getUUID());
                 int activeCooldowns = 0;
                 long now = System.currentTimeMillis();
@@ -462,14 +554,14 @@ public class KitManager {
                     }
                 }
                 if (!alreadyOnCooldown && activeCooldowns >= maxKits) {
-                    return new KitUsageResult(false, MessageUtil.localize("commands.neoessentials.kits.reason.max_kits_cooldown", maxKits));
+                    return new KitUsageResult(false, MessageUtil.localize("commands.neoessentials.kits.util.max_kits_on_cooldown", maxKits));
                 }
             }
         }
 
         Kit kit = getKit(kitName);
         if (kit == null) {
-            return new KitUsageResult(false, MessageUtil.localize("commands.neoessentials.kits.reason.not_found"));
+            return new KitUsageResult(false, MessageUtil.localize("commands.neoessentials.kits.util.not_found"));
         }
 
         try {
@@ -537,30 +629,62 @@ public class KitManager {
 
             // Update cooldown and usage tracking
             // Only set cooldown if player doesn't have exemption
-            if (!hasCooldownExemption(player, kitName)) {
+            if (!isCooldownExempt(player, kitName)) {
                 setCooldown(player.getUUID(), kitName, System.currentTimeMillis() + kit.getCooldownMillis());
             }
             incrementUsage(player.getUUID(), kitName);
 
-            savePlayerData();
+            saveCooldowns(player.getUUID());
+            saveUsages(player.getUUID());
 
-            String result = String.format("Given kit '%s' (%d items)", kit.getDisplayName(), itemsGiven.size());
+            runKitCommands(kit, player);
+
+            String result = MessageUtil.localize("commands.neoessentials.kits.util.given", kit.getDisplayName(), itemsGiven.size());
             if (!itemsDropped.isEmpty()) {
-                result += String.format(" (%d items dropped)", itemsDropped.size());
+                result += MessageUtil.localize("commands.neoessentials.kits.util.items_dropped_suffix", itemsDropped.size());
             }
             if (!deniedItems.isEmpty()) {
-                result += String.format(" (%d items denied: %s)", deniedItems.size(), String.join(", ", deniedItems));
+                result += MessageUtil.localize("commands.neoessentials.kits.util.items_denied_suffix", deniedItems.size(), String.join(", ", deniedItems));
             }
 
             if (com.zerog.neoessentials.config.ConfigManager.isLogKitUsageEnabled()) {
-                LOGGER.info("Player {} used kit {}", player.getName().getString(), kitName);
+                NeoLog.info(LOGGER, LogCategory.KITS, "Player {} used kit {}", player.getName().getString(), kitName);
             }
+            NeoLog.debug(LOGGER, LogCategory.KITS,
+                "Kit granted: player={} kit={} itemsGiven={} itemsDropped={} itemsDenied={}",
+                player.getName().getString(), kitName, itemsGiven.size(), itemsDropped.size(), deniedItems.size());
             return new KitUsageResult(true, result);
 
         } catch (Exception e) {
-            LOGGER.error("Failed to give kit '{}' to player {}: {}",
-                        kitName, player.getName().getString(), e.getMessage(), e);
-            return new KitUsageResult(false, MessageUtil.localize("commands.neoessentials.kits.reason.error"));
+            NeoLog.error(LOGGER, LogCategory.KITS,
+                "Failed to give kit '" + kitName + "' to player " + player.getName().getString(), e);
+            return new KitUsageResult(false, MessageUtil.localize("commands.neoessentials.kits.util.give_error"));
+        }
+    }
+
+    /**
+     * Runs this kit's console commands (kits.json's per-kit "commands" array) once the items
+     * have actually been handed over — e.g. granting a permission or broadcasting a message
+     * alongside the items. {player} is replaced with the claiming player's name. Same
+     * server.execute()-wrapped console-dispatch pattern as {@link com.zerog.neoessentials.scheduler.TaskScheduler}.
+     */
+    private void runKitCommands(Kit kit, ServerPlayer player) {
+        List<String> commands = kit.getCommands();
+        if (commands.isEmpty()) return;
+
+        var server = player.getServer();
+        if (server == null) return;
+
+        for (String command : commands) {
+            String cmd = (command.startsWith("/") ? command.substring(1) : command)
+                .replace("{player}", player.getName().getString());
+            server.execute(() -> {
+                try {
+                    server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), cmd);
+                } catch (Exception e) {
+                    LOGGER.error("Failed to execute kit command '{}' from kit '{}': {}", cmd, kit.getName(), e.getMessage(), e);
+                }
+            });
         }
     }
 
@@ -570,6 +694,9 @@ public class KitManager {
      * and returns true even on a partial fit, so the leftover must be read from the stack
      * itself — checking only the boolean silently loses the remainder. Counts above the
      * item's max stack size are split into max-size stacks first.
+     *
+     * <p>This is a fork-local helper — upstream has no equivalent — and the kit-giving code
+     * above calls it, so it must survive an upstream sync.
      */
     private void giveOrDrop(ServerPlayer player, ItemStack item,
                             List<ItemStack> itemsGiven, List<ItemStack> itemsDropped) {
@@ -622,15 +749,16 @@ public class KitManager {
         if (map != null) {
             map.remove(kitName.toLowerCase());
         }
-        savePlayerData();
+        saveCooldowns(playerId);
     }
 
     /**
      * Reset ALL kit cooldowns for a player.
      */
+    @SuppressWarnings("unused") // Public API — may be called by external integrations
     public void resetAllCooldowns(UUID playerId) {
         playerCooldowns.remove(playerId);
-        savePlayerData();
+        store.delete(COOLDOWN_COLLECTION, playerId.toString());
     }
 
     private void setCooldown(UUID playerId, String kitName, long cooldownEnd) {
@@ -643,7 +771,31 @@ public class KitManager {
         if (playerUsageMap == null) return 0;
         return playerUsageMap.getOrDefault(kitName.toLowerCase(), 0);
     }
-    
+
+    /**
+     * Reset the use count for a player on a specific kit. Previously there was no way to do
+     * this at all — {@link #resetCooldown} only clears the cooldown timestamp, so a player who
+     * hit a kit's {@code maxUses} cap stayed permanently blocked by {@link #canUseKit}'s usage
+     * check regardless of cooldown state, with no admin command able to clear it.
+     */
+    public void resetUsage(UUID playerId, String kitName) {
+        Map<String, Integer> map = playerUsages.get(playerId);
+        if (map != null) {
+            map.remove(kitName.toLowerCase());
+        }
+        saveUsages(playerId);
+    }
+
+    /**
+     * Reset ALL kit use counts for a player.
+     */
+    @SuppressWarnings("unused") // Public API — may be called by external integrations
+    public void resetAllUsages(UUID playerId) {
+        playerUsages.remove(playerId);
+        store.delete(USAGE_COLLECTION, playerId.toString());
+    }
+
+
     private void incrementUsage(UUID playerId, String kitName) {
         playerUsages.computeIfAbsent(playerId, k -> new ConcurrentHashMap<>())
                    .merge(kitName.toLowerCase(), 1, Integer::sum);
@@ -653,7 +805,7 @@ public class KitManager {
      * Checks if a player has cooldown exemption for a kit.
      * Checks both global cooldown exemption and per-kit exemption.
      */
-    private boolean hasCooldownExemption(ServerPlayer player, String kitName) {
+    private boolean isCooldownExempt(ServerPlayer player, String kitName) {
         UUID playerId = player.getUUID();
         // Check override permission if allowKitOverride is enabled
         if (com.zerog.neoessentials.config.ConfigManager.getInstance().isAllowKitOverrideEnabled()) {
@@ -665,14 +817,9 @@ public class KitManager {
         if (com.zerog.neoessentials.api.permissions.PermissionAPI.hasPermission(playerId, "neoessentials.kits.nocooldown")) {
             return true;
         }
-        
         // Check per-kit cooldown exemption
         String kitNocooldownPermission = "neoessentials.kits." + kitName.toLowerCase() + ".nocooldown";
-        if (com.zerog.neoessentials.api.permissions.PermissionAPI.hasPermission(playerId, kitNocooldownPermission)) {
-            return true;
-        }
-        
-        return false;
+        return com.zerog.neoessentials.api.permissions.PermissionAPI.hasPermission(playerId, kitNocooldownPermission);
     }
     
     private String formatTime(long millis) {

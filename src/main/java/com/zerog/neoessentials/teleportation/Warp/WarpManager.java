@@ -3,16 +3,16 @@ package com.zerog.neoessentials.teleportation.Warp;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.zerog.neoessentials.config.ConfigManager;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import com.zerog.neoessentials.teleportation.TeleportLocation;
 import com.zerog.neoessentials.teleportation.TeleportUtil;
 import com.zerog.neoessentials.util.MessageUtil;
@@ -33,6 +33,9 @@ public class WarpManager {
     // Cooldown for setting warps (seconds) and per-player last set timestamps
     private final Map<UUID, Long> lastWarpSetTimestamps = new ConcurrentHashMap<>();
     private int warpSetCooldown = 0;
+    // Cooldown for USING warps (seconds) and per-player last use timestamps
+    private final Map<UUID, Long> lastWarpUseTimestamps = new ConcurrentHashMap<>();
+    private int warpUseCooldown = 0;
     // --- Persistence for player warps ---
     // private static final String PLAYER_WARPS_FILE = "playerwarps.json";
 
@@ -56,8 +59,16 @@ public class WarpManager {
     }
     
     private final Map<String, TeleportLocation> warps = new ConcurrentHashMap<>();
-    private final Gson gson = new Gson();
-    
+
+    private static final String WARPS_COLLECTION = "warps";
+    private static final String PLAYER_WARPS_COLLECTION = "player_warps";
+    // Reserved record id (not a valid warp name — isValidWarpName() only allows
+    // [a-zA-Z0-9_-]) used to persist the warp settings blob that used to live under
+    // warps.json's "config" key.
+    private static final String CONFIG_RECORD_ID = "!!config!!";
+    private final com.zerog.neoessentials.storage.DataStore store =
+        com.zerog.neoessentials.storage.StorageManager.getInstance().getStore();
+
     // Configuration
     private int teleportDelay = 0; // Instant for warps by default
     private boolean requireSafeLocations = true;
@@ -68,6 +79,7 @@ public class WarpManager {
 
     private WarpManager() {
         loadConfig();
+        migrateLegacyFilesIfNeeded();
         loadWarps();
         loadPlayerWarps();
     }
@@ -96,17 +108,34 @@ public class WarpManager {
                         if (warpSettings.has("maxPlayerWarps")) {
                             try {
                                 maxPlayerWarps = warpSettings.get("maxPlayerWarps").getAsInt();
-                            } catch (Exception ignored) {}
+                            } catch (Exception e) {
+                                NeoLog.debug(LOGGER, LogCategory.TELEPORTATION,
+                                    "Failed to parse warpSettings.maxPlayerWarps, using default", e);
+                            }
                         }
                         if (warpSettings.has("warpSetCooldown")) {
                             try {
                                 warpSetCooldown = warpSettings.get("warpSetCooldown").getAsInt();
-                            } catch (Exception ignored) {}
+                            } catch (Exception e) {
+                                NeoLog.debug(LOGGER, LogCategory.TELEPORTATION,
+                                    "Failed to parse warpSettings.warpSetCooldown, using default", e);
+                            }
+                        }
+                        if (warpSettings.has("warpCooldown")) {
+                            try {
+                                warpUseCooldown = warpSettings.get("warpCooldown").getAsInt();
+                            } catch (Exception e) {
+                                NeoLog.debug(LOGGER, LogCategory.TELEPORTATION,
+                                    "Failed to parse warpSettings.warpCooldown, using default", e);
+                            }
                         }
                         if (warpSettings.has("allowCrossDimensionWarps")) {
                             try {
                                 allowCrossDimensionWarps = warpSettings.get("allowCrossDimensionWarps").getAsBoolean();
-                            } catch (Exception ignored) {}
+                            } catch (Exception e) {
+                                NeoLog.debug(LOGGER, LogCategory.TELEPORTATION,
+                                    "Failed to parse warpSettings.allowCrossDimensionWarps, using default", e);
+                            }
                         }
                     }
 
@@ -116,13 +145,16 @@ public class WarpManager {
                         if (generalSettings.has("teleportDelay")) {
                             try {
                                 teleportDelay = generalSettings.get("teleportDelay").getAsInt();
-                            } catch (Exception ignored) {}
+                            } catch (Exception e) {
+                                NeoLog.debug(LOGGER, LogCategory.TELEPORTATION,
+                                    "Failed to parse generalSettings.teleportDelay, using default", e);
+                            }
                         }
                     }
                 }
             }
-            LOGGER.debug("Warp config loaded: requireSafe={}, maxWarps={}, delay={}",
-                requireSafeLocations, maxWarps, teleportDelay);
+            NeoLog.info(LOGGER, LogCategory.TELEPORTATION, "[WarpManager] Config loaded — safetyCheck={}, maxWarps={}, allowPlayerWarps={}, maxPlayerWarps={}, warmup={}s, useCooldown={}s, setCooldown={}s, crossDimension={}",
+                requireSafeLocations, maxWarps, allowPlayerWarps, maxPlayerWarps, teleportDelay, warpUseCooldown, warpSetCooldown, allowCrossDimensionWarps);
         } catch (Exception e) {
             LOGGER.warn("Failed to load warp config, using defaults: {}", e.getMessage());
         }
@@ -194,23 +226,22 @@ public class WarpManager {
             return false;
         }
         
-        // Enforce warp set cooldown per player (atomic check)
+        // Check warp-set cooldown (read-only) — only actually consumed once the warp genuinely
+        // gets created (see below); an invalid name, a name collision, or the player-warp limit
+        // no longer costs the cooldown for a /setpwarp that never took effect.
+        UUID playerId = player.getUUID();
         if (warpSetCooldown > 0) {
-            long now = System.currentTimeMillis();
-            UUID playerId = player.getUUID();
-            Long lastSet = lastWarpSetTimestamps.putIfAbsent(playerId, now);
-            if (lastSet != null && (now - lastSet < warpSetCooldown * 1000L)) {
-                long secondsLeft = (warpSetCooldown - ((now - lastSet) / 1000));
-                player.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.warp.set_cooldown", secondsLeft));
-                return false;
-            }
-            // Update timestamp atomically if cooldown passed
+            Long lastSet = lastWarpSetTimestamps.get(playerId);
             if (lastSet != null) {
-                lastWarpSetTimestamps.put(playerId, now);
+                long elapsed = System.currentTimeMillis() - lastSet;
+                if (elapsed < warpSetCooldown * 1000L) {
+                    long secondsLeft = (warpSetCooldown - (elapsed / 1000));
+                    player.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.warp.set_cooldown", secondsLeft));
+                    return false;
+                }
             }
         }
-        
-        UUID playerId = player.getUUID();
+
         String normalizedName = caseSensitiveNames ? warpName : warpName.toLowerCase();
         
         if (!isValidWarpName(warpName)) {
@@ -242,10 +273,15 @@ public class WarpManager {
             player.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.warp.already_exists", warpName));
             return false;
         }
-        
+
+        // Warp genuinely created — now commit the cooldown.
+        if (warpSetCooldown > 0) {
+            lastWarpSetTimestamps.put(playerId, System.currentTimeMillis());
+        }
+
         savePlayerWarps();
         player.sendSystemMessage(MessageUtil.success("commands.neoessentials.teleport.warp.playerwarp_created", warpName, location.getLocationString()));
-        LOGGER.info("Player {} created player warp '{}' at {}", player.getName().getString(), warpName, location.getLocationString());
+        NeoLog.info(LOGGER, LogCategory.TELEPORTATION, "Player {} created player warp '{}' at {}", player.getName().getString(), warpName, location.getLocationString());
         return true;
     }
 
@@ -268,7 +304,7 @@ public class WarpManager {
         
         savePlayerWarps();
         player.sendSystemMessage(MessageUtil.success("commands.neoessentials.teleport.warp.playerwarp_deleted", warpName));
-        LOGGER.info("Player {} deleted player warp '{}'", player.getName().getString(), warpName);
+        NeoLog.info(LOGGER, LogCategory.TELEPORTATION, "Player {} deleted player warp '{}'", player.getName().getString(), warpName);
         return true;
     }
 
@@ -287,6 +323,39 @@ public class WarpManager {
         return new ArrayList<>(warps.keySet());
     }
 
+    /**
+     * All players' warps, keyed by owner UUID. For dashboard/REST use — unlike
+     * {@link #teleportToPlayerWarp} / {@link #listPlayerWarps}, this doesn't require an
+     * online {@link ServerPlayer} caller.
+     */
+    public Map<UUID, Map<String, TeleportLocation>> getAllPlayerWarps() {
+        return Collections.unmodifiableMap(playerWarps);
+    }
+
+    /**
+     * One player's warps by raw UUID, without requiring them to be online. For dashboard/REST use.
+     */
+    public Map<String, TeleportLocation> getPlayerWarpsRaw(UUID playerId) {
+        Map<String, TeleportLocation> warps = playerWarps.get(playerId);
+        return warps == null ? Collections.emptyMap() : Collections.unmodifiableMap(warps);
+    }
+
+    /**
+     * Admin/dashboard deletion of another player's warp by raw UUID — no {@link ServerPlayer}
+     * required, so no in-game messaging (unlike {@link #deletePlayerWarp}).
+     */
+    public boolean deletePlayerWarpByAdmin(UUID playerId, String warpName) {
+        Map<String, TeleportLocation> warps = playerWarps.get(playerId);
+        if (warps == null) return false;
+
+        String normalizedName = caseSensitiveNames ? warpName : warpName.toLowerCase();
+        TeleportLocation removed = warps.remove(normalizedName);
+        if (removed == null) return false;
+
+        savePlayerWarps();
+        NeoLog.info(LOGGER, LogCategory.TELEPORTATION, "Admin deleted player warp '{}' for {}", warpName, playerId);
+        return true;
+    }
 
     /**
      * Teleport to another player's warp (admin only)
@@ -334,34 +403,122 @@ public class WarpManager {
     }
 
     // --- Persistence for player warps ---
-    private static final String PLAYER_WARPS_FILE = "run/playerwarps.json";
+    // NOTE: this used to be hard-coded to the literal relative path "run/playerwarps.json"
+    // (a pre-existing bug — it was never using ResourceUtil's data dir like every other
+    // manager). It now persists through the DataStore under PLAYER_WARPS_COLLECTION; the
+    // old "run/playerwarps.json" path is only ever read once more, during legacy migration.
 
     private void savePlayerWarps() {
-        try {
-            Map<String, Map<String, TeleportLocation>> serializable = new HashMap<>();
-            for (Map.Entry<UUID, Map<String, TeleportLocation>> entry : playerWarps.entrySet()) {
-                serializable.put(entry.getKey().toString(), entry.getValue());
-            }
-            String json = new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(serializable);
-            java.nio.file.Files.writeString(java.nio.file.Path.of(PLAYER_WARPS_FILE), json);
-        } catch (Exception e) {
-            System.err.println("[WarpManager] Failed to save player warps: " + e);
+        for (Map.Entry<UUID, Map<String, TeleportLocation>> entry : playerWarps.entrySet()) {
+            store.put(PLAYER_WARPS_COLLECTION, entry.getKey().toString(), playerWarpsToJson(entry.getValue()));
         }
     }
 
     private void loadPlayerWarps() {
+        playerWarps.clear();
+        for (Map.Entry<String, JsonObject> entry : store.getAll(PLAYER_WARPS_COLLECTION).entrySet()) {
+            try {
+                UUID playerId = UUID.fromString(entry.getKey());
+                playerWarps.put(playerId, playerWarpsFromJson(entry.getValue()));
+            } catch (Exception e) {
+                LOGGER.warn("Failed to load player warps for '{}': {}", entry.getKey(), e.getMessage());
+            }
+        }
+    }
+
+    /** Serializes one player's named warps into {@code {"warps": {name -> location}}}. */
+    private JsonObject playerWarpsToJson(Map<String, TeleportLocation> warpsForPlayer) {
+        JsonObject root = new JsonObject();
+        JsonObject warpsJson = new JsonObject();
+        for (Map.Entry<String, TeleportLocation> entry : warpsForPlayer.entrySet()) {
+            warpsJson.add(entry.getKey(), entry.getValue().toJson());
+        }
+        root.add("warps", warpsJson);
+        return root;
+    }
+
+    private Map<String, TeleportLocation> playerWarpsFromJson(JsonObject root) {
+        Map<String, TeleportLocation> result = new ConcurrentHashMap<>();
+        if (root != null && root.has("warps")) {
+            JsonObject warpsJson = root.getAsJsonObject("warps");
+            for (String warpName : warpsJson.keySet()) {
+                try {
+                    TeleportLocation location = TeleportLocation.fromJson(warpsJson.getAsJsonObject(warpName));
+                    if (location != null) {
+                        result.put(warpName, location);
+                    }
+                } catch (Exception e) {
+                    LOGGER.warn("Failed to load player warp '{}': {}", warpName, e.getMessage());
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * One-time import of the legacy warps.json / playerwarps.json files into the active
+     * DataStore, if it's still empty and storage.autoMigrate is enabled. The legacy
+     * per-player file was (buggily) written to the hard-coded relative path
+     * "run/playerwarps.json" instead of ResourceUtil's data dir — that path is only
+     * consulted here, once, to import any pre-existing data.
+     */
+    private void migrateLegacyFilesIfNeeded() {
+        if (store.hasAnyData(WARPS_COLLECTION) || store.hasAnyData(PLAYER_WARPS_COLLECTION)) return;
+        if (!ConfigManager.getInstance().isStorageAutoMigrateEnabled()) return;
+
+        int migratedWarps = migrateLegacyWarpsFile();
+        int migratedPlayerWarps = migrateLegacyPlayerWarpsFile();
+
+        if (migratedWarps > 0 || migratedPlayerWarps > 0) {
+            NeoLog.info(LOGGER, LogCategory.TELEPORTATION, "WarpManager: migrated {} warp(s) and {} player warp owner(s) from legacy files into the '{}' storage backend.",
+                migratedWarps, migratedPlayerWarps, com.zerog.neoessentials.storage.StorageManager.getInstance().getActiveType());
+        }
+    }
+
+    private int migrateLegacyWarpsFile() {
         try {
-            java.nio.file.Path path = java.nio.file.Path.of(PLAYER_WARPS_FILE);
-            if (!java.nio.file.Files.exists(path)) return;
+            File file = ResourceUtil.getDataFile(WARPS_FILE);
+            if (!file.exists()) return 0;
+            String content = java.nio.file.Files.readString(file.toPath());
+            if (content.trim().isEmpty()) return 0;
+            JsonObject root = JsonParser.parseString(content).getAsJsonObject();
+            int count = 0;
+            if (root.has("warps")) {
+                JsonObject warpsJson = root.getAsJsonObject("warps");
+                for (String warpName : warpsJson.keySet()) {
+                    store.put(WARPS_COLLECTION, warpName, warpsJson.getAsJsonObject(warpName));
+                    count++;
+                }
+            }
+            if (root.has("config")) {
+                store.put(WARPS_COLLECTION, CONFIG_RECORD_ID, root.getAsJsonObject("config"));
+            }
+            return count;
+        } catch (Exception e) {
+            LOGGER.error("Failed to migrate legacy warps.json: {}", e.getMessage());
+            return 0;
+        }
+    }
+
+    private int migrateLegacyPlayerWarpsFile() {
+        // Legacy hard-coded path (bug being fixed): a File relative to the working
+        // directory, NOT ResourceUtil's data dir. Consulted only here for one-time import.
+        try {
+            java.nio.file.Path path = java.nio.file.Path.of("run/playerwarps.json");
+            if (!java.nio.file.Files.exists(path)) return 0;
             String json = java.nio.file.Files.readString(path);
             java.lang.reflect.Type type = new com.google.gson.reflect.TypeToken<Map<String, Map<String, TeleportLocation>>>(){}.getType();
             Map<String, Map<String, TeleportLocation>> loaded = new com.google.gson.Gson().fromJson(json, type);
-            playerWarps.clear();
+            if (loaded == null) return 0;
+            int count = 0;
             for (Map.Entry<String, Map<String, TeleportLocation>> entry : loaded.entrySet()) {
-                playerWarps.put(UUID.fromString(entry.getKey()), entry.getValue());
+                store.put(PLAYER_WARPS_COLLECTION, entry.getKey(), playerWarpsToJson(entry.getValue()));
+                count++;
             }
+            return count;
         } catch (Exception e) {
-            System.err.println("[WarpManager] Failed to load player warps: " + e);
+            LOGGER.error("Failed to migrate legacy run/playerwarps.json: {}", e.getMessage());
+            return 0;
         }
     }
     
@@ -369,22 +526,25 @@ public class WarpManager {
      * Create a new warp
      */
     public boolean createWarp(ServerPlayer creator, String warpName, TeleportLocation location) {
-        // Enforce warp set cooldown per player (atomic check)
+        // Check warp-set cooldown (read-only) — only actually consumed once the warp genuinely
+        // gets created (see below). Same fix as setHome/PayCommand/TeleportRequestManager's
+        // cooldown bugs earlier this session: consuming it here unconditionally meant an
+        // invalid name, the warp limit, a restricted world, an unreachable safe spot, or a
+        // name collision all still cost the player a full cooldown for a /setwarp that never
+        // took effect.
+        UUID playerId = creator.getUUID();
         if (warpSetCooldown > 0) {
-            long now = System.currentTimeMillis();
-            UUID playerId = creator.getUUID();
-            Long lastSet = lastWarpSetTimestamps.putIfAbsent(playerId, now);
-            if (lastSet != null && (now - lastSet < warpSetCooldown * 1000L)) {
-                long secondsLeft = (warpSetCooldown - ((now - lastSet) / 1000));
-                creator.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.warp.set_cooldown", secondsLeft));
-                return false;
-            }
-            // Update timestamp atomically if cooldown passed
+            Long lastSet = lastWarpSetTimestamps.get(playerId);
             if (lastSet != null) {
-                lastWarpSetTimestamps.put(playerId, now);
+                long elapsed = System.currentTimeMillis() - lastSet;
+                if (elapsed < warpSetCooldown * 1000L) {
+                    long secondsLeft = (warpSetCooldown - (elapsed / 1000));
+                    creator.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.warp.set_cooldown", secondsLeft));
+                    return false;
+                }
             }
         }
-        
+
         // Enforce cross-dimension restriction
         if (!allowCrossDimensionWarps && !isOverworld(location)) {
             creator.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.warp.cross_dimension_disabled"));
@@ -397,12 +557,6 @@ public class WarpManager {
         // Validate warp name
         if (!isValidWarpName(warpName)) {
             creator.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.warp.invalid_name", warpName));
-            return false;
-        }
-        
-        // Check warp limit before attempting creation
-        if (warps.size() >= maxWarps) {
-            creator.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.warp.limit_reached", maxWarps));
             return false;
         }
         
@@ -439,17 +593,33 @@ public class WarpManager {
             creator.sendSystemMessage(MessageUtil.warning("commands.neoessentials.teleport.warp.moved_to_safety"));
         }
         
-        // Atomic warp creation using putIfAbsent to prevent duplicate names
-        TeleportLocation existing = warps.putIfAbsent(normalizedName, location);
-        if (existing != null) {
-            creator.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.warp.already_exists", warpName));
-            return false;
+        // Atomic warp-limit check + creation: checking warps.size() and then putIfAbsent as two
+        // separate steps let two concurrent creations with different names both pass the limit
+        // check before either inserted, letting the count exceed maxWarps — same TOCTOU class
+        // already fixed via Map.compute() in HomeManager.setHome(). Synchronizing the
+        // check-then-insert here closes the same gap without needing every read of `warps`
+        // elsewhere to also synchronize.
+        synchronized (warps) {
+            if (warps.size() >= maxWarps) {
+                creator.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.warp.limit_reached", maxWarps));
+                return false;
+            }
+            TeleportLocation existing = warps.putIfAbsent(normalizedName, location);
+            if (existing != null) {
+                creator.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.warp.already_exists", warpName));
+                return false;
+            }
         }
-        
+
+        // Warp genuinely created — now commit the cooldown.
+        if (warpSetCooldown > 0) {
+            lastWarpSetTimestamps.put(playerId, System.currentTimeMillis());
+        }
+
         saveWarps();
         
         creator.sendSystemMessage(MessageUtil.success("commands.neoessentials.teleport.warp.created", warpName, location.getLocationString()));
-        LOGGER.info("Player {} created warp '{}' at {}", creator.getName().getString(), warpName, location.getLocationString());
+        NeoLog.info(LOGGER, LogCategory.TELEPORTATION, "Player {} created warp '{}' at {}", creator.getName().getString(), warpName, location.getLocationString());
         
         return true;
     }
@@ -494,6 +664,72 @@ public class WarpManager {
     }
     
     /**
+     * Create a warp — admin/console variant that doesn't require a ServerPlayer
+     * (used by the web dashboard, where there's no in-game player to message).
+     * Applies the same validation as {@link #createWarp(ServerPlayer, String, TeleportLocation)}
+     * (name format, warp limit, cross-dimension/overworld-only restrictions, safety check)
+     * but reports failures via the returned reason instead of chat messages.
+     *
+     * @return {@code null} on success, or a short reason string on failure.
+     */
+    public String createWarpByAdmin(String warpName, TeleportLocation location, String createdBy) {
+        if (!isValidWarpName(warpName)) {
+            return "invalid_name";
+        }
+
+        if (!allowCrossDimensionWarps && !isOverworld(location)) {
+            return "cross_dimension_disabled";
+        }
+
+        if (allowOverworldOnly && !isOverworld(location)) {
+            return "overworld_only";
+        }
+
+        boolean requireSafe = true;
+        try {
+            JsonObject config = ConfigManager.getInstance().getConfig(ConfigManager.MAIN_CONFIG);
+            if (config.has("teleportation")) {
+                JsonObject tp = config.getAsJsonObject("teleportation");
+                if (tp.has("warpSettings")) {
+                    JsonObject warpSettings = tp.getAsJsonObject("warpSettings");
+                    if (warpSettings.has("enableWarpSafety")) {
+                        requireSafe = warpSettings.get("enableWarpSafety").getAsBoolean();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.warn("Failed to read warp safety config, defaulting to enabled: {}", e.getMessage());
+        }
+
+        if (requireSafe && !location.isSafe()) {
+            TeleportLocation safeLocation = location.findSafeLocation();
+            if (safeLocation == null) {
+                return "unsafe_location";
+            }
+            location = safeLocation;
+        }
+
+        String normalizedName = caseSensitiveNames ? warpName : warpName.toLowerCase();
+        // See createWarp()'s matching comment — the limit check and insert must be atomic
+        // together, not two separate steps, to actually enforce maxWarps under concurrency.
+        synchronized (warps) {
+            if (warps.size() >= maxWarps) {
+                return "limit_reached";
+            }
+            TeleportLocation existing = warps.putIfAbsent(normalizedName, location);
+            if (existing != null) {
+                return "already_exists";
+            }
+        }
+
+        saveWarps();
+        if (ConfigManager.getInstance().isLogWarpActionsEnabled()) {
+            NeoLog.info(LOGGER, LogCategory.TELEPORTATION, "Warp '{}' created by {} at {}", warpName, createdBy, location.getLocationString());
+        }
+        return null;
+    }
+
+    /**
      * Delete a warp by name — admin/console variant that doesn't require a ServerPlayer.
      * Essentials: Warps.removeWarp(name)
      */
@@ -503,7 +739,7 @@ public class WarpManager {
         if (removed == null) return false;
         saveWarps();
         if (ConfigManager.getInstance().isLogWarpActionsEnabled()) {
-            LOGGER.info("Warp '{}' deleted by {}", warpName, deletedBy);
+            NeoLog.info(LOGGER, LogCategory.TELEPORTATION, "Warp '{}' deleted by {}", warpName, deletedBy);
         }
         return true;
     }
@@ -523,7 +759,7 @@ public class WarpManager {
         saveWarps();
         
         if (com.zerog.neoessentials.config.ConfigManager.getInstance().isLogWarpActionsEnabled()) {
-            LOGGER.info("Player {} deleted warp '{}'", player.getName().getString(), warpName);
+            NeoLog.info(LOGGER, LogCategory.TELEPORTATION, "Player {} deleted warp '{}'", player.getName().getString(), warpName);
         }
         return true;
     }
@@ -533,10 +769,33 @@ public class WarpManager {
      */
     public void teleportToWarp(ServerPlayer player, String warpName) {
         TeleportLocation warp = getWarp(warpName);
-        
+        NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "teleportToWarp request: player={} warpName={}",
+            player.getName().getString(), warpName);
+
         if (warp == null) {
+            NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "teleportToWarp: warp '{}' not found", warpName);
             player.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.warp.not_found", warpName));
             return;
+        }
+
+        // Check warp-use cooldown (read-only) — only actually consumed once the teleport
+        // genuinely proceeds (see below). Checked before maxTeleportDistance so a too-far
+        // warp attempt (blocked below) doesn't cost the cooldown for a teleport that never
+        // happened, but the actual timestamp update is deferred past both checks.
+        boolean bypassCooldown = com.zerog.neoessentials.api.permissions.PermissionAPI.hasPermission(player.getUUID(), "neoessentials.teleport.bypass.cooldown")
+            || com.zerog.neoessentials.api.permissions.PermissionAPI.hasPermission(player.getUUID(), "neoessentials.teleport.warp.bypass.cooldown");
+        UUID playerId = player.getUUID();
+        if (warpUseCooldown > 0 && !bypassCooldown) {
+            Long lastUse = lastWarpUseTimestamps.get(playerId);
+            if (lastUse != null) {
+                long elapsed = (System.currentTimeMillis() - lastUse) / 1000L;
+                if (elapsed < warpUseCooldown) {
+                    long wait = warpUseCooldown - elapsed;
+                    NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "teleportToWarp: player {} blocked by use cooldown, {}s remaining", player.getName().getString(), wait);
+                    player.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.warp.cooldown", wait));
+                    return;
+                }
+            }
         }
 
         // Enforce maxTeleportDistance if set in config
@@ -546,12 +805,20 @@ public class WarpManager {
             if (fromLoc.getWorldName().equals(warp.getWorldName())) {
                 double dist = fromLoc.distanceTo(warp);
                 if (dist > maxDistance) {
+                    NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "teleportToWarp: player {} blocked, distance {} exceeds max {}", player.getName().getString(), dist, maxDistance);
                     player.sendSystemMessage(com.zerog.neoessentials.util.MessageUtil.error("commands.neoessentials.teleport.warp.distance_exceeded", maxDistance));
                     return;
                 }
             }
         }
-        
+
+        // Past the checks that reject the teleport outright — commit the cooldown now (the
+        // remaining unsafe-location-with-no-fallback path below is a rare edge case, same
+        // tradeoff already made for the equivalent case in HomeManager.teleportToHome()).
+        if (warpUseCooldown > 0 && !bypassCooldown) {
+            lastWarpUseTimestamps.put(playerId, System.currentTimeMillis());
+        }
+
         // Check if warp location is still safe - read from config dynamically
         boolean requireSafe = true; // Default to true for safety
         try {
@@ -572,28 +839,55 @@ public class WarpManager {
         if (requireSafe && !warp.isSafe()) {
             TeleportLocation safeLocation = warp.findSafeLocation();
             if (safeLocation == null) {
+                NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "teleportToWarp: warp '{}' is unsafe and no safe location found, teleport blocked", warpName);
                 player.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.warp.unsafe", warpName));
                 return;
             }
-            
+
             // Update warp to safe location
             String normalizedName = caseSensitiveNames ? warpName : warpName.toLowerCase();
             warps.put(normalizedName, safeLocation);
             saveWarps();
             warp = safeLocation;
-            
+
+            NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "teleportToWarp: warp '{}' moved to safe location {}", warpName, safeLocation.getLocationString());
             player.sendSystemMessage(MessageUtil.warning("commands.neoessentials.teleport.warp.moved_to_safety", warpName));
         }
         
         // Save current location for /back command
         com.zerog.neoessentials.teleportation.Misc.MiscTeleportManager.getInstance().saveBackLocation(player);
 
+        // Show warmup countdown message if delay is configured and warmup messages are enabled
+        // Players with warmup bypass permission teleport instantly
+        boolean bypassWarmup = com.zerog.neoessentials.api.permissions.PermissionAPI.hasPermission(player.getUUID(), "neoessentials.teleport.bypass.warmup")
+            || com.zerog.neoessentials.api.permissions.PermissionAPI.hasPermission(player.getUUID(), "neoessentials.teleport.warp.bypass.warmup");
+        int delayTicks = bypassWarmup ? 0 : teleportDelay * 20;
+        if (delayTicks > 0) {
+            boolean showWarmup = true;
+            try {
+                JsonObject generalSettings = ConfigManager.getInstance()
+                    .getConfig(ConfigManager.MAIN_CONFIG)
+                    .getAsJsonObject("teleportation").getAsJsonObject("generalSettings");
+                if (generalSettings.has("enableTeleportWarmup")) {
+                    showWarmup = generalSettings.get("enableTeleportWarmup").getAsBoolean();
+                }
+            } catch (Exception e) {
+                NeoLog.debug(LOGGER, LogCategory.TELEPORTATION,
+                    "Failed to read generalSettings.enableTeleportWarmup, defaulting to shown", e);
+            }
+            if (showWarmup) {
+                player.sendSystemMessage(MessageUtil.info("commands.neoessentials.teleport.warp.warmup", warpName, teleportDelay));
+            }
+        }
+
         // Perform teleportation — safety already resolved above, so pass findSafe=false
-        int delayTicks = teleportDelay * 20;
-        TeleportUtil.teleportPlayer(player, warp, delayTicks, false).thenAccept(result -> {
+        TeleportLocation finalWarp = warp;
+        TeleportUtil.teleportPlayer(player, finalWarp, delayTicks, false).thenAccept(result -> {
             if (result.isSuccess()) {
                 player.sendSystemMessage(MessageUtil.success("commands.neoessentials.teleport.warp.success", warpName));
-                LOGGER.info("Player {} teleported to warp '{}'", player.getName().getString(), warpName);
+                NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "Player {} successfully teleported to warp '{}' at {}",
+                    player.getName().getString(), warpName, finalWarp.getLocationString());
+                NeoLog.info(LOGGER, LogCategory.TELEPORTATION, "Player {} teleported to warp '{}'", player.getName().getString(), warpName);
             } else {
                 player.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.warp.failed", warpName, result.getMessage()));
                 LOGGER.warn("Failed to teleport player {} to warp '{}': {}", 
@@ -661,97 +955,73 @@ public class WarpManager {
     }
     
     /**
-     * Load warps from file
+     * Load warps from the active {@link com.zerog.neoessentials.storage.DataStore}.
      */
     private void loadWarps() {
         try {
-            File file = ResourceUtil.getDataFile(WARPS_FILE);
-            if (!file.exists()) {
-                LOGGER.info("No warps file found, starting with empty warps");
-                return;
-            }
-            
-            String content = java.nio.file.Files.readString(file.toPath());
-            if (content.trim().isEmpty()) {
-                return;
-            }
-            
-            JsonObject root = JsonParser.parseString(content).getAsJsonObject();
-            
-            // Load warps
-            if (root.has("warps")) {
-                JsonObject warpsJson = root.getAsJsonObject("warps");
-                
-                for (String warpName : warpsJson.keySet()) {
-                    try {
-                        JsonObject warpJson = warpsJson.getAsJsonObject(warpName);
-                        TeleportLocation location = TeleportLocation.fromJson(warpJson);
-                        if (location != null) {
-                            warps.put(warpName, location);
-                        }
-                    } catch (Exception e) {
-                        LOGGER.warn("Failed to load warp '{}': {}", warpName, e.getMessage());
+            for (Map.Entry<String, JsonObject> entry : store.getAll(WARPS_COLLECTION).entrySet()) {
+                if (entry.getKey().equals(CONFIG_RECORD_ID)) {
+                    JsonObject config = entry.getValue();
+                    if (config.has("teleportDelay")) {
+                        teleportDelay = config.get("teleportDelay").getAsInt();
                     }
+                    if (config.has("requireSafeLocations")) {
+                        requireSafeLocations = config.get("requireSafeLocations").getAsBoolean();
+                    }
+                    if (config.has("allowOverworldOnly")) {
+                        allowOverworldOnly = config.get("allowOverworldOnly").getAsBoolean();
+                    }
+                    if (config.has("maxWarps")) {
+                        maxWarps = config.get("maxWarps").getAsInt();
+                    }
+                    if (config.has("caseSensitiveNames")) {
+                        caseSensitiveNames = config.get("caseSensitiveNames").getAsBoolean();
+                    }
+                    continue;
+                }
+                try {
+                    TeleportLocation location = TeleportLocation.fromJson(entry.getValue());
+                    if (location != null) {
+                        warps.put(entry.getKey(), location);
+                    }
+                } catch (Exception e) {
+                    LOGGER.warn("Failed to load warp '{}': {}", entry.getKey(), e.getMessage());
                 }
             }
-            
-            // Load configuration
-            if (root.has("config")) {
-                JsonObject config = root.getAsJsonObject("config");
-                
-                if (config.has("teleportDelay")) {
-                    teleportDelay = config.get("teleportDelay").getAsInt();
-                }
-                if (config.has("requireSafeLocations")) {
-                    requireSafeLocations = config.get("requireSafeLocations").getAsBoolean();
-                }
-                if (config.has("allowOverworldOnly")) {
-                    allowOverworldOnly = config.get("allowOverworldOnly").getAsBoolean();
-                }
-                if (config.has("maxWarps")) {
-                    maxWarps = config.get("maxWarps").getAsInt();
-                }
-                if (config.has("caseSensitiveNames")) {
-                    caseSensitiveNames = config.get("caseSensitiveNames").getAsBoolean();
-                }
-            }
-            
-            LOGGER.info("Loaded {} warps", warps.size());
-            
+
+            NeoLog.info(LOGGER, LogCategory.TELEPORTATION, "Loaded {} warps", warps.size());
+
         } catch (Exception e) {
-            LOGGER.error("Failed to load warps from file", e);
+            LOGGER.error("Failed to load warps from storage", e);
         }
     }
-    
+
     /**
-     * Save warps to file
+     * Save warps (and the warp settings blob, under {@link #CONFIG_RECORD_ID}) to the
+     * active DataStore. Also prunes any store records for warps that no longer exist in
+     * memory (e.g. after a delete), matching the old full-file-rewrite semantics.
      */
     private void saveWarps() {
         try {
-            JsonObject root = new JsonObject();
-            
-            // Save warps
-            JsonObject warpsJson = new JsonObject();
             for (Map.Entry<String, TeleportLocation> entry : warps.entrySet()) {
-                warpsJson.add(entry.getKey(), entry.getValue().toJson());
+                store.put(WARPS_COLLECTION, entry.getKey(), entry.getValue().toJson());
             }
-            root.add("warps", warpsJson);
-            
-            // Save configuration
+            for (String existingId : store.getAll(WARPS_COLLECTION).keySet()) {
+                if (!existingId.equals(CONFIG_RECORD_ID) && !warps.containsKey(existingId)) {
+                    store.delete(WARPS_COLLECTION, existingId);
+                }
+            }
+
             JsonObject config = new JsonObject();
             config.addProperty("teleportDelay", teleportDelay);
             config.addProperty("requireSafeLocations", requireSafeLocations);
             config.addProperty("allowOverworldOnly", allowOverworldOnly);
             config.addProperty("maxWarps", maxWarps);
             config.addProperty("caseSensitiveNames", caseSensitiveNames);
-            root.add("config", config);
-            
-            ResourceUtil.ensureDataDirectory();
-            File file = ResourceUtil.getDataFile(WARPS_FILE);
-            java.nio.file.Files.writeString(file.toPath(), gson.toJson(root));
-            
+            store.put(WARPS_COLLECTION, CONFIG_RECORD_ID, config);
+
         } catch (Exception e) {
-            LOGGER.error("Failed to save warps to file", e);
+            LOGGER.error("Failed to save warps to storage", e);
         }
     }
     
@@ -777,7 +1047,7 @@ public class WarpManager {
     public void clearAllWarps() {
         warps.clear();
         saveWarps();
-        LOGGER.info("Cleared all warps");
+        NeoLog.info(LOGGER, LogCategory.TELEPORTATION, "Cleared all warps");
     }
     
     /**
@@ -792,13 +1062,13 @@ public class WarpManager {
      * Reload warp data from disk
      */
     public void reload() {
-        LOGGER.info("Reloading warp system...");
+        NeoLog.info(LOGGER, LogCategory.TELEPORTATION, "Reloading warp system...");
         loadConfig();
         warps.clear();
         playerWarps.clear();
         loadWarps();
         loadPlayerWarps();
-        LOGGER.info("Warp system reloaded: {} warps, {} player warps loaded", warps.size(),
+        NeoLog.info(LOGGER, LogCategory.TELEPORTATION, "Warp system reloaded: {} warps, {} player warps loaded", warps.size(),
             playerWarps.values().stream().mapToInt(Map::size).sum());
     }
 }

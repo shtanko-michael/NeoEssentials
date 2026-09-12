@@ -5,6 +5,8 @@ import com.zerog.neoessentials.shop.ShopManager;
 import com.zerog.neoessentials.shop.ShopParser;
 import com.zerog.neoessentials.shop.model.ShopData;
 import com.zerog.neoessentials.util.MessageUtil;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
@@ -13,19 +15,22 @@ import net.minecraft.world.level.block.SignBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.SignBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.network.chat.ClickEvent;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.level.BlockEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Listens for sign placement and subsequent text finalization to register new ChestShop signs.
+ * Listens for sign placement, text finalization, and sign breakage to manage ChestShop signs.
  *
- * <h3>Flow</h3>
+ * <h3>Registration flow</h3>
  * <ol>
  *   <li>{@link BlockEvent.EntityPlaceEvent} — a sign is placed; we record the position + player as "pending".</li>
  *   <li>{@link ServerTickEvent.Post} — every tick we re-check pending signs.
@@ -33,11 +38,19 @@ import java.util.concurrent.ConcurrentHashMap;
  *       as a shop. Pending entries time out after 30 seconds if never filled.</li>
  * </ol>
  *
+ * <h3>Removal flow</h3>
+ * <ul>
+ *   <li>{@link BlockEvent.BreakEvent} — when a sign block is broken, any shop registered at
+ *       that position is removed (including its hologram) via {@link ShopManager#removeShop}.</li>
+ * </ul>
+ *
  * This deferred approach is necessary because NeoForge 1.21.1 has no sign-text-written event;
  * the {@code ServerboundSignUpdatePacket} is processed server-side before any NeoForge event fires.
  */
 @EventBusSubscriber(modid = "neoessentials")
 public class ShopSignHandler {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(ShopSignHandler.class);
 
     // ── Pending sign queue ────────────────────────────────────────────────────
 
@@ -63,6 +76,34 @@ public class ShopSignHandler {
         String dimension = level.dimension().location().toString();
         String key = dimension + "@" + pos.getX() + "," + pos.getY() + "," + pos.getZ();
         pending.put(key, new PendingSign(player.getUUID(), dimension, System.currentTimeMillis()));
+    }
+
+    // ── Sign broken ───────────────────────────────────────────────────────────
+
+    /**
+     * When a sign block is broken, remove any shop registered at that position.
+     * ShopManager.removeShop() also calls ShopHologramManager.deleteShopHologram()
+     * so the floating hologram is cleaned up atomically with the shop data.
+     *
+     * <p>This fires BEFORE the block is removed from the world, so the BlockEntity
+     * is still accessible (though we only need the position and dimension here).
+     */
+    @SubscribeEvent
+    public static void onSignBroken(BlockEvent.BreakEvent event) {
+        if (!(event.getLevel() instanceof ServerLevel level)) return;
+        BlockPos pos = event.getPos();
+        // Only care about sign blocks
+        if (!(level.getBlockState(pos).getBlock() instanceof SignBlock)) return;
+        String dimension = level.dimension().location().toString();
+        // Also remove from the pending queue in case the sign was placed but never written
+        String key = dimension + "@" + pos.getX() + "," + pos.getY() + "," + pos.getZ();
+        pending.remove(key);
+        // Remove the shop (and its hologram via ShopManager → ShopHologramManager)
+        ShopData removed = ShopManager.getInstance().removeShop(dimension, pos);
+        if (removed != null) {
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "[ChestShop] Removed shop at {} (sign broken by {})",
+                key, event.getPlayer() != null ? event.getPlayer().getName().getString() : "unknown");
+        }
     }
 
     // ── Tick check ────────────────────────────────────────────────────────────
@@ -132,6 +173,7 @@ public class ShopSignHandler {
                 tryRegisterShop(player, lines, pos, ps.dimension(), level);
 
             } catch (Exception e) {
+                NeoLog.warn(LOGGER, LogCategory.GENERAL, "Failed to process pending shop sign '{}': {}", key, e.getMessage());
                 iter.remove();
             }
         }
@@ -154,6 +196,12 @@ public class ShopSignHandler {
         // Strip colour codes from line 0 before permission/admin check
         String ownerLine = lines[ShopData.NAME_LINE].replaceAll("§[0-9a-fA-FkKlLmMnNoOrRiI]", "").trim();
 
+        // [Shop] header → auto-assign to placing player (alternative to blank line)
+        if (SHOP_HEADER.equalsIgnoreCase(ownerLine)) {
+            ownerLine = player.getName().getString();
+            lines[ShopData.NAME_LINE] = ownerLine;
+        }
+
         // Blank line 0 → auto-assign this player
         if (ownerLine.isEmpty()) {
             ownerLine = player.getName().getString();
@@ -163,18 +211,29 @@ public class ShopSignHandler {
         boolean wantsAdmin = ShopData.ADMIN_SHOP_NAME.equalsIgnoreCase(ownerLine);
 
         if (wantsAdmin && !PermissionAPI.hasPermission(player.getUUID(), "neoessentials.shop.create.admin")) {
-            player.sendSystemMessage(Component.literal(MessageUtil.localize("commands.neoessentials.shop.no_permission_create_admin")));
+            player.sendSystemMessage(MessageUtil.component("commands.neoessentials.shop.no_permission_admin"));
             return;
         }
         if (!wantsAdmin && !PermissionAPI.hasPermission(player.getUUID(), "neoessentials.shop.create")) {
-            player.sendSystemMessage(Component.literal(MessageUtil.localize("commands.neoessentials.shop.no_permission_create")));
+            player.sendSystemMessage(MessageUtil.component("commands.neoessentials.shop.no_permission"));
             return;
+        }
+
+        // Per-player shop limit (skip for admin shops)
+        if (!wantsAdmin) {
+            int used = ShopManager.getInstance().getShopsByOwner(player.getUUID()).size();
+            int max  = getMaxShopsPerPlayer();
+            if (max > 0 && used >= max) {
+                player.sendSystemMessage(MessageUtil.component(
+                    "commands.neoessentials.shop.limit_reached", used, max));
+                return;
+            }
         }
 
         // Check for duplicate sign position before parsing
         ShopData existing = ShopManager.getInstance().getShopBySign(dimension, pos);
         if (existing != null) {
-            player.sendSystemMessage(Component.literal(MessageUtil.localize("commands.neoessentials.shop.already_exists")));
+            player.sendSystemMessage(MessageUtil.component("commands.neoessentials.shop.sign_occupied"));
             return;
         }
 
@@ -183,11 +242,9 @@ public class ShopSignHandler {
 
         if (parsed.isEmpty()) {
             if (!wantsAdmin && ShopParser.findAdjacentChest(pos, level) == null) {
-                player.sendSystemMessage(Component.literal(
-                    MessageUtil.localize("commands.neoessentials.shop.no_chest_found")));
+                player.sendSystemMessage(MessageUtil.component("commands.neoessentials.shop.no_chest"));
             } else {
-                player.sendSystemMessage(Component.literal(
-                    MessageUtil.localize("commands.neoessentials.shop.invalid_format")));
+                player.sendSystemMessage(MessageUtil.component("commands.neoessentials.shop.invalid_format"));
             }
             return;
         }
@@ -200,19 +257,36 @@ public class ShopSignHandler {
 
         if (shop.itemPending) {
             // Shop is registered but non-functional — item still needed
-            player.sendSystemMessage(Component.literal(
-                MessageUtil.localize("commands.neoessentials.shop.frame_created")));
+            player.sendSystemMessage(MessageUtil.component("commands.neoessentials.shop.frame_created"));
         } else {
-            player.sendSystemMessage(Component.literal(MessageUtil.localize("commands.neoessentials.shop.created")));
+            player.sendSystemMessage(MessageUtil.component("commands.neoessentials.shop.created"));
             String currency = com.zerog.neoessentials.economy.managers.EconomyManager.getInstance().getCurrencySymbol();
             if (!shop.isAdminShop()) {
-                if (shop.buyPrice  != null) player.sendSystemMessage(Component.literal(
-                    MessageUtil.localize("commands.neoessentials.shop.buy_price", currency + shop.buyPrice.toPlainString())));
-                if (shop.sellPrice != null) player.sendSystemMessage(Component.literal(
-                    MessageUtil.localize("commands.neoessentials.shop.sell_price", currency + shop.sellPrice.toPlainString())));
+                if (shop.buyPrice  != null) player.sendSystemMessage(MessageUtil.component(
+                    "commands.neoessentials.shop.buy_price_announce", currency, shop.buyPrice.toPlainString()));
+                if (shop.sellPrice != null) player.sendSystemMessage(MessageUtil.component(
+                    "commands.neoessentials.shop.sell_price_announce", currency, shop.sellPrice.toPlainString()));
             } else {
-                player.sendSystemMessage(Component.literal(MessageUtil.localize("commands.neoessentials.shop.admin_unlimited")));
+                player.sendSystemMessage(MessageUtil.component("commands.neoessentials.shop.admin_unlimited_stock"));
             }
+        }
+
+        // ── Hologram opt-in prompt ────────────────────────────────────────────
+        // Only offer a hologram if there isn't one already (e.g. re-conversion).
+        if (!shop.hologramEnabled) {
+            String enableCmd = "/chestshop hologram enablepos "
+                + shop.signX + " " + shop.signY + " " + shop.signZ;
+            Component holoPrompt = MessageUtil.component("commands.neoessentials.shop.hologram_prompt_text")
+                .copy()
+                .append(MessageUtil.component("commands.neoessentials.shop.hologram_prompt_button")
+                    .copy()
+                    .withStyle(s -> s.withClickEvent(com.zerog.neoessentials.util.ClickEventCompat.create(
+                        ClickEvent.Action.RUN_COMMAND, enableCmd)))
+                    .withStyle(s -> s.withHoverEvent(
+                        new net.minecraft.network.chat.HoverEvent(
+                            net.minecraft.network.chat.HoverEvent.Action.SHOW_TEXT,
+                            MessageUtil.component("commands.neoessentials.shop.hologram_prompt_hover")))));
+            player.sendSystemMessage(holoPrompt);
         }
     }
 
@@ -236,14 +310,32 @@ public class ShopSignHandler {
         for (int i = 0; i < 4 && i < lines.length; i++) {
             final String text = lines[i] != null ? lines[i] : "";
             Component component = net.minecraft.network.chat.Component.literal(text);
-            final int capturedI = i;
             var currentText = sign.getFrontText();
-            var newText = currentText.setMessage(capturedI, component);
+            var newText = currentText.setMessage(i, component);
             sign.updateText(s -> newText, true);
         }
         sign.setChanged();
         BlockState state = level.getBlockState(pos);
         level.sendBlockUpdated(pos, state, state, 3);
+    }
+
+    // ── Config helpers ────────────────────────────────────────────────────────
+
+    /** Alternative trigger recognised on line 0 (in addition to owner name / blank). */
+    public static final String SHOP_HEADER = "[Shop]";
+
+    private static int getMaxShopsPerPlayer() {
+        try {
+            var cfg = com.zerog.neoessentials.config.ConfigManager.getInstance()
+                    .getConfig(com.zerog.neoessentials.config.ConfigManager.MAIN_CONFIG);
+            if (cfg != null && cfg.has("shop")) {
+                var shopCfg = cfg.getAsJsonObject("shop");
+                if (shopCfg.has("maxShopsPerPlayer")) return shopCfg.get("maxShopsPerPlayer").getAsInt();
+            }
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Failed to read shop.maxShopsPerPlayer config — using default", e);
+        }
+        return 10; // default
     }
 }
 

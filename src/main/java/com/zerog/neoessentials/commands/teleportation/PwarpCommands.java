@@ -4,12 +4,16 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.zerog.neoessentials.api.permissions.PermissionAPI;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import com.zerog.neoessentials.teleportation.Warp.WarpManager;
 import com.zerog.neoessentials.teleportation.TeleportLocation;
 import com.zerog.neoessentials.util.MessageUtil;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.server.level.ServerPlayer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Commands for player warps:
@@ -19,40 +23,58 @@ import net.minecraft.server.level.ServerPlayer;
  * - /pwarps - List your player warps
  */
 public class PwarpCommands {
+    private static final Logger LOGGER = LoggerFactory.getLogger(PwarpCommands.class);
     private static final String PERMISSION_PWARP = "neoessentials.teleport.pwarp";
     private static final String PERMISSION_SETPWARP = "neoessentials.teleport.pwarp.create";
     private static final String PERMISSION_DELPWARP = "neoessentials.teleport.pwarp.delete";
     private static final String PERMISSION_PWARPS = "neoessentials.teleport.pwarp.list";
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
+        // Check if teleportation module is enabled
+        if (!com.zerog.neoessentials.config.ConfigManager.getInstance().isTeleportationEnabled()) {
+            return;
+        }
+
         WarpManager warpManager = WarpManager.getInstance();
         if (!warpManager.isPlayerWarpsEnabled()) return;
+
+        com.zerog.neoessentials.config.ConfigManager config = com.zerog.neoessentials.config.ConfigManager.getInstance();
+
         // /pwarp <name>
-        dispatcher.register(Commands.literal("pwarp")
-            .requires(source -> source.getEntity() instanceof ServerPlayer player && PermissionAPI.hasPermission(player.getUUID(), PERMISSION_PWARP))
-            .then(Commands.argument("name", StringArgumentType.word())
-                .executes(PwarpCommands::executePwarp)
-            )
-        );
+        if (config.isCommandEnabled("pwarp")) {
+            dispatcher.register(Commands.literal("pwarp")
+                .requires(source -> source.getEntity() instanceof ServerPlayer player && PermissionAPI.hasPermission(player.getUUID(), PERMISSION_PWARP))
+                .then(Commands.argument("name", StringArgumentType.word())
+                    .executes(PwarpCommands::executePwarp)
+                )
+            );
+        }
         // /setpwarp <name>
-        dispatcher.register(Commands.literal("setpwarp")
-            .requires(source -> source.getEntity() instanceof ServerPlayer player && PermissionAPI.hasPermission(player.getUUID(), PERMISSION_SETPWARP))
-            .then(Commands.argument("name", StringArgumentType.word())
-                .executes(PwarpCommands::executeSetPwarp)
-            )
-        );
+        if (config.isCommandEnabled("setpwarp")) {
+            dispatcher.register(Commands.literal("setpwarp")
+                .requires(source -> source.getEntity() instanceof ServerPlayer player && PermissionAPI.hasPermission(player.getUUID(), PERMISSION_SETPWARP))
+                .then(Commands.argument("name", StringArgumentType.word())
+                    .executes(PwarpCommands::executeSetPwarp)
+                )
+            );
+        }
         // /delpwarp <name>
-        dispatcher.register(Commands.literal("delpwarp")
-            .requires(source -> source.getEntity() instanceof ServerPlayer player && PermissionAPI.hasPermission(player.getUUID(), PERMISSION_DELPWARP))
-            .then(Commands.argument("name", StringArgumentType.word())
-                .executes(PwarpCommands::executeDelPwarp)
-            )
-        );
+        if (config.isCommandEnabled("delpwarp")) {
+            dispatcher.register(Commands.literal("delpwarp")
+                .requires(source -> source.getEntity() instanceof ServerPlayer player && PermissionAPI.hasPermission(player.getUUID(), PERMISSION_DELPWARP))
+                .then(Commands.argument("name", StringArgumentType.word())
+                    .executes(PwarpCommands::executeDelPwarp)
+                )
+            );
+        }
         // /pwarps
-        dispatcher.register(Commands.literal("pwarps")
-            .requires(source -> source.getEntity() instanceof ServerPlayer player && PermissionAPI.hasPermission(player.getUUID(), PERMISSION_PWARPS))
-            .executes(PwarpCommands::executePwarps)
-        );
+        if (config.isCommandEnabled("pwarps")) {
+            dispatcher.register(Commands.literal("pwarps")
+                .requires(source -> source.getEntity() instanceof ServerPlayer player && PermissionAPI.hasPermission(player.getUUID(), PERMISSION_PWARPS))
+                .executes(PwarpCommands::executePwarps)
+            );
+        }
+        NeoLog.debug(LOGGER, LogCategory.COMMANDS, "Player warp command family registered");
     }
 
     private static int executePwarp(CommandContext<CommandSourceStack> context) {
@@ -102,14 +124,23 @@ public class PwarpCommands {
         WarpManager warpManager = WarpManager.getInstance();
         var names = warpManager.getPlayerWarpNames(player);
         if (names.isEmpty()) {
-            player.sendSystemMessage(MessageUtil.component(MessageUtil.localize("commands.neoessentials.teleport.warp.playerwarps_list_empty")));
+            // coloredText(), not component(localize(...)) — localize() already returns fully
+            // resolved text; component() would treat that resolved text as a translation KEY
+            // and re-run it through localize() again, corrupting it via the humanizeKey()
+            // fallback (same anti-pattern found and fixed across the moderation commands).
+            player.sendSystemMessage(MessageUtil.coloredText(MessageUtil.localize("commands.neoessentials.teleport.warp.playerwarps_list_empty")));
         } else {
             StringBuilder builder = new StringBuilder();
+            // Template is "{0}'s Player Warps ({1}/{2})" — needs the player's OWN name as {0},
+            // not just count/max — previously only 2 args were passed for 3 placeholders, so
+            // {0} showed the warp COUNT (not the player's name), {1} showed MAX (not count),
+            // and {2} was left as a literal unresolved "{2}".
+            // The max stays per-player (our getMaxPlayerWarpsForPlayer), with "∞" for unlimited.
             int maxWarps = warpManager.getMaxPlayerWarpsForPlayer(player);
-            builder.append(MessageUtil.localize("commands.neoessentials.teleport.warp.playerwarps_list_header", names.size(),
-                maxWarps < 0 ? "∞" : maxWarps));
+            builder.append(MessageUtil.localize("commands.neoessentials.teleport.warp.playerwarps_list_header",
+                player.getName().getString(), names.size(), maxWarps < 0 ? "∞" : maxWarps));
             names.stream().sorted().forEach(name -> builder.append("\n").append(name));
-            player.sendSystemMessage(MessageUtil.component(builder.toString()));
+            player.sendSystemMessage(MessageUtil.coloredText(builder.toString()));
         }
         return 1;
     }

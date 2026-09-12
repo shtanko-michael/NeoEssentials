@@ -4,7 +4,8 @@ import com.google.gson.JsonObject;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.zerog.neoessentials.api.permissions.PermissionAPI;
-import com.zerog.neoessentials.config.ConfigManager;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
@@ -19,7 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Authentication handler for web dashboard.
- * Supports Minecraft player authentication and Discord OAuth.
+ * Supports Minecraft player authentication.
  */
 public class AuthHandler implements HttpHandler {
     private static final Logger LOGGER = LoggerFactory.getLogger(AuthHandler.class);
@@ -50,13 +51,11 @@ public class AuthHandler implements HttpHandler {
                 handleLogout(exchange);
             } else if (path.endsWith("/auth/validate") && "GET".equals(method)) {
                 handleValidate(exchange);
-            } else if (path.endsWith("/auth/discord") && "POST".equals(method)) {
-                handleDiscordAuth(exchange);
             } else {
                 sendError(exchange, 404, "Not Found");
             }
         } catch (Exception e) {
-            LOGGER.error("Error handling auth request", e);
+            NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Error handling auth request", e);
             sendError(exchange, 500, "Internal Server Error");
         }
     }
@@ -75,22 +74,24 @@ public class AuthHandler implements HttpHandler {
                 sendError(exchange, 400, "Username is required");
                 return;
             }
-            
+
             // Check if player is online
             ServerPlayer player = server.getPlayerList().getPlayerByName(username);
             if (player == null) {
+                NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Dashboard login rejected for '{}': player not online", username);
                 sendError(exchange, 401, "Player must be online on the server to authenticate");
                 return;
             }
-            
+
             // Check if player is OP (super admin)
             boolean isOp = server.getPlayerList().isOp(player.getGameProfile());
-            
+
             // Check permissions
             boolean hasViewPermission = isOp || PermissionAPI.hasPermission(player.getUUID(), DASHBOARD_VIEW_PERMISSION);
             boolean hasAdminPermission = isOp || PermissionAPI.hasPermission(player.getUUID(), DASHBOARD_ADMIN_PERMISSION);
-            
+
             if (!hasViewPermission) {
+                NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Dashboard login rejected for '{}': missing view permission", username);
                 sendError(exchange, 403, "You don't have permission to access the dashboard");
                 return;
             }
@@ -119,66 +120,11 @@ public class AuthHandler implements HttpHandler {
             response.addProperty("authType", "minecraft");
             
             sendJson(exchange, 200, response.toString());
-            
-            LOGGER.info("Player {} authenticated to dashboard (admin: {})", username, hasAdminPermission);
-            
+
+            NeoLog.info(LOGGER, LogCategory.WEB_DASHBOARD, "Player {} authenticated to dashboard (admin: {})", username, hasAdminPermission);
+
         } catch (Exception e) {
-            LOGGER.error("Error during login", e);
-            sendError(exchange, 500, "Authentication failed");
-        }
-    }
-    
-    /**
-     * Handle Discord OAuth authentication
-     */
-    private void handleDiscordAuth(HttpExchange exchange) throws IOException {
-        try {
-            String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-            JsonObject request = com.google.gson.JsonParser.parseString(body).getAsJsonObject();
-            
-            String discordId = request.has("discordId") ? request.get("discordId").getAsString() : null;
-            String discordUsername = request.has("username") ? request.get("username").getAsString() : null;
-            
-            if (discordId == null || discordUsername == null) {
-                sendError(exchange, 400, "Discord ID and username are required");
-                return;
-            }
-            
-            // Check Discord role permissions via config
-            boolean hasPermission = checkDiscordPermission(discordId);
-            
-            if (!hasPermission) {
-                sendError(exchange, 403, "Your Discord role doesn't have permission to access the dashboard");
-                return;
-            }
-            
-            // Generate session token
-            String token = generateToken();
-            SessionData session = new SessionData(
-                discordUsername,
-                discordId,
-                "discord",
-                checkDiscordAdminPermission(discordId),
-                System.currentTimeMillis()
-            );
-            
-            sessions.put(token, session);
-            cleanupSessions();
-            
-            // Send response
-            JsonObject response = new JsonObject();
-            response.addProperty("success", true);
-            response.addProperty("token", token);
-            response.addProperty("username", discordUsername);
-            response.addProperty("isAdmin", session.isAdmin);
-            response.addProperty("authType", "discord");
-            
-            sendJson(exchange, 200, response.toString());
-            
-            LOGGER.info("Discord user {} authenticated to dashboard (admin: {})", discordUsername, session.isAdmin);
-            
-        } catch (Exception e) {
-            LOGGER.error("Error during Discord authentication", e);
+            NeoLog.error(LOGGER, LogCategory.WEB_DASHBOARD, "Error during login", e);
             sendError(exchange, 500, "Authentication failed");
         }
     }
@@ -200,6 +146,7 @@ public class AuthHandler implements HttpHandler {
             if (session != null) {
                 sessions.remove(token);
             }
+            NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "Session validation failed: {}", session == null ? "unknown token" : "expired");
             sendError(exchange, 401, "Invalid or expired token");
             return;
         }
@@ -283,126 +230,6 @@ public class AuthHandler implements HttpHandler {
     
     private void cleanupSessions() {
         sessions.entrySet().removeIf(entry -> isExpired(entry.getValue()));
-    }
-    
-    /**
-     * Check if Discord user has permission to view dashboard.
-     * Uses DiscordAuthProvider which integrates with Simple Discord Link (SDLink).
-     * Falls back to config-role matching if SDLink is not available.
-     */
-    private boolean checkDiscordPermission(String discordId) {
-        List<String> allowedRoles = getDiscordAllowedRoles();
-
-        com.zerog.neoessentials.webdashboard.security.DiscordAuthProvider provider =
-            com.zerog.neoessentials.webdashboard.security.DiscordAuthProvider.getInstance();
-        if (provider.isAvailable()) {
-            com.zerog.neoessentials.webdashboard.security.DiscordUser discordUser =
-                provider.getLinkedAccountByDiscordId(discordId);
-            if (discordUser == null) {
-                LOGGER.debug("Discord user {} has no linked Minecraft account via SDLink", discordId);
-                return false;
-            }
-            // getDiscordRoles() returns Discord role IDs — check against configured allowed roles
-            List<String> userRoles = discordUser.getDiscordRoles();
-            for (String allowed : allowedRoles) {
-                if (userRoles.contains(allowed)) {
-                    LOGGER.debug("Discord user {} has allowed role: {}", discordId, allowed);
-                    return true;
-                }
-            }
-            LOGGER.debug("Discord user {} has no matching allowed roles. Has: {}", discordId, userRoles);
-            return false;
-        }
-
-        // SDLink not available — standalone mode: wildcard grants access
-        LOGGER.debug("SDLink not available — standalone Discord auth mode for user {}", discordId);
-        return allowedRoles.contains("*") || allowedRoles.isEmpty();
-    }
-
-    /**
-     * Check if Discord user has admin permissions.
-     * Uses DiscordAuthProvider which integrates with Simple Discord Link (SDLink).
-     */
-    private boolean checkDiscordAdminPermission(String discordId) {
-        List<String> adminRoles = getDiscordAdminRoles();
-
-        com.zerog.neoessentials.webdashboard.security.DiscordAuthProvider provider =
-            com.zerog.neoessentials.webdashboard.security.DiscordAuthProvider.getInstance();
-        if (provider.isAvailable()) {
-            com.zerog.neoessentials.webdashboard.security.DiscordUser discordUser =
-                provider.getLinkedAccountByDiscordId(discordId);
-            if (discordUser != null) {
-                List<String> userRoles = discordUser.getDiscordRoles();
-                for (String adminRole : adminRoles) {
-                    if (userRoles.contains(adminRole)) {
-                        LOGGER.debug("Discord user {} has admin role: {}", discordId, adminRole);
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
-
-        // SDLink not available — no admin access without explicit role match
-        return false;
-    }
-    
-    /**
-     * Get allowed Discord roles from config
-     */
-    private List<String> getDiscordAllowedRoles() {
-        List<String> roles = new ArrayList<>();
-        try {
-            JsonObject config = ConfigManager.getInstance().getConfig("config.json");
-            if (config.has("webDashboard") && config.getAsJsonObject("webDashboard").has("discord")) {
-                JsonObject discord = config.getAsJsonObject("webDashboard").getAsJsonObject("discord");
-                if (discord.has("allowedRoles") && discord.get("allowedRoles").isJsonArray()) {
-                    for (var el : discord.getAsJsonArray("allowedRoles")) {
-                        if (el.isJsonPrimitive() && el.getAsJsonPrimitive().isString()) {
-                            roles.add(el.getAsString());
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) {
-            LOGGER.warn("Failed to read Discord allowed roles from config", e);
-        }
-        
-        // Default roles if not configured
-        if (roles.isEmpty()) {
-            roles.addAll(Arrays.asList("Admin", "Moderator", "Staff"));
-        }
-        
-        return roles;
-    }
-    
-    /**
-     * Get admin Discord roles from config
-     */
-    private List<String> getDiscordAdminRoles() {
-        List<String> roles = new ArrayList<>();
-        try {
-            JsonObject config = ConfigManager.getInstance().getConfig("config.json");
-            if (config.has("webDashboard") && config.getAsJsonObject("webDashboard").has("discord")) {
-                JsonObject discord = config.getAsJsonObject("webDashboard").getAsJsonObject("discord");
-                if (discord.has("adminRoles") && discord.get("adminRoles").isJsonArray()) {
-                    for (var el : discord.getAsJsonArray("adminRoles")) {
-                        if (el.isJsonPrimitive() && el.getAsJsonPrimitive().isString()) {
-                            roles.add(el.getAsString());
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) {
-            LOGGER.warn("Failed to read Discord admin roles from config", e);
-        }
-        
-        // Default admin role if not configured
-        if (roles.isEmpty()) {
-            roles.add("Admin");
-        }
-        
-        return roles;
     }
     
     private void sendJson(HttpExchange exchange, int code, String json) throws IOException {

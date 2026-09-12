@@ -1,14 +1,21 @@
 package com.zerog.neoessentials.shop;
 
-import com.zerog.neoessentials.economy.managers.EconomyManager;
+import com.zerog.neoessentials.shop.api.ShopEconomyAdapter;
+import com.zerog.neoessentials.shop.api.ShopEconomyRegistry;
+import com.zerog.neoessentials.shop.events.ShopTransactionEvent;
 import com.zerog.neoessentials.shop.model.ShopData;
+import com.zerog.neoessentials.shop.pricing.PricingEngine;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.entity.ChestBlockEntity;
+import net.minecraft.world.level.block.entity.HopperBlockEntity;
+import net.neoforged.neoforge.common.NeoForge;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -17,7 +24,11 @@ import java.math.RoundingMode;
 
 /**
  * Executes buy/sell transactions for ChestShop.
- * Integrates with {@link EconomyManager} for money and the chest inventory for items.
+ *
+ * <p>Economy operations are routed through {@link ShopEconomyRegistry}.
+ * Dynamic pricing is applied (if enabled) via {@link PricingEngine}.
+ * A {@link ShopTransactionEvent} is fired on the NeoForge game bus after every
+ * successful transaction.
  */
 public final class ShopTransaction {
 
@@ -27,8 +38,10 @@ public final class ShopTransaction {
 
     // ── Result ────────────────────────────────────────────────────────────────
 
-    public enum ResultType { SUCCESS, NOT_ENOUGH_MONEY, NOT_ENOUGH_STOCK, NO_SPACE,
-                             NO_CHEST, NO_ECONOMY_ACCOUNT, SHOP_DISABLED, ERROR }
+    public enum ResultType {
+        SUCCESS, NOT_ENOUGH_MONEY, NOT_ENOUGH_STOCK, NO_SPACE,
+        NO_CHEST, NO_ECONOMY_ACCOUNT, SHOP_DISABLED, ERROR
+    }
 
     public static class TransactionResult {
         public final ResultType type;
@@ -52,203 +65,297 @@ public final class ShopTransaction {
 
     // ── BUY ───────────────────────────────────────────────────────────────────
 
-    /**
-     * Player right-clicks the shop sign → they BUY from the shop owner.
-     * Money flows: buyer → owner (or voided for admin shops).
-     * Items flow:  owner's chest → buyer's inventory.
-     */
     public static TransactionResult executeBuy(ServerPlayer buyer, ShopData shop, ServerLevel level) {
         if (!shop.canBuy()) return fail(ResultType.SHOP_DISABLED);
 
-        EconomyManager eco = EconomyManager.getInstance();
-        if (eco == null) return fail(ResultType.ERROR);
+        ShopEconomyAdapter eco = ShopEconomyRegistry.getInstance().getAdapter();
 
-        BigDecimal price = shop.buyPrice.setScale(2, RoundingMode.HALF_UP);
-        ItemStack template = resolveItem(shop.itemId);
+        BigDecimal price = PricingEngine.getInstance()
+                .computeBuyPrice(shop, buyer.getUUID(), shop.quantity, level);
+        if (price == null) return fail(ResultType.ERROR);
+        price = price.setScale(2, RoundingMode.HALF_UP);
+
+        ItemStack template = resolveItem(shop);
         if (template.isEmpty()) return fail(ResultType.ERROR);
         ItemStack item = template.copyWithCount(shop.quantity);
 
-        // Check buyer has enough money
-        BigDecimal buyerBalance = eco.getBalance(buyer.getUUID());
-        if (buyerBalance.compareTo(price) < 0) return fail(ResultType.NOT_ENOUGH_MONEY);
+        if (!eco.hasBalance(buyer.getUUID(), price)) return fail(ResultType.NOT_ENOUGH_MONEY);
 
-        // Check stock (admin shops have unlimited stock)
         if (!shop.isAdminShop()) {
-            ChestBlockEntity chest = getChest(shop, level);
+            Container chest = getChest(shop, level);
             if (chest == null) return fail(ResultType.NO_CHEST);
-            int available = countItems(chest, template);
-            if (available < shop.quantity) return fail(ResultType.NOT_ENOUGH_STOCK);
+            if (countItems(chest, template) < shop.quantity) return fail(ResultType.NOT_ENOUGH_STOCK);
         }
 
-        // Check buyer inventory has space
         if (!hasSpace(buyer.getInventory(), item)) return fail(ResultType.NO_SPACE);
 
-        // ── Execute ───────────────────────────────────────────────────────────
-        // 1. Deduct money from buyer
-        boolean deducted = eco.subtractBalance(buyer.getUUID(), price);
-        if (!deducted) return fail(ResultType.NOT_ENOUGH_MONEY);
+        if (!eco.debit(buyer.getUUID(), price)) return fail(ResultType.NOT_ENOUGH_MONEY);
 
-        // 2. Remove items from chest (skip for admin shops)
         if (!shop.isAdminShop()) {
-            ChestBlockEntity chest = getChest(shop, level);
-            if (chest == null) { eco.addBalance(buyer.getUUID(), price); return fail(ResultType.NO_CHEST); }
+            Container chest = getChest(shop, level);
+            if (chest == null) { eco.credit(buyer.getUUID(), price); return fail(ResultType.NO_CHEST); }
             if (!removeItems(chest, template, shop.quantity)) {
-                eco.addBalance(buyer.getUUID(), price); // rollback
+                eco.credit(buyer.getUUID(), price);
                 return fail(ResultType.NOT_ENOUGH_STOCK);
             }
         }
 
-        // 3. Give items to buyer
         giveItems(buyer, item);
 
-        // 4. Pay shop owner (skip for admin shops — money is voided)
         if (!shop.isAdminShop() && shop.ownerUUID != null) {
-            eco.addBalance(shop.ownerUUID, price);
+            guaranteedCredit(eco, shop.ownerUUID, price, "BUY", shop);
         }
 
-        LOGGER.debug("[ChestShop] BUY: {} bought {}x {} for {} from {}",
-            buyer.getName().getString(), shop.quantity, shop.itemId, price, shop.ownerName);
+        shop.totalSalesCount++;
+        shop.totalRevenueCents += price.movePointRight(2).longValue();
+        shop.lastSaleTimestamp = System.currentTimeMillis();
+        ShopManager.getInstance().registerShop(shop);
+
+        NeoForge.EVENT_BUS.post(new ShopTransactionEvent(
+                shop, buyer.getUUID(), ShopTransactionEvent.Type.BUY, price, shop.quantity));
+
+        if (!shop.isAdminShop()) checkAndNotifyLowStock(shop, level, template);
+
+        NeoLog.debug(LOGGER, LogCategory.GENERAL, "[ChestShop] BUY: {} bought {}x {} for {} from {}",
+                buyer.getName().getString(), shop.quantity, shop.itemId, price, shop.ownerName);
         return ok(price, shop.quantity);
     }
 
     // ── SELL ──────────────────────────────────────────────────────────────────
 
-    /**
-     * Player left-clicks the shop sign → they SELL to the shop owner.
-     * Money flows: owner (or server) → seller.
-     * Items flow:  seller's inventory → owner's chest.
-     */
     public static TransactionResult executeSell(ServerPlayer seller, ShopData shop, ServerLevel level) {
         if (!shop.canSell()) return fail(ResultType.SHOP_DISABLED);
 
-        EconomyManager eco = EconomyManager.getInstance();
-        if (eco == null) return fail(ResultType.ERROR);
+        ShopEconomyAdapter eco = ShopEconomyRegistry.getInstance().getAdapter();
 
-        BigDecimal price = shop.sellPrice.setScale(2, RoundingMode.HALF_UP);
-        ItemStack template = resolveItem(shop.itemId);
+        BigDecimal price = PricingEngine.getInstance()
+                .computeSellPrice(shop, seller.getUUID(), shop.quantity, level);
+        if (price == null) return fail(ResultType.ERROR);
+        price = price.setScale(2, RoundingMode.HALF_UP);
+
+        ItemStack template = resolveItem(shop);
         if (template.isEmpty()) return fail(ResultType.ERROR);
         ItemStack item = template.copyWithCount(shop.quantity);
 
-        // Check seller has the items
-        int available = countItems(seller.getInventory(), template);
-        if (available < shop.quantity) return fail(ResultType.NOT_ENOUGH_STOCK);
+        if (countItems(seller.getInventory(), template) < shop.quantity) return fail(ResultType.NOT_ENOUGH_STOCK);
 
-        // Check owner can pay (skip for admin shops)
         if (!shop.isAdminShop() && shop.ownerUUID != null) {
-            BigDecimal ownerBalance = eco.getBalance(shop.ownerUUID);
-            if (ownerBalance.compareTo(price) < 0) return fail(ResultType.NOT_ENOUGH_MONEY);
+            if (!eco.hasBalance(shop.ownerUUID, price)) return fail(ResultType.NOT_ENOUGH_MONEY);
         }
 
-        // Check chest has space (skip for admin shops — items are voided)
         if (!shop.isAdminShop()) {
-            ChestBlockEntity chest = getChest(shop, level);
+            Container chest = getChest(shop, level);
             if (chest == null) return fail(ResultType.NO_CHEST);
             if (!hasSpaceInContainer(chest, template, shop.quantity)) return fail(ResultType.NO_SPACE);
         }
 
-        // ── Execute ───────────────────────────────────────────────────────────
-        // 1. Remove items from seller
         if (!removeItemsFromPlayer(seller, template, shop.quantity)) return fail(ResultType.NOT_ENOUGH_STOCK);
 
-        // 2. Deduct money from owner (skip for admin shops)
         if (!shop.isAdminShop() && shop.ownerUUID != null) {
-            boolean deducted = eco.subtractBalance(shop.ownerUUID, price);
-            if (!deducted) {
-                giveItems(seller, item); // rollback items
+            if (!eco.debit(shop.ownerUUID, price)) {
+                giveItems(seller, item);
                 return fail(ResultType.NOT_ENOUGH_MONEY);
             }
         }
 
-        // 3. Add items to chest (skip for admin shops — voided)
         if (!shop.isAdminShop()) {
-            ChestBlockEntity chest = getChest(shop, level);
+            Container chest = getChest(shop, level);
             if (chest != null) addItems(chest, template, shop.quantity);
         }
 
-        // 4. Pay seller
-        eco.addBalance(seller.getUUID(), price);
+        guaranteedCredit(eco, seller.getUUID(), price, "SELL", shop);
 
-        LOGGER.debug("[ChestShop] SELL: {} sold {}x {} for {} to {}",
-            seller.getName().getString(), shop.quantity, shop.itemId, price, shop.ownerName);
+        shop.totalSalesCount++;
+        shop.totalRevenueCents += price.movePointRight(2).longValue();
+        shop.lastSaleTimestamp = System.currentTimeMillis();
+        ShopManager.getInstance().registerShop(shop);
+
+        NeoForge.EVENT_BUS.post(new ShopTransactionEvent(
+                shop, seller.getUUID(), ShopTransactionEvent.Type.SELL, price, shop.quantity));
+
+        NeoLog.debug(LOGGER, LogCategory.GENERAL, "[ChestShop] SELL: {} sold {}x {} for {} to {}",
+                seller.getName().getString(), shop.quantity, shop.itemId, price, shop.ownerName);
         return ok(price, shop.quantity);
     }
 
-    // ── Inventory helpers (use Container interface — avoids protected getItems()) ──
+    /**
+     * Credits {@code recipient} via the pluggable {@link ShopEconomyAdapter}, and if that's
+     * rejected (a cancellable deposit event, provider error, etc.) falls back to a guaranteed,
+     * non-cancellable {@code EconomyManager.setBalance()} settlement — by the point this is
+     * called, the other side of the trade (item or payment) has already been taken from the
+     * counterparty, so a rejected credit here must not silently lose it. Matches the fallback
+     * already used by {@code AuctionHouseManager.buyItem()} for the same failure mode.
+     */
+    private static void guaranteedCredit(ShopEconomyAdapter eco, java.util.UUID recipient, BigDecimal amount, String direction, ShopData shop) {
+        try {
+            boolean paid = eco.credit(recipient, amount);
+            if (!paid) {
+                NeoLog.error(LOGGER, LogCategory.GENERAL,
+                        "[ChestShop] {} credit rejected via {} for {} on shop '{}' — forcing settlement to avoid losing the payment",
+                        direction, eco.getProviderName(), recipient, shop.toKey());
+                var em = com.zerog.neoessentials.economy.managers.EconomyManager.getInstance();
+                em.setBalance(recipient, em.getBalance(recipient).add(amount));
+            }
+        } catch (Exception e) {
+            NeoLog.error(LOGGER, LogCategory.GENERAL,
+                    "[ChestShop] Could not credit " + recipient + " for shop '" + shop.toKey() + "'", e);
+        }
+    }
 
-    private static ItemStack resolveItem(String itemId) {
-        // Delegate to WorthManager which handles vanilla, modded, fuzzy, and namespaced IDs
+    // ── Low-stock notification ─────────────────────────────────────────────────
+
+    private static void checkAndNotifyLowStock(ShopData shop, ServerLevel level, ItemStack template) {
+        try {
+            Container chest = getChest(shop, level);
+            if (chest == null) return;
+            int remaining = countItems(chest, template);
+            int threshold = shop.stockLowThreshold > 0 ? shop.stockLowThreshold : getDefaultThreshold();
+            if (remaining <= threshold && shop.ownerUUID != null) {
+                var server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
+                if (server == null) return;
+                var owner = server.getPlayerList().getPlayer(shop.ownerUUID);
+                if (owner != null) {
+                    owner.sendSystemMessage(Component.literal(
+                            "§e[Shop] §fYour §e" + shop.itemId.replace("minecraft:", "") +
+                            " §fshop at §7(" + shop.signX + ", " + shop.signY + ", " + shop.signZ +
+                            ")§f is running low! §c" + remaining + " §fitem(s) left."));
+                }
+            }
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Failed to check/notify low stock for shop '{}'", shop.toKey(), e);
+        }
+    }
+
+    private static int getDefaultThreshold() {
+        try {
+            var cfg = com.zerog.neoessentials.config.ConfigManager.getInstance()
+                    .getConfig(com.zerog.neoessentials.config.ConfigManager.MAIN_CONFIG);
+            if (cfg != null && cfg.has("shop")) {
+                var shopCfg = cfg.getAsJsonObject("shop");
+                if (shopCfg.has("stockLowThreshold")) return shopCfg.get("stockLowThreshold").getAsInt();
+            }
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Failed to read shop.stockLowThreshold config — using default", e);
+        }
+        return 5;
+    }
+
+    // ── Inventory helpers ──────────────────────────────────────────────────────
+
+    public static ItemStack resolveItem(String itemId) {
         try {
             ItemStack result = com.zerog.neoessentials.economy.worth.WorthManager.resolveItem(itemId);
             if (result != null && !result.isEmpty()) return result;
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "WorthManager.resolveItem failed for '{}'", itemId, e);
+        }
         return ItemStack.EMPTY;
     }
 
-    private static ChestBlockEntity getChest(ShopData shop, ServerLevel level) {
-        if (!shop.hasChest) return null;
-        BlockPos pos = shop.getChestPos();
-        BlockEntity be = level.getBlockEntity(pos);
-        return be instanceof ChestBlockEntity c ? c : null;
+    /**
+     * Resolves a shop's traded item INCLUDING its stored {@link ShopData#itemNbt} components
+     * (custom name, enchantments, modded NBT-backed data) — so buy/sell actually trades the
+     * real item the owner set up, not a data-less lookalike built from just the registry id.
+     * Falls back to plain {@link #resolveItem(String)} when {@code itemNbt} is null/blank
+     * (legacy shops, or shops whose item genuinely has no non-default components).
+     */
+    public static ItemStack resolveItem(ShopData shop) {
+        ItemStack base = resolveItem(shop.itemId);
+        if (base.isEmpty() || shop.itemNbt == null || shop.itemNbt.isBlank()) return base;
+        try {
+            com.google.gson.JsonElement json = com.google.gson.JsonParser.parseString(shop.itemNbt);
+            net.minecraft.core.component.DataComponentMap components =
+                com.zerog.neoessentials.auctionhouse.AuctionComponentSerializer.deserialize(json);
+            base.applyComponents(components);
+        } catch (Exception e) {
+            LOGGER.warn("[ChestShop] Failed to apply stored components for shop item '{}': {}",
+                shop.itemId, e.getMessage());
+        }
+        return base;
     }
 
-    /** Count matching items in a Container (works for ChestBlockEntity and player Inventory). */
-    private static int countItems(Container container, ItemStack target) {
+    /**
+     * Whether {@code stack} carries any non-default {@code DataComponents} — used to decide
+     * how strictly two stacks must match (see {@link #matches}).
+     */
+    private static boolean hasCustomComponents(ItemStack stack) {
+        return !stack.getComponents().equals(new ItemStack(stack.getItem()).getComponents());
+    }
+
+    /**
+     * Item-matching predicate for chest/inventory scans. When {@code target} carries custom
+     * data (a modded item's defining components, a custom name, enchantments, etc.) matching
+     * requires an EXACT component match, so a shop configured for one specific data-bearing
+     * item variant doesn't accept/dispense a different variant of the same base item.
+     * Otherwise falls back to the loose registry-type-only match ({@link ItemStack#isSameItem})
+     * used historically, so a plain shop (e.g. "sell any diamond sword") isn't broken by
+     * incidental component differences (durability, etc.) between physical stacks.
+     */
+    private static boolean matches(ItemStack slot, ItemStack target) {
+        if (slot.isEmpty()) return false;
+        return hasCustomComponents(target)
+            ? ItemStack.isSameItemSameComponents(slot, target)
+            : ItemStack.isSameItem(slot, target);
+    }
+
+    /**
+     * Resolves the shop's linked chest container — for a double chest, this returns the
+     * combined 54-slot {@code CompoundContainer} covering both halves, not just the single
+     * {@code ChestBlockEntity} at {@code shop.getChestPos()}. Using
+     * {@link HopperBlockEntity#getContainerAt} (the same helper vanilla hoppers use to pull
+     * from chests) instead of casting the BlockEntity directly means both signs on a double
+     * chest correctly read/write the shared inventory instead of each only seeing its own half.
+     */
+    private static Container getChest(ShopData shop, ServerLevel level) {
+        if (!shop.hasChest) return null;
+        BlockPos pos = shop.getChestPos();
+        return HopperBlockEntity.getContainerAt(level, pos);
+    }
+
+    public static int countItems(Container container, ItemStack target) {
         int count = 0;
         for (int i = 0; i < container.getContainerSize(); i++) {
             ItemStack slot = container.getItem(i);
-            if (!slot.isEmpty() && ItemStack.isSameItemSameComponents(slot, target)) {
-                count += slot.getCount();
-            }
+            if (matches(slot, target)) count += slot.getCount();
         }
         return count;
     }
 
-    /** Remove exactly `amount` of matching items from a Container. Returns false if insufficient. */
-    private static boolean removeItems(Container container, ItemStack target, int amount) {
+    public static boolean removeItems(Container container, ItemStack target, int amount) {
         int toRemove = amount;
         for (int i = 0; i < container.getContainerSize() && toRemove > 0; i++) {
             ItemStack slot = container.getItem(i);
-            if (!slot.isEmpty() && ItemStack.isSameItemSameComponents(slot, target)) {
+            if (matches(slot, target)) {
                 int take = Math.min(slot.getCount(), toRemove);
                 slot.shrink(take);
                 toRemove -= take;
                 container.setItem(i, slot.isEmpty() ? ItemStack.EMPTY : slot);
             }
         }
-        if (container instanceof net.minecraft.world.level.block.entity.BlockEntity be) {
-            be.setChanged();
-        }
+        if (container instanceof BlockEntity be) be.setChanged();
         return toRemove == 0;
     }
 
-    /** Remove items from player inventory. */
     private static boolean removeItemsFromPlayer(ServerPlayer player, ItemStack target, int amount) {
         return removeItems(player.getInventory(), target, amount);
     }
 
-    /** Give items to player; overflow drops at feet. */
-    private static void giveItems(ServerPlayer player, ItemStack item) {
+    public static void giveItems(ServerPlayer player, ItemStack item) {
         ItemStack copy = item.copy();
-        if (!player.getInventory().add(copy)) {
-            player.drop(copy, false);
-        }
+        if (!player.getInventory().add(copy)) player.drop(copy, false);
     }
 
-    /** Add items to a container (chest), stacking first then filling empty slots. */
-    private static void addItems(Container container, ItemStack target, int amount) {
+    static void addItems(Container container, ItemStack target, int amount) {
         int toAdd = amount;
-        // First: stack onto existing
         for (int i = 0; i < container.getContainerSize() && toAdd > 0; i++) {
             ItemStack slot = container.getItem(i);
-            if (!slot.isEmpty() && ItemStack.isSameItemSameComponents(slot, target)) {
+            if (matches(slot, target)) {
                 int space = slot.getMaxStackSize() - slot.getCount();
                 int add = Math.min(space, toAdd);
-                slot.grow(add);
-                toAdd -= add;
+                slot.grow(add); toAdd -= add;
                 container.setItem(i, slot);
             }
         }
-        // Then: fill empty slots
         for (int i = 0; i < container.getContainerSize() && toAdd > 0; i++) {
             if (container.getItem(i).isEmpty()) {
                 int stackAmt = Math.min(toAdd, target.getMaxStackSize());
@@ -256,30 +363,22 @@ public final class ShopTransaction {
                 toAdd -= stackAmt;
             }
         }
-        if (container instanceof net.minecraft.world.level.block.entity.BlockEntity be) {
-            be.setChanged();
-        }
+        if (container instanceof BlockEntity be) be.setChanged();
     }
 
-    /** Check if a Container has space for `amount` more of the given item. */
-    private static boolean hasSpaceInContainer(Container container, ItemStack target, int amount) {
+    public static boolean hasSpaceInContainer(Container container, ItemStack target, int amount) {
         int canFit = 0;
         for (int i = 0; i < container.getContainerSize(); i++) {
             ItemStack slot = container.getItem(i);
-            if (slot.isEmpty()) {
-                canFit += target.getMaxStackSize();
-            } else if (ItemStack.isSameItemSameComponents(slot, target)) {
-                canFit += slot.getMaxStackSize() - slot.getCount();
-            }
+            if (slot.isEmpty()) canFit += target.getMaxStackSize();
+            else if (matches(slot, target)) canFit += slot.getMaxStackSize() - slot.getCount();
             if (canFit >= amount) return true;
         }
         return false;
     }
 
-    /** Check if a player inventory has space for the given item stack. */
     private static boolean hasSpace(net.minecraft.world.entity.player.Inventory inv, ItemStack item) {
         return hasSpaceInContainer(inv, item, item.getCount());
     }
 }
-
 

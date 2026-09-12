@@ -5,15 +5,21 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.zerog.neoessentials.economy.managers.EconomyManager;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import com.zerog.neoessentials.util.MessageUtil;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.server.level.ServerPlayer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import java.math.BigDecimal;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class PayCommand {
+    private static final Logger LOGGER = LoggerFactory.getLogger(PayCommand.class);
     private static final Map<UUID, Long> payCooldowns = new ConcurrentHashMap<>();
     private static long getPayCooldownMs() {
         return com.zerog.neoessentials.config.ConfigManager.getPayCooldownSeconds() * 1000L;
@@ -62,20 +68,19 @@ public class PayCommand {
         
         ServerPlayer sender = permResult.getPlayer();
         
-        // Check cooldown atomically to prevent bypass
-        long now = System.currentTimeMillis();
-        long cooldownMs = getPayCooldownMs();
-        Long lastPay = payCooldowns.putIfAbsent(sender.getUUID(), now);
-        if (lastPay != null) {
-            long timeSince = now - lastPay;
-            if (timeSince < cooldownMs) {
+        // Check cooldown (read-only) — only actually consumed once the payment succeeds, see
+        // below. EconomyModifierManager: players with bypass permission skip the cooldown
+        // entirely (never checked, never recorded).
+        boolean bypassCooldown = com.zerog.neoessentials.economy.compat.EconomyModifierManager
+            .getInstance().hasNoPayCooldown(sender.getUUID());
+        if (!bypassCooldown) {
+            Long lastPay = payCooldowns.get(sender.getUUID());
+            if (lastPay != null && System.currentTimeMillis() - lastPay < getPayCooldownMs()) {
                 ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.pay.cooldown"));
                 return 0;
             }
-            // Update cooldown time
-            payCooldowns.put(sender.getUUID(), now);
         }
-        
+
         // Check if economy is enabled
         if (!EconomyManager.getInstance().isEnabled()) {
             ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.economy.disabled"));
@@ -157,28 +162,63 @@ public class PayCommand {
         // Use validated amount
         java.math.BigDecimal amount = amountValidation.getValue(java.math.BigDecimal.class);
 
-        // Calculate tax
-        double taxPercent = com.zerog.neoessentials.config.ConfigManager.getEconomyTaxPercentage();
-        java.math.BigDecimal fee = amount.multiply(java.math.BigDecimal.valueOf(taxPercent / 100.0));
-        java.math.BigDecimal netAmount = amount.subtract(fee);
-
-        boolean success = com.zerog.neoessentials.api.EconomyAPI.payPlayer(
-            sender.getUUID(), finalRecipientUUID, amount);
-        if (!success) {
-            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.pay.insufficient_funds"));
+        // Enforce max transfer amount — use per-player limit from EconomyModifierManager
+        // (supports LuckPerms meta and permission tiers)
+        BigDecimal perPlayerPayLimit = com.zerog.neoessentials.economy.compat.EconomyModifierManager
+            .getInstance().getPayLimit(sender.getUUID());
+        double maxTransfer = perPlayerPayLimit != null ? perPlayerPayLimit.doubleValue()
+            : com.zerog.neoessentials.config.ConfigManager.getMaxTransferAmount();
+        boolean bypassMaxTransfer = com.zerog.neoessentials.api.permissions.PermissionAPI
+            .hasPermission(sender.getUUID(), "neoessentials.economy.pay.bypass.limit");
+        if (!bypassMaxTransfer && amount.doubleValue() > maxTransfer) {
+            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.pay.exceeds_limit",
+                maxTransfer, EconomyManager.getInstance().getCurrencySymbol()));
             return 0;
         }
 
+        // Calculate tax using effective per-player rate (respects tax-exempt and LuckPerms meta)
+        double taxPercent = com.zerog.neoessentials.economy.compat.EconomyModifierManager
+            .getInstance().getEffectiveTaxRate(sender.getUUID());
+        java.math.BigDecimal fee = amount.multiply(java.math.BigDecimal.valueOf(taxPercent / 100.0));
+        java.math.BigDecimal netAmount = amount.subtract(fee);
+
+        NeoLog.debug(LOGGER, LogCategory.ECONOMY,
+            "pay: sender={} recipient={} amount={} taxPercent={} fee={} netAmount={}",
+            sender.getUUID(), finalRecipientUUID, amount, taxPercent, fee, netAmount);
+
+        boolean success = com.zerog.neoessentials.api.EconomyAPI.payPlayer(
+            sender.getUUID(), finalRecipientUUID, amount, taxPercent);
+        if (!success) {
+            NeoLog.debug(LOGGER, LogCategory.ECONOMY,
+                "pay: transaction failed (insufficient funds) sender={} amount={}", sender.getUUID(), amount);
+            ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.pay.insufficient_funds"));
+            return 0;
+        }
+        NeoLog.debug(LOGGER, LogCategory.ECONOMY, "pay: transaction committed sender={} recipient={} netAmount={}",
+            sender.getUUID(), finalRecipientUUID, netAmount);
+
+        // Only now — after every validation check has passed and the transfer actually went
+        // through — start the cooldown. Consuming it any earlier meant a mistyped name, a
+        // toggled-off recipient, or insufficient funds still cost the player a full cooldown
+        // for a payment that never happened.
+        if (!bypassCooldown) {
+            payCooldowns.put(sender.getUUID(), System.currentTimeMillis());
+        }
+
         String currency = EconomyManager.getInstance().getCurrencySymbol();
+        // amount keeps whatever scale the parsed input had (e.g. "1000.0"), while fee/netAmount
+        // always come out at scale 2 from the BigDecimal arithmetic above — normalize here so
+        // all three display consistently.
+        java.math.BigDecimal displayAmount = amount.setScale(2, java.math.RoundingMode.HALF_UP);
         ctx.getSource().sendSuccess(() -> MessageUtil.success(
             "commands.neoessentials.pay.success_fee",
-            finalRecipientName, amount, fee, netAmount, currency), false);
+            displayAmount, finalRecipientName, fee, netAmount, currency), false);
 
         // Notify recipient if online
         if (onlineRecipient != null) {
             onlineRecipient.sendSystemMessage(MessageUtil.info(
                 "commands.neoessentials.pay.received_fee",
-                sender.getGameProfile().getName(), netAmount, fee, currency));
+                netAmount, sender.getGameProfile().getName(), fee, currency));
         }
 
         com.zerog.neoessentials.economy.managers.TransactionHistoryManager.getInstance()

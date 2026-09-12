@@ -2,6 +2,8 @@ package com.zerog.neoessentials.shop;
 
 import com.zerog.neoessentials.economy.worth.WorthManager;
 import com.zerog.neoessentials.shop.model.ShopData;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -68,7 +70,7 @@ public final class ShopParser {
         // Blank → auto-assign to the placing player
         if (ownerLine.isEmpty()) {
             if (ownerUUID == null || ownerName == null || ownerName.isBlank()) {
-                LOGGER.debug("[ChestShop] Blank owner line but no player context at {}", signPos);
+                NeoLog.debug(LOGGER, LogCategory.GENERAL, "[ChestShop] Blank owner line but no player context at {}", signPos);
                 return Optional.empty();
             }
             ownerLine = ownerName;
@@ -87,11 +89,11 @@ public final class ShopParser {
         try {
             quantity = Integer.parseInt(qtyStr);
         } catch (NumberFormatException e) {
-            LOGGER.debug("[ChestShop] Invalid quantity '{}' at {}", qtyStr, signPos);
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "[ChestShop] Invalid quantity '{}' at {}", qtyStr, signPos);
             return Optional.empty();
         }
         if (quantity < 1 || quantity > MAX_QUANTITY) {
-            LOGGER.debug("[ChestShop] Quantity {} out of range at {}", quantity, signPos);
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "[ChestShop] Quantity {} out of range at {}", quantity, signPos);
             return Optional.empty();
         }
         shop.quantity = quantity;
@@ -99,7 +101,7 @@ public final class ShopParser {
         // ── Line 2: price ─────────────────────────────────────────────────────
         String priceLine = strip(lines[ShopData.PRICE_LINE]).toUpperCase();
         if (!parsePriceLine(priceLine, shop)) {
-            LOGGER.debug("[ChestShop] Invalid price line '{}' at {}", priceLine, signPos);
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "[ChestShop] Invalid price line '{}' at {}", priceLine, signPos);
             return Optional.empty();
         }
         if (!shop.canBuy() && !shop.canSell()) return Optional.empty();
@@ -118,7 +120,7 @@ public final class ShopParser {
 
             ItemStack resolved = resolveItem(itemStr);
             if (resolved == null || resolved.isEmpty()) {
-                LOGGER.debug("[ChestShop] Could not resolve item '{}' (normalised: '{}') at {} — " +
+                NeoLog.debug(LOGGER, LogCategory.GENERAL, "[ChestShop] Could not resolve item '{}' (normalised: '{}') at {} — " +
                     "check the item ID is correct (e.g. 'thermal:copper_ingot' or 'diamond')",
                     itemRaw, itemStr, signPos);
                 return Optional.empty();
@@ -137,7 +139,7 @@ public final class ShopParser {
         if (!shop.isAdminShop()) {
             BlockPos chestPos = findAdjacentChest(signPos, level);
             if (chestPos == null) {
-                LOGGER.debug("[ChestShop] No chest found adjacent to sign at {}", signPos);
+                NeoLog.debug(LOGGER, LogCategory.GENERAL, "[ChestShop] No chest found adjacent to sign at {}", signPos);
                 return Optional.empty();
             }
             shop.hasChest      = true;
@@ -237,7 +239,9 @@ public final class ShopParser {
         try {
             ItemStack fromWorth = WorthManager.resolveItem(itemStr);
             if (fromWorth != null && !fromWorth.isEmpty()) return fromWorth;
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "WorthManager.resolveItem failed for '{}'", itemStr, e);
+        }
 
         // Try vanilla registry directly
         String id = itemStr.toLowerCase().trim();
@@ -245,7 +249,9 @@ public final class ShopParser {
         try {
             Optional<Item> item = BuiltInRegistries.ITEM.getOptional(ResourceLocation.parse(id));
             if (item.isPresent()) return new ItemStack(item.get());
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Vanilla registry lookup failed for item id '{}'", id, e);
+        }
 
         return ItemStack.EMPTY;
     }
@@ -331,7 +337,7 @@ public final class ShopParser {
         if (shop.itemPending || shop.itemId == null) {
             itemLine = "§e§l?";
         } else {
-            itemLine = buildItemDisplayName(shop.itemId);
+            itemLine = buildSignItemDisplayName(shop);
         }
 
         return new String[] {
@@ -365,6 +371,63 @@ public final class ShopParser {
             display = display.substring(0, 15) + "…";
         }
         return display;
+    }
+
+    /**
+     * Display name for the physical sign line (line 3) — prefers the item's REAL name
+     * (respecting a custom name from {@link ShopData#itemNbt}, e.g. a modded item's proper
+     * name instead of its raw registry id) via {@code getHoverName()}, truncated to the
+     * ~16-char sign-line limit. Falls back to the id-derived name ({@link #buildItemDisplayName})
+     * if the item can't be resolved.
+     */
+    public static String buildSignItemDisplayName(ShopData shop) {
+        String name = null;
+        try {
+            ItemStack resolved = com.zerog.neoessentials.shop.ShopTransaction.resolveItem(shop);
+            if (!resolved.isEmpty()) name = resolved.getHoverName().getString();
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Failed to resolve item hover name for sign display of shop item '{}'", shop.itemId, e);
+        }
+        if (name == null || name.isBlank()) return buildItemDisplayName(shop.itemId);
+        return name.length() > 16 ? name.substring(0, 15) + "…" : name;
+    }
+
+    /**
+     * Full, untruncated display name for chat messages (shop info / transaction feedback) —
+     * unlike {@link #buildItemDisplayName}, which exists solely for the ~16-char sign line.
+     * Uses the item's real {@code getHoverName()} (respects custom names/lore from the shop's
+     * stored {@link ShopData#itemNbt}) when the item resolves; falls back to the id-based
+     * name if resolution fails (e.g. a since-removed modded item).
+     */
+    public static String buildFullItemDisplayName(ShopData shop) {
+        try {
+            ItemStack resolved = com.zerog.neoessentials.shop.ShopTransaction.resolveItem(shop);
+            if (!resolved.isEmpty()) return resolved.getHoverName().getString();
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Failed to resolve item hover name for full display of shop item '{}'", shop.itemId, e);
+        }
+        return buildItemDisplayName(shop.itemId).replace("…", "");
+    }
+
+    /**
+     * Captures a held item's {@code DataComponentMap} (custom name, enchantments, modded
+     * NBT-backed data, etc.) as a JSON string for {@link ShopData#itemNbt}, so a shop trades
+     * the actual item the owner held — not a data-less lookalike rebuilt from just its
+     * registry id. Returns {@code null} for a plain item with no non-default components
+     * (keeps old shops.json entries lean/unchanged) or if serialization fails.
+     */
+    public static String captureComponents(ItemStack held) {
+        try {
+            if (held.isEmpty()) return null;
+            net.minecraft.core.component.DataComponentMap defaults = new ItemStack(held.getItem()).getComponents();
+            if (held.getComponents().equals(defaults)) return null; // nothing custom to preserve
+            return com.zerog.neoessentials.auctionhouse.AuctionComponentSerializer
+                .serialize(held.getComponents()).toString();
+        } catch (Exception e) {
+            LOGGER.warn("[ChestShop] Failed to capture item components for '{}': {}",
+                held.getItem(), e.getMessage());
+            return null;
+        }
     }
 }
 

@@ -1,6 +1,8 @@
 package com.zerog.neoessentials.chat;
 
 import com.google.gson.JsonObject;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.util.Collections;
@@ -35,20 +37,8 @@ public class ChatManager {
         return playerChatPermissions;
     }
     // Config toggles and options
-    private final boolean sleepIgnoresAfkPlayers;
-    private final boolean sleepIgnoresVanishedPlayers;
-    private final String afkListName;
-    private final boolean broadcastAfkMessage;
-    private final boolean deathMessages;
-    private final String vanishingItemsPolicy;
-    private final String bindingItemsPolicy;
-    private final boolean sendInfoAfterDeath;
-    private final boolean allowSilentJoinQuit;
     private final String customJoinMessage;
     private final String customQuitMessage;
-    private final String customNewUsernameMessage;
-    private final boolean useCustomServerFullMessage;
-    private final int hideJoinQuitMessagesAbove;
     // Chat format: can be a string (default) or a map for per-group/world - thread-safe
     private final String defaultChatFormat;
     private final java.util.Map<String, String> chatFormatMap;
@@ -64,20 +54,8 @@ public class ChatManager {
     public ChatManager(JsonObject chatConfig, JsonObject commandsConfig) {
         this.mutedCommands = toSet(chatConfig, "muteCommands");
         this.playerChatPermissions = toSet(chatConfig, "playerChatPermissions");
-        this.sleepIgnoresAfkPlayers = chatConfig.has("sleepIgnoresAfkPlayers") && chatConfig.get("sleepIgnoresAfkPlayers").getAsBoolean();
-        this.sleepIgnoresVanishedPlayers = chatConfig.has("sleepIgnoresVanishedPlayers") && chatConfig.get("sleepIgnoresVanishedPlayers").getAsBoolean();
-        this.afkListName = chatConfig.has("afkListName") ? chatConfig.get("afkListName").getAsString() : "none";
-        this.broadcastAfkMessage = chatConfig.has("broadcastAfkMessage") && chatConfig.get("broadcastAfkMessage").getAsBoolean();
-        this.deathMessages = chatConfig.has("deathMessages") && chatConfig.get("deathMessages").getAsBoolean();
-        this.vanishingItemsPolicy = chatConfig.has("vanishingItemsPolicy") ? chatConfig.get("vanishingItemsPolicy").getAsString() : "keep";
-        this.bindingItemsPolicy = chatConfig.has("bindingItemsPolicy") ? chatConfig.get("bindingItemsPolicy").getAsString() : "keep";
-        this.sendInfoAfterDeath = chatConfig.has("sendInfoAfterDeath") && chatConfig.get("sendInfoAfterDeath").getAsBoolean();
-        this.allowSilentJoinQuit = chatConfig.has("allowSilentJoinQuit") && chatConfig.get("allowSilentJoinQuit").getAsBoolean();
         this.customJoinMessage = chatConfig.has("customJoinMessage") ? chatConfig.get("customJoinMessage").getAsString() : "none";
         this.customQuitMessage = chatConfig.has("customQuitMessage") ? chatConfig.get("customQuitMessage").getAsString() : "none";
-        this.customNewUsernameMessage = chatConfig.has("customNewUsernameMessage") ? chatConfig.get("customNewUsernameMessage").getAsString() : "none";
-        this.useCustomServerFullMessage = chatConfig.has("useCustomServerFullMessage") && chatConfig.get("useCustomServerFullMessage").getAsBoolean();
-        this.hideJoinQuitMessagesAbove = chatConfig.has("hideJoinQuitMessagesAbove") ? chatConfig.get("hideJoinQuitMessagesAbove").getAsInt() : -1;
         // Support chat-format as string or object
         if (chatConfig.has("chat-format")) {
             if (chatConfig.get("chat-format").isJsonObject()) {
@@ -88,21 +66,27 @@ public class ChatManager {
                     if (key.equalsIgnoreCase("default")) {
                         def = obj.get(key).getAsString();
                     } else {
-                        map.put(key, obj.get(key).getAsString());
+                        // Lowercased to match getChatFormat()'s lookup keys, which lowercase the
+                        // resolved group/world name before checking the map — without this, a
+                        // config key written with any uppercase (e.g. "group:SeasonedExplorer",
+                        // matching a rank/group's actual name casing) could never match, since
+                        // Map.containsKey() is exact-case. Case is irrelevant to the *value*, just
+                        // normalized on the way in so both sides of the lookup agree.
+                        map.put(key.toLowerCase(), obj.get(key).getAsString());
                     }
                 }
                 this.defaultChatFormat = def != null ? def : "{neoessentials_displayname}: {MESSAGE}";
                 this.chatFormatMap = map;
-                LOGGER.info("Loaded chat-format (object): default=[{}], map size={}", this.defaultChatFormat, map.size());
+                NeoLog.info(LOGGER, LogCategory.CHAT, "Loaded chat-format (object): default=[{}], map size={}", this.defaultChatFormat, map.size());
             } else {
                 this.defaultChatFormat = chatConfig.get("chat-format").getAsString();
                 this.chatFormatMap = java.util.Collections.emptyMap();
-                LOGGER.info("Loaded chat-format (string): [{}]", this.defaultChatFormat);
+                NeoLog.info(LOGGER, LogCategory.CHAT, "Loaded chat-format (string): [{}]", this.defaultChatFormat);
             }
         } else {
             this.defaultChatFormat = "{neoessentials_displayname}: {MESSAGE}";
             this.chatFormatMap = java.util.Collections.emptyMap();
-            LOGGER.info("No chat-format in config, using default: [{}]", this.defaultChatFormat);
+            NeoLog.info(LOGGER, LogCategory.CHAT, "No chat-format in config, using default: [{}]", this.defaultChatFormat);
         }
         this.commandsConfig = commandsConfig;
     }
@@ -133,34 +117,8 @@ public class ChatManager {
     }
 
     // Accessors for chat config options
-    @SuppressWarnings("unused") // May be used by external systems
-    public boolean shouldSleepIgnoreAfk() { return sleepIgnoresAfkPlayers; }
-    @SuppressWarnings("unused") // May be used by external systems
-    public boolean shouldSleepIgnoreVanished() { return sleepIgnoresVanishedPlayers; }
-    @SuppressWarnings("unused") // May be used by external systems
-    public String getAfkListName() { return afkListName; }
-    @SuppressWarnings("unused") // May be used by external systems
-    public boolean shouldBroadcastAfk() { return broadcastAfkMessage; }
-    @SuppressWarnings("unused") // May be used by external systems
-    public boolean showDeathMessages() { return deathMessages; }
-    @SuppressWarnings("unused") // May be used by external systems
-    public String getVanishingItemsPolicy() { return vanishingItemsPolicy; }
-    @SuppressWarnings("unused") // May be used by external systems
-    public String getBindingItemsPolicy() { return bindingItemsPolicy; }
-    @SuppressWarnings("unused") // May be used by external systems
-    public boolean shouldSendInfoAfterDeath() { return sendInfoAfterDeath; }
-    @SuppressWarnings("unused") // May be used by external systems
-    public boolean allowSilentJoinQuit() { return allowSilentJoinQuit; }
-    @SuppressWarnings("unused") // May be used by external systems
     public String getCustomJoinMessage() { return customJoinMessage; }
-    @SuppressWarnings("unused") // May be used by external systems
     public String getCustomQuitMessage() { return customQuitMessage; }
-    @SuppressWarnings("unused") // May be used by external systems
-    public String getCustomNewUsernameMessage() { return customNewUsernameMessage; }
-    @SuppressWarnings("unused") // May be used by external systems
-    public boolean useCustomServerFullMessage() { return useCustomServerFullMessage; }
-    @SuppressWarnings("unused") // May be used by external systems
-    public int getHideJoinQuitMessagesAbove() { return hideJoinQuitMessagesAbove; }
 
     /**
      * Returns the chat format for a given group and/or world.
@@ -181,32 +139,43 @@ public class ChatManager {
                     if (templates.has("templates")) {
                         com.google.gson.JsonObject templateMap = templates.getAsJsonObject("templates");
                         if (templateMap.has(activeTemplate)) {
+                            NeoLog.debug(LOGGER, LogCategory.CHAT, "Using format template '{}' for group={}, world={}", activeTemplate, group, world);
                             return templateMap.get(activeTemplate).getAsString();
                         }
                     }
                 }
             }
         } catch (Exception e) {
-            // Ignore, fall through to normal format selection
+            NeoLog.debug(LOGGER, LogCategory.CHAT, "Error checking format templates, falling back to normal format selection", e);
         }
 
         // Normal format selection
         // Try group+world
         if (group != null && world != null) {
             String key = "group:" + group.toLowerCase() + ":world:" + world.toLowerCase();
-            if (chatFormatMap.containsKey(key)) return chatFormatMap.get(key);
+            if (chatFormatMap.containsKey(key)) {
+                NeoLog.debug(LOGGER, LogCategory.CHAT, "Resolved chat format via group+world key '{}'", key);
+                return chatFormatMap.get(key);
+            }
         }
         // Try group
         if (group != null) {
             String key = "group:" + group.toLowerCase();
-            if (chatFormatMap.containsKey(key)) return chatFormatMap.get(key);
+            if (chatFormatMap.containsKey(key)) {
+                NeoLog.debug(LOGGER, LogCategory.CHAT, "Resolved chat format via group key '{}'", key);
+                return chatFormatMap.get(key);
+            }
         }
         // Try world
         if (world != null) {
             String key = "world:" + world.toLowerCase();
-            if (chatFormatMap.containsKey(key)) return chatFormatMap.get(key);
+            if (chatFormatMap.containsKey(key)) {
+                NeoLog.debug(LOGGER, LogCategory.CHAT, "Resolved chat format via world key '{}'", key);
+                return chatFormatMap.get(key);
+            }
         }
         // Fallback
+        NeoLog.debug(LOGGER, LogCategory.CHAT, "No specific chat format match for group={}, world={}; using default format", group, world);
         return defaultChatFormat;
     }
 

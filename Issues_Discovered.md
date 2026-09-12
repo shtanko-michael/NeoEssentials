@@ -1,324 +1,609 @@
-# 👾 Issues That Were Discovered
+---
+---
+#  Issues That Were Discovered
 
+- Player Warps having issues
+
+---
+
+- config missing its own key we added for languages.
 
 ---
 
 # ✅ Issues That Were Fixed
 
-- **PowerTool system — powertools not firing on block right-clicks; dead PowertoolToggleCommand class causing stale per-item toggle check**
-  *(Fixed: 2026-03-06)*
+## 🐛 Bug Fix — Inventory & Ender Chest Duplication Exploit (NeoForge 1.21.1, build.1.0.2.6+119, fixed build.214)
 
-  **Root causes found:**
+**`InventoryViewCommands.java` / `PlayerInventoryContainerMenu.java`**
 
-  - **`ItemInteractionHandler` only subscribed to `RightClickItem`** — NeoForge fires `RightClickItem` only when the player clicks in the air. Clicking on a block fires `RightClickBlock`; clicking with nothing in air fires `RightClickEmpty`. Powertools were completely silent when the player aimed at any block.
-  - **`PowertoolToggleCommand.isPowertoolEnabled(uuid, itemId)` was the gate in the handler** — `PowertoolToggleCommand` is a dead legacy class with an empty `TOGGLES` map that was never populated. Every call returned `true` from the old per-item map (no entry = enabled), which accidentally masked the bug. But since the global per-player toggle in `PowertoolCommand.ptDisabled` was never checked by the handler, `/powertooltoggle` (the command players actually run) had zero effect.
-  - **`PowertoolToggleCommand` was still compiled and imported** — it registered a duplicate `/powertooltoggle` command (no-op after our fix) but its `isPowertoolEnabled()` signature accepted `(uuid, itemId)` which the handler was calling. The handler bypassed the real `PowertoolCommand.isPowertoolEnabled(uuid)` entirely.
+**Root cause (read-only mode):** `/invsee`, `/inv`, `/ec`, `/enderchest` created a
+`SimpleContainer` filled with `.copy()` items and opened it via the standard
+`ChestMenu.threeRows` / `ChestMenu.sixRows`.  Standard chest menus allow items to be
+freely moved out of the container, so a viewer could drag copies into their own
+inventory while the originals remained in the target's inventory — duplicating every
+item they touched.
 
-  **Fixes applied:**
+**Fix:** Both read-only open methods now use `buildReadOnlyMenu()`, a custom
+`AbstractContainerMenu` factory whose top-section slots override `mayPickup() → false`
+and `mayPlace() → false`.  Items are display-only and cannot be removed or inserted.
 
-  | File | Change |
-  |---|---|
-  | `ItemInteractionHandler.java` | Added `onRightClickBlock` and `onRightClickEmpty` handlers, all delegating to `handlePowertool()`. Removed dead `PowertoolToggleCommand` import. Gate now correctly calls `PowertoolCommand.isPowertoolEnabled(playerUUID)` (global toggle). Added null-safety on `player.getServer()`. |
-  | `PowertoolToggleCommand.java` | Replaced entire class with a compatibility shim — `isPowertoolEnabled()` delegates to `PowertoolCommand.isPowertoolEnabled()`, `register()` is a no-op to prevent double-registration of `/powertooltoggle`. |
+**Secondary fix (edit mode desync):** `PlayerInventoryContainerMenu` now registers the
+viewer's own inventory and hotbar slots.  Previously they were absent, causing
+server-client desync when the viewer tried to move items between the target's inventory
+and their own.
 
 ---
 
-- **Economy integration — ChestShop system missing: sign-based player shops, admin shops, item autofill, auto-assign owner**
-  *(Fixed: 2026-03-05)*
-
-  **Root causes:** No chest shop system existed at all. The `🎯 Additional Features` section listed it as a wanted feature.
-
-  **Implemented from ChestShop-3 (Bukkit plugin), converted to NeoForge:**
-
-  | Component | Details |
-  |---|---|
-  | `ShopData.java` | Data model — owner UUID/name, quantity, buy/sell prices, item ID, sign pos, chest pos, `itemPending` flag |
-  | `ShopManager.java` | Singleton, `ConcurrentHashMap` in-memory store, persisted to `neoessentials/shops.json` with atomic-move writes |
-  | `ShopParser.java` | Validates all 4 sign lines; blank line 0 auto-assigns player name; `?` on line 4 creates pending shop; item resolution via `WorthManager.resolveItem()` then vanilla registry; K/M price suffix support |
-  | `ShopTransaction.java` | BUY (right-click) and SELL (left-click) flows; uses `Container` interface for chest access; balance checks; rollback on failure |
-  | `ShopInteractHandler.java` | `PlayerInteractEvent.RightClickBlock` → BUY; `LeftClickBlock` → SELL; `BlockEvent.BreakEvent` → shop removal |
-  | `ShopSignHandler.java` | Deferred tick-check queue (NeoForge has no sign-update event); detects sign text after player finishes editing; blank owner auto-assign |
-  | `ShopCommand.java` | `/chestshop list [player]`, `info`, `convert`, `remove <x y z>`, `reload` — alias `/cshop` |
-
-  **Sign format:**
-  ```
-  Line 1: owner name or blank (auto-assigns)
-  Line 2: quantity (1-3456)
-  Line 3: B 10:S 5 / B 10 / S 5 / B FREE / supports K/M suffixes
-  Line 4: item name or ? (right-click with item to assign)
-  ```
-
-  **Integration:** `EconomyManager` (add/subtract balance), `PermissionAPI` (LuckPerms/FTBRanks respected), `WorthManager` (item resolution), `ConfigManager` (economy enabled check), `ResourceUtil` (shops.json path)
-
-  **Permissions:** `neoessentials.shop.create`, `shop.create.admin`, `shop.use`, `shop.list.others`, `shop.admin.remove`, `shop.admin.reload`
-
-- **Vault API — missing: Economy, Chat, and Permission Vault providers**
-  *(Fixed: 2026-03-05)*
-
-  **Root causes:** No Vault API implementation existed. Other mods using Vault could not hook into NeoEssentials economy or permissions.
-
-  **Implemented:**
-
-  | Component | Details |
-  |---|---|
-  | `NeoEssentialsEconomy` | `VaultEconomy` backed by `EconomyManager`; `format()` uses live `getCurrencySymbol()`; fires `EconomyDepositEvent`/`EconomyWithdrawEvent`; `createPlayerAccount()` uses `ConfigManager.getEconomyStartingBalance()` |
-  | `NeoEssentialsChat` | `VaultChat`; `getPlayerPrefix/getSuffix` routes through `PermissionAPI.getPrefix/getSuffix()` (respects LuckPerms → FTBRanks → internal) |
-  | `NeoEssentialsPermission` | `VaultPermission`; `playerHas()` → `PermissionAPI.hasPermission()` (external adapters respected); write ops via `PermissionManager`/`PermissionStorage` |
-  | `VaultManager` | Initialises/shuts down all three providers; lifecycle hooked into server start/stop in `NeoEssentials.java` |
-
-  **Fixed during audit:**
-  - `currencyNameSingular/Plural()` now reads from `EconomyManager.getCurrencySymbol()` (was hardcoded)
-  - `getPlayerPrefix/getSuffix` was going directly to internal `PermissionUser`, bypassing LuckPerms/FTBRanks — fixed to use `PermissionAPI`
-
-- **Console Spam**: Reduce the console spam — `LuckPermsAdapter.getPrefix()` and `PermissionAPI.getPrefix()` were logging at INFO level on every chat message/prefix lookup.
-  *(Fixed: 2026-03-04)*
-  - `LuckPermsAdapter.getPrefix()`: All ~20 `LOGGER.info()` diagnostic lines (the full `=== LUCKPERMS PREFIX REQUEST ===` block) changed to `LOGGER.debug()`. These fired on every single prefix lookup.
-  - `PermissionAPI.getPrefix()`: Removed manual `debugEnabled = ConfigManager.isDebugLoggingEnabled()` gate around `LOGGER.info()` calls. Replaced with plain `LOGGER.debug()` — consistent with the rest of the codebase and respects log level automatically.
-  - `ChatDebugUtil.java`: Removed `ConfigManager.isDebugLoggingEnabled()` gate + `LOGGER.info()`. Now uses plain `LOGGER.debug()` — fires per chat message.
-  - `ChatHandler.java`: Removed all `MessageUtil.isDebugMode()` gated `LOGGER.info("[DEBUG]…")` blocks in Discord relay section. Replaced with plain `LOGGER.debug()`.
-  - `MessageUtil.java`: Demoted all per-startup diagnostic `LOGGER.info()` in `loadTranslations()` and `updateServerLanguageFile()` to `LOGGER.debug()`. Kept only the single summary line (`"NeoEssentials: loaded N translations"`) at INFO. Also demoted `syncDebugModeFromConfig()` banner.
-  - `ServerDataCollector.java`: Demoted `"=== Collecting Server Statistics ==="` from `LOGGER.info()` to `LOGGER.debug()` — fires on every dashboard poll.
-  - `GameEndpoint.java`, `PlayerEndpoint.java`, `LoggingEndpoint.java`: Demoted all per-HTTP-request `LOGGER.info()` (handling/collecting/success lines) to `LOGGER.debug()` — fired on every dashboard page load/refresh.
-  - `ListCommand.java`: Removed redundant `MessageUtil.isDebugMode()` gate around `LOGGER.debug()` call — the debug level already suppresses it automatically.
-  - **Result:** With `enableDebugLogging: false` (default), zero prefix/permission lines appear in console. With `enableDebugLogging: true`, full diagnostics still available at DEBUG level.
-
-- **Commands Doc Update**: Update the commands document for all registered commands please.
-  *(Fixed: 2026-03-02)*
-  Created `docs/Wiki/CommandsReference.md` — a comprehensive reference covering all ~172 commands across 17 systems, with syntax, permission node, default access level, aliases, and description for every command. Added link as the first entry in `Home.md` wiki index.
-
-- **Player Info & Admin Tools system — Missing entirely: /seen, /near, /ping, /playtime, /whois, /realname, /sudo, /suicide, /msgtoggle, /rtoggle, /motd, /rules**
-  *(Fixed: 2026-03-02)*
-
-  **Root causes:** All 12 commands were completely absent. `ConfigManager` had no `getMotd()`/`getRules()` methods.
-
-  **Implemented in `PlayerInfoCommands.java` based on EssentialsX:**
-
-  | Command | Perm | Description |
-  |---|---|---|
-  | `/seen <player>` | `neoessentials.seen` | Checks online list first (shows world/pos/ping). Falls back to `ProfileCache.get()` for offline players. |
-  | `/near [radius]` | `neoessentials.near` | Iterates online players in same `ServerLevel`, computes `distanceToSqr()`, sorts by name, shows distance in metres. Default 200 block radius. |
-  | `/ping [player]` | `neoessentials.ping(.others)` | Reads `player.latency`. Colour-coded green/yellow/red. |
-  | `/playtime [player]` | `neoessentials.playtime(.others)` | Reads `Stats.CUSTOM.get(Stats.PLAY_TIME)` ticks → formatted h/m/s. |
-  | `/whois <player>` | `neoessentials.whois` | Shows UUID, dimension, XYZ, gamemode, ping, health, food. |
-  | `/realname <nick>` | `neoessentials.realname` | Searches online players by `getDisplayName().getString()` with colour stripping. |
-  | `/sudo <player> <cmd>` | `neoessentials.sudo` | Respects `neoessentials.sudo.exempt`. Prefix `c:` to send chat. Runs via `player.createCommandSourceStack()`. |
-  | `/suicide` | `neoessentials.suicide` | `player.hurt(damageSources().magic(), Float.MAX_VALUE)`. Broadcasts death message to all others. |
-  | `/msgtoggle [on\|off]` | `neoessentials.msgtoggle(.others)` | Syncs with existing `MsgToggleManager` (name-based) used by `MsgCommand`, plus UUID shadow map for `isMsgBlocked()`. |
-  | `/rtoggle [on\|off]` | `neoessentials.rtoggle(.others)` | Per-player `rtoggleEnabled` map. `isRtoggleEnabled()` available for `ReplyCommand` to check. |
-  | `/motd` | `neoessentials.motd` | Reads `ConfigManager.getMotd()` → `general.motd` in config. Replaces `{player}` placeholder. |
-  | `/rules` | `neoessentials.rules` | Reads `ConfigManager.getRules()` → `general.rules` in config. |
-
-  **Additional:** `ConfigManager.getMotd()` + `getRules()` added. `general.motd` + `general.rules` added to `config.json`. 17 permission nodes, 18 lang keys, 12 commands registered in `NeoEssentials.java` + `config.json`. `PermissionSystem.md` + `CommandsReference.md` updated.
-
-- **World Interaction & Fun system — Missing entirely: /fireball, /tree, /bigtree, /break, /ice, /bottom, /tpaall, /broadcastworld**
-  *(Fixed: 2026-03-02)*
-
-  **Root causes:** All 8 commands were completely absent from the codebase.
-
-  **Implemented in `WorldInteractionCommands.java` based on EssentialsX (`Commandfireball`, `Commandtree`, `Commandbigtree`, `Commandbreak`, `Commandice`, `Commandbottom`, `Commandtpaall`, `Commandbroadcastworld`):**
-
-  | Command | Perm | Description |
-  |---|---|---|
-  | `/fireball [type] [speed] [ride]` | `neoessentials.fireball.<type>` | Spawns typed projectile in look direction using NeoForge entity constructors. 11 types: fireball, small, large, arrow, skull, egg, snowball, expbottle, dragon, trident, windcharge. Optional `ride` mounts player on projectile. Per-type permission check + wildcard `neoessentials.fireball.*`. |
-  | `/tree <type>` / `/bigtree` | `neoessentials.tree` | Raycasts 20 blocks, plants one above. Uses `level.registryAccess()` to resolve `CONFIGURED_FEATURE` by ResourceLocation key and calls `holder.place()`. 12 tree types mapped to vanilla feature keys. |
-  | `/break` | `neoessentials.break` | Raycasts 20 blocks via `player.pick()`. Calls `level.destroyBlock(pos, false, player)` (no drops). Bedrock protected unless `neoessentials.break.bedrock`. |
-  | `/ice [player]` | `neoessentials.ice(.others)` | Calls `target.setTicksFrozen(target.getTicksRequiredToFreeze() + 1)` to fully freeze via powder-snow mechanic. |
-  | `/bottom` | `neoessentials.bottom` | Scans from `level.getMinBuildHeight()` upward looking for solid+air+air pattern. Saves `/back` location before teleport. |
-  | `/tpaall [player]` | `neoessentials.tpaall(.others)` | Iterates all online players, checks tptoggle, calls `TeleportRequestManager.sendTeleportRequest()` with `TPAHERE` type for each eligible player. |
-  | `/broadcastworld <msg>` / `/bcastworld` | `neoessentials.broadcastworld` | Filters online players by `p.serverLevel() == src.getLevel()`. Sends coloured `§6[World] §e<msg>`. |
+## 🐛 Bug Fix — Shop Hologram Not Removed When Sign Is Broken (NeoForge 1.21.1, fixed build.214)
 
-  **Additional:** 13 permission nodes, 17 lang keys, all commands registered in `NeoEssentials.java` + `config.json`. `PermissionSystem.md` + `CommandsReference.md` updated.
-
-- **Home & Warp Enhancement system — Missing entirely: /renamehome, /warpinfo, /world, /spawner, /recipe, /tpauto**
-  *(Fixed: 2026-03-02)*
-
-  **Root causes:** All 6 command groups were completely absent. `HomeManager` had no rename capability. `TeleportRequestManager.sendTeleportRequest()` had no tpauto check.
-
-  **Implemented from scratch based on EssentialsX (`Commandrenamehome`, `Commandwarpinfo`, `Commandworld`, `Commandspawner`, `Commandrecipe`, `Commandtpauto`):**
-
-  | Command | Perm | Description |
-  |---|---|---|
-  | `/renamehome <old> <new>` | `neoessentials.renamehome(.others)` | Renames a home atomically via `HomeManager.renameHome()`. Supports `player:homename` format for admin use. Validates name with existing `isValidHomeName()`. |
-  | `/warpinfo <name>` | `neoessentials.warpinfo` | Shows warp coordinates and world via `WarpManager.getWarp()`. Tab-completes all warp names. |
-  | `/world [name] [player]` | `neoessentials.world(.others)` | Lists all registered `ServerLevel` dimensions. Teleports to world spawn via `player.teleportTo()`. Matches by dimension path or full resource location key. |
-  | `/spawner <mob>` | `neoessentials.spawner[.<mob>]` | Raycasts 6 blocks to find `Blocks.SPAWNER`. Sets entity type via `SpawnerBlockEntity.setEntityId()`. Per-mob perm `neoessentials.spawner.<mob>` or wildcard `neoessentials.spawner.*`. |
-  | `/recipe [item]` | `neoessentials.recipe` | Scans all server recipes for result matching held/named item. Unlocks via `player.awardRecipes()`. Reports count of matched recipes. |
-  | `/tpauto [on\|off] [player]` | `neoessentials.tpauto(.others)` | Per-player auto-accept state. `TeleportRequestManager.sendTeleportRequest()` now calls `HomeWarpEnhancementCommands.isTpAutoEnabled()` and immediately executes the teleport without sending a request if enabled. Warns if tptoggle is also off. |
-
-  **Additional:** `HomeManager.renameHome()` method added. 11 permission nodes, 21 lang keys (incl. auto-accept keys), all commands registered in `NeoEssentials.java` + `config.json`. `PermissionSystem.md` + `CommandsReference.md` updated.
+**`ShopSignHandler.java`**
 
-- **Item Customisation & Miscellaneous system — Missing entirely: /me, /tptoggle, /gc, /lightning, /skull, /itemname, /itemlore, /remove, /loom, /cartography**
-  *(Fixed: 2026-03-02)*
+When a player physically broke a shop sign, no event handler called `ShopManager.removeShop()`.
+The shop entry remained in `shops.json` and the hologram entity stayed floating in the world.
 
-  **Root causes:** All commands were completely absent. `/tptoggle` was registered in the command list but had no implementation, and `TeleportRequestManager.sendTeleportRequest()` had no tptoggle check.
+**Fix:** Added `BlockEvent.BreakEvent` listener to `ShopSignHandler`.  When a `SignBlock` is
+broken, any shop at that position is removed atomically via `ShopManager.removeShop()`, which
+in turn calls `ShopHologramManager.deleteShopHologram()` to clean up the entity.
 
-  **Implemented from scratch based on EssentialsX (`Commandme`, `Commandtptoggle`, `Commandgc`, `Commandlightning`, `Commandskull`, `Commanditemname`, `Commanditemlore`, `Commandremove`):**
+---
 
-  | Command | Perm | Description |
-  |---|---|---|
-  | `/me <action>` | `neoessentials.me` | Broadcasts `§5* §dName §faction` to all players. |
-  | `/tptoggle [on\|off] [player]` | `neoessentials.tptoggle(.others)` | Toggle tp-request acceptance. State stored in `ItemCustomisationCommands.isTpToggleAllowed()`. `TeleportRequestManager.sendTeleportRequest()` now checks this before sending — returns error unless sender has `neoessentials.teleport.tpo`. |
-  | `/gc` / `/mem` | `neoessentials.gc` | Shows uptime (JMX), TPS (via `server.getAverageTickTimeNanos()`), used/total/max memory, loaded chunk count across all dimensions. |
-  | `/lightning [player]` / `/smite` | `neoessentials.lightning(.others)` | Spawns `EntityType.LIGHTNING_BOLT` at look-target or named player. Essentials: `strikeLightning()`. |
-  | `/skull [player]` | `neoessentials.skull` | Creates `PLAYER_HEAD` with `DataComponents.PROFILE` set from server profile cache (`ResolvableProfile(GameProfile)`). Falls back to random UUID + name. |
-  | `/itemname [name\|-]` / `/rename` | `neoessentials.itemname` | Sets `DataComponents.CUSTOM_NAME` on held item. Omit or use `-` to clear. |
-  | `/itemlore add\|set <n>\|remove <n>\|clear` | `neoessentials.itemlore` | Reads/writes `DataComponents.LORE` (`ItemLore`). Full add/set/remove/clear sub-commands. |
-  | `/remove <type> [radius]` | `neoessentials.remove` | Removes entities in AABB-inflated radius. Types: all, items/drops, mobs, animals, monsters, arrows, xp, boats, minecarts, tnt, paintings. Never removes players. |
-  | `/loom` | `neoessentials.loom` | Opens `LoomMenu` via `MenuProvider` + `ContainerLevelAccess`. |
-  | `/cartography` / `/cartographytable` | `neoessentials.cartography` | Opens `CartographyTableMenu` via `MenuProvider` + `ContainerLevelAccess`. |
-
-  **Additional:** 13 permission nodes, 14 lang keys (incl. `tptoggle_off` for tptoggle-blocked tpa). All commands registered in `NeoEssentials.java` + `config.json`. `PermissionSystem.md` + `CommandsReference.md` updated.
-
-- **Utility Commands system — Missing entirely: /ptime, /pweather, /effect, /spawnmob, /unlimited, /condense**
-  *(Fixed: 2026-03-02)*
-
-  **Root causes:** All 6 command groups were completely absent.
-
-  **Implemented from scratch based on EssentialsX (`Commandptime`, `Commandpweather`, `Commandpotion`, `Commandspawnmob`, `Commandunlimited`, `Commandcondense`):**
-
-  | Command | Perm | Description |
-  |---|---|---|
-  | `/ptime [reset\|day\|noon\|night\|midnight\|<ticks>] [player]` | `neoessentials.ptime(.others)` | Per-player client-side time via `ClientboundSetTimePacket`. Restored on rejoin. |
-  | `/pweather [reset\|sun\|storm\|clear\|rain] [player]` | `neoessentials.pweather(.others)` | Per-player weather via `ClientboundGameEventPacket`. Restored on rejoin. |
-  | `/effect <player> <effect\|clear> [duration] [amp]` | `neoessentials.effect` | Applies `MobEffectInstance`. Supports all registry effect names. `/effect <player> clear` removes all. |
-  | `/spawnmob <mob> [amount] [player]`, `/mob` | `neoessentials.spawnmob(.others)` | Spawns entities at player via `EntityType.create()` + `finalizeSpawn()`. Amount 1–100. |
-  | `/unlimited [list\|clear\|<item\|hand>] [player]` | `neoessentials.unlimited(.others)` | Adds item to per-player unlimited set. `isUnlimited()` static method for event handler use. |
-  | `/condense [item]` | `neoessentials.condense` | Converts loose items → storage blocks using 21 built-in rules (nugget→ingot→block pattern). |
-
-  **Additional:** `GodModeEventHandler` updated to call `UtilityCommands.onPlayerJoin/Quit` for ptime/pweather restore on login and state cleanup on logout. 10 permission nodes, 19 lang keys, all commands registered in `NeoEssentials.java` + `config.json`. `PermissionSystem.md` updated.
-
-- **Server Admin system — Missing entirely: /broadcast, /time, /weather, /kill, /gamemode (full), /tpo, /tpohere, /tpoffline**
-  *(Fixed: 2026-03-02)*
-
-  **Root causes:** All commands were either absent or only partially registered (gamemode only had gms/gmc/gma/gmsp shortcuts, no `/gamemode` command).
-
-  **Implemented from scratch based on EssentialsX:**
-
-  | Command | Perm | Description |
-  |---|---|---|
-  | `/broadcast <msg>` | `neoessentials.broadcast` | Server-wide coloured announcement. Aliases: `/bc`, `/announce`. |
-  | `/time [set\|add] <value>` | `neoessentials.time(.set)` | Get time, set or add ticks. Named values: day/noon/sunset/night/midnight/sunrise. Aliases `/day`, `/night`. |
-  | `/weather <sun\|storm\|thunder> [dur]` | `neoessentials.weather` | Sets weather on all sky-light worlds. Optional duration in seconds. Aliases `/sun`, `/storm`, `/thunder`. |
-  | `/kill <player>` | `neoessentials.kill` | Kills player via `damageSources().genericKill()`. Respects `kill.exempt` + `kill.force`. |
-  | `/gamemode <survival\|creative\|adventure\|spectator\|0-3> [player]` | `neoessentials.gamemode(.others)` | Full gamemode command with all modes + numeric shortcuts. |
-  | `/tpo <player>` | `neoessentials.teleport.tpo` | Teleport to player ignoring their tptoggle setting. |
-  | `/tpohere <player>` | `neoessentials.teleport.tpohere` | Bring player to sender ignoring tptoggle. Notifies target. |
-  | `/tpoffline <player>` | `neoessentials.teleport.tpoffline` | Loads offline player NBT from world saves, teleports to their last recorded Pos/Dimension. |
-
-  **Additional registrations:** 14 permission nodes, 16 lang keys, all commands in `NeoEssentials.java` + `config.json`. `PermissionSystem.md` updated with Server Admin section.
-
-- **Player State / Admin Tool system — Missing entirely: /fly, /god, /heal, /feed, /speed, /ext, /burn, /give, /more, /hat, /exp, /sudo, /playtime**
-  *(Fixed: 2026-03-02)*
-
-  **Root causes found (vs EssentialsX):**
-
-  - All 13 commands were completely absent from the mod.
-
-  **Implemented from scratch based on EssentialsX pattern:**
-
-  | Command | Perm | Description |
-  |---|---|---|
-  | `/fly [player] [on\|off]` | `fly` / `fly.others` | Toggle flight. Clears fall distance. Resets flying when disabled. |
-  | `/god [player] [on\|off]` | `god` / `god.others` | Toggle god mode. Restores health+hunger on enable. `GodModeEventHandler` cancels all damage. |
-  | `/heal [player]` | `heal` / `heal.others` | Full health, full hunger, full saturation, clears all potion effects. Dead-player guard. |
-  | `/feed [player]` | `feed` / `feed.others` | Full hunger + saturation. |
-  | `/speed [walk\|fly] <0-10> [player]` | `speed` / `speed.others` | Maps 0–10 to Minecraft 0.0–1.0 speed. Auto-detects walk/fly from current state. |
-  | `/ext [player]` | `ext` / `ext.others` | `clearFire()`. Alias `/extinguish`. |
-  | `/burn <player> [seconds]` | `burn` | Sets fire ticks (seconds × 20). Default 10s. |
-  | `/give <player> <item> [amount]` | `give` | Multi-stack distribution. Drops to ground if inventory full. |
-  | `/more [amount]` | `more` | Sets held stack count to amount or max stack size. |
-  | `/hat` | `hat` | Swaps held item into helmet slot, returns old helmet to hand. |
-  | `/exp [show\|set\|give] [amount] [player]` | `exp` + sub-nodes | Show level+total XP. Set/give XP. Console + others support. |
-  | `/sudo <player> <command>` | `sudo` | Runs command as target. Blocks if target has `sudo.exempt`. Prevents self-sudo. |
-  | `/playtime [player]` | `playtime` / `playtime.others` | Uses `Stats.PLAY_TIME` ticks + current session ms. |
-
-  **Additional files created:**
-  - `GodModeEventHandler.java` — `LivingDamageEvent.Pre` cancels damage for god-mode players; `PlayerLoggedIn/Out` events track session start for playtime and clean up state on quit.
-  - `PermissionCategory.PLAYER` — Added enum value to PermissionRegistry.
-  - 26 permission nodes registered.
-  - 33 lang keys added to `en_us.json`.
-  - All commands added to `NeoEssentials.java` and `config.json` commands section.
-  - `PermissionSystem.md` updated with full Player State section.
-
-- **Worth/Sell system — Missing entirely: /worth, /sell hand|inventory|all|item, /setworth, WorthManager with price persistence**
-
-  *(Fixed: 2026-03-02)*
-
-  **Root causes found (vs EssentialsX `Worth.java`, `Commandworth.java`, `Commandsell.java`):**
-
-  - **Entire system was absent** — No `WorthManager`, no `/worth`, no `/sell`, no `/setworth` commands existed at all.
-
-  **Implemented from scratch based on EssentialsX pattern:**
-
-  | Component | Details |
-  |---|---|
-  | `WorthManager.java` | Singleton. Loads/saves `worth.json` (item registry ID → price). `getPrice(ItemStack)`, `setPrice()`, `removePrice()`, `getSellMultiplier()`, `isAllowSellNamedItems()`, `resolveItem(name)`. |
-  | `/worth [item\|hand] [amount]` | Shows sell value of held item or named item × amount. Essentials: `itemWorth()`. |
-  | `/sell hand [amount]` | Sells item in hand. Requires `neoessentials.sell.hand`. |
-  | `/sell inventory\|all\|invent` | Sells all priced items in inventory. Skips named items if disabled. Requires `neoessentials.sell.bulk`. |
-  | `/sell <item> [amount]` | Sells by item name/ID from inventory. |
-  | `/setworth <item\|hand> <price>` | Admin: sets sell price. `hand` uses held item. Requires `neoessentials.setworth`. |
-  | `/setworth <item\|hand> remove` | Admin: removes sell price. |
-  | Sell multiplier | `economy.sellMultiplier` config (default `1.0`). Applied to all sell prices. Essentials: `getSettings().getMultiplier(user)`. |
-  | Named item protection | `economy.allowSellNamedItems` config (default `false`). Essentials: `isAllowSellNamedItems()`. |
-  | `economy` config section | Added `currencySymbol`, `startingBalance`, `sellMultiplier`, `allowSellNamedItems` to `config.json`. |
-  | 5 permission nodes | `neoessentials.worth`, `sell`, `sell.hand`, `sell.bulk`, `setworth` registered. |
-  | 13 lang keys | All `worth.*` and `sell.*` keys added to `en_us.json`. |
-  | Commands registered | `worth`, `sell`, `setworth` added to `NeoEssentials.java` and `config.json` commands section. |
-
-- **Kit system — Missing Essentials features: /kit others, /kitreset, clean list, console support, recipient notification, public cooldown API**
-  *(Fixed: 2026-03-02)*
-
-  **Root causes found (vs EssentialsX `Commandkit.java`, `Commandkitreset.java`, `Kit.java`):**
-
-  - **`/kit <name> <player>` (give to others) missing** — Essentials `Commandkit` checks `essentials.kit.others` and lets you specify a second player argument. Our command had no `target` argument.
-  - **`/kitreset <kit> [player]` command missing entirely** — Essentials has a full `/kitreset` command that sets `user.setKitTimestamp(kitName, 0)`. We had no cooldown reset command at all.
-  - **`/kit` (no args) showed wrong format** — Previous list display showed verbose info blocks per kit. Essentials shows a clean single-line per-kit list with cooldown status.
-  - **Console support missing** — `KitCommand` blocked console entirely. Essentials allows console to run `/kit <name> <player>`.
-  - **Recipient notification missing** — Essentials sends `kitReceive` to the target when given a kit by another player. Our command sent nothing to the recipient.
-  - **Redundant double permission check** — Command checked permission, then called `canUseKit()` which checked it again, potentially sending two error messages for one denied action. Cleaned up to single check.
-  - **`getRemainingCooldown` private** — KitCommand couldn't show per-kit cooldown status in the list because the method was private. Needed for list display and external access.
-  - **`resetCooldown()` / `resetAllCooldowns()` methods missing** — No public API to reset a player's kit cooldown, required for `/kitreset`.
-  - **3 new permission nodes missing** — `kit.others`, `kitreset`, `kitreset.others` unregistered.
-  - **16 lang keys outdated** — Old keys used `{placeholder}` style instead of `{0}` MessageFormat style, missing new keys for list display, reset, others notifications.
-
-  **Fixes applied:**
-
-  | Area | Change |
-  |---|---|
-  | `/kit <name> <player>` | New `target` argument. Requires `neoessentials.kit.others`. Notifies recipient with `kits.received_from`. |
-  | Console `/kit` | Console allowed when target arg present. Logs as "Console gave kit X to Y". |
-  | `/kit` list (no args) | Clean format: per-kit single line with item count + cooldown status (Ready / Cooldown: Xm Ys). Filtered by player's permissions. |
-  | `/kitreset <kit> [player]` | New `KitResetCommand.java`. Self-reset + others-reset. Notifies target. Registered in `KitCommands` + `NeoEssentials`. |
-  | `getRemainingCooldownPublic()` | Public alias for private `getRemainingCooldown()`. Used by list display and future API. |
-  | `resetCooldown(uuid, kit)` | New public method. Removes cooldown entry and saves. |
-  | `resetAllCooldowns(uuid)` | New public method. Clears all cooldowns for a player. |
-  | Permission nodes | Added: `kit.others`, `kitreset`, `kitreset.others`. |
-  | Lang keys | Full rewrite with `{0}` MessageFormat args: `given`, `gave_to`, `received_from`, `list_header`, `list_entry`, `list_ready`, `list_cooldown`, `list_empty`, `reset_self`, `reset_other`, `reset_notify`, `console_needs_target`, `cannot_use`, `charge_failed`, `not_enough_money`. §colour-coded. |
-  | PermissionSystem.md | Kits section updated with all new nodes and correct command associations. |
-
-- **Warp system — Missing Essentials features: warp-others, per-warp permission, /warps pagination, /warp no-args list, deleteWarpByAdmin, console NPE fix**
-
-  *(Fixed: 2026-03-02)*
-
-  **Root causes found (vs EssentialsX `Warps.java` / `Commandwarp.java`):**
-
-  - **`/warp <name> <player>` missing** — Essentials supports warping another player with `essentials.warp.others`. Our command accepted only `<name>`.
-  - **`/warp` (no args) didn't show list** — Essentials: `if (args.length == 0 || args[0].matches("[0-9]+"))` → show paginated warp list. Ours required a name and threw a syntax error.
-  - **Per-warp permission (`neoessentials.warps.<name>`) missing** — Essentials has `getPerWarpPermission()` which checks `essentials.warps.<warpname>` per warp when enabled. Not wired in our command.
-  - **`/warps [page]` pagination missing** — Essentials: `WARPS_PER_PAGE = 20`, shows `page/maxPages` header. Our `/warps` dumped all warps as a single blob.
-  - **`/delwarp` used wrong permission** — Used `hasSetWarpPermission()` (create perm) instead of `PERMISSION_DELWARP`. Admin with delete-but-not-create permission couldn't delete warps.
-  - **`/warps` NPE from console** — `executeWarps()` cast `getEntity()` to `ServerPlayer` unconditionally. Would NPE if run from console.
-  - **No console `/delwarp` support** — `deleteWarp(ServerPlayer, String)` requires a player object. Console couldn't delete warps.
-  - **All warp lang keys undefined** — `WarpManager` referenced 20+ lang keys (`warp.not_found`, `warp.created`, `warp.list_header`, etc.) but none were in `en_us.json`. Players would see raw key strings.
-  - **`perWarpPermission` config option missing** — No config entry to enable/disable per-warp permissions.
-  - **3 new permission nodes missing** — `warp.others`, `warp.list` (was registered but undocumented properly), `warps.*`.
-
-  **Fixes applied:**
-
-  | Area | Change |
-  |---|---|
-  | `/warp <name> <player>` | New variant. Requires `neoessentials.teleport.warp.others`. Teleports target, notifies sender. |
+## 🐛 Bug Fix — Shop Hologram Orphaned After Manual shops.json Edit (NeoForge 1.21.1, fixed build.214)
+
+**`ShopHologramManager.java` / `ShopManager.java` / `NeoEssentials.java`**
+
+Manually deleting a shop from `shops.json` left its hologram ID in `holograms.json`.
+On the next server start or `/chestshop reload` the hologram entity was re-spawned
+even though no matching shop existed.
+
+**Fix:** Added `ShopHologramManager.cleanOrphanedShopHolograms()`.  It computes the
+expected hologram ID for every active shop, then removes any `shop_*` holograms from
+`HologramManager` that are not in that set.  Called after both managers are loaded at
+server start, and at the end of `ShopManager.reload()`.
+
+---
+
+## ✅ TPA Message Key Already Fixed (build.157)
+
+`commands.neoessentials.teleport.request.recived` (typo) was corrected to
+`commands.neoessentials.teleport.request.received` and sender context was added in
+build 157.  Confirmed absent from codebase in build.214.
+
+---
+
+## 🐛 Bug Fix — Chat Rich Text Formatting Ignores Config (NeoForge 1.21.1, build.1.0.2.6+119)
+
+**`RichTextFormatter.java` / `ChatFormatter.java` — Rich text applied even when `rich_text=false`**
+
+Rich text formatting was applied to chat messages even when disabled in configuration.
+
+- Observed: Debug output showed `After rich text: [[Admin] OtaaRL > d]` even with `rich_text=false` in config.
+- **Root Cause 1**: `preprocessTags()` only gated gradient/rainbow tags on `isRichTextEnabled()` but processed named-color and format tags (`<red>`, `<bold>`, etc.) unconditionally — stripping the tag markers from the string and applying color/format regardless of the setting.
+- **Root Cause 2**: The non-enhancement path in `ChatFormatter.formatMessage()` called `processRichText(formatted)` using the raw un-preprocessed string, bypassing the config gate entirely.
+
+**Fixes applied:**
+
+| File | Change |
+|---|---|
+| `RichTextFormatter.java` | All tag processing (gradient, rainbow, named-color, format tags) now gated on `isRichTextEnabled()`. Added `stripAllRichTags()` helper that removes tag markers without applying any formatting, used when rich text is disabled. |
+| `ChatFormatter.java` | Non-enhancement path now uses `richPreProcessed` (the output of `preprocessTags()`) instead of the raw `formatted` string. Added debug logging showing rich text enabled/disabled state. |
+
+---
+
+## 🗑️ Feature Removed — Web Dashboard 429 Too Many Requests (NeoForge 1.21.1, build.1.0.2.6+119)
+
+**N/A — Entire webdashboard removed**
+
+The web dashboard was reporting `429 Too Many Requests` errors — browser console showed repeated `HTTP 429` failures in `loadServerInfo()` inside `dashboard.js`, causing a perpetual "Connection Error" loop that could not be interrupted.
+
+- Observed: Client-side `refreshData()` loop spammed API endpoints; server-side rate limiting rejected the requests; dashboard became permanently unusable.
+- **Resolution**: The entire webdashboard feature was **completely removed** from NeoEssentials. All dashboard HTML/JS/CSS files, server-side endpoint handlers (`DashboardHttpServer`, `AuthHandler`, `CommandExecutionHandler`, `FileManagementHandler`, `PermissionEndpoint`, etc.), and all references in `NeoEssentials.java`, `ConfigManager.java`, `ConfigSplitter.java`, and `ModRootCommand.java` were deleted. The 429 rate-limiting issue, client-side refresh loop, and all related stability concerns are no longer applicable.
+
+---
+
+## 🐛 Bug Fix — Teleportation Unsafe Fallback Triggered (NeoForge 1.21.1, build.1.0.2.6+119)
+
+**`SpawnManager.java` — `/spawn` always fell back to world-spawn when target chunks were unloaded**
+
+Three interlocking bugs caused `/spawn` (and less commonly `/home`) to show "teleportation is unsafe" messages and fall through to the vanilla world-spawn fallback, even when safety checks were disabled in config.
+
+**Root Cause 1 — Safety check ran BEFORE chunks were loaded (primary bug):**
+`SpawnManager.teleportToSpawn()` called `spawnLocation.isSafe()` before any chunk-loading had occurred. `TeleportLocation.isSafe()` returns `false` whenever `!level.isLoaded(pos)` — so if the spawn world's chunks weren't already resident in memory (common in multiworld setups), `isSafe()` returned `false`, `findSafeLocation()` likewise found nothing (all candidate positions were also unloaded), and `teleportToWorldSpawn()` was unconditionally invoked. The server log showed: `Player Ovaredge teleported to world spawn fallback`.
+`TeleportUtil.teleportPlayer()` already force-loads the surrounding 3×3 chunk grid *before* checking safety, but the pre-check in `SpawnManager` ran *before* `TeleportUtil` was ever called — making the chunk-loading code unreachable for this code path.
+
+**Root Cause 2 — `requireSafeLocation` overridden by stale `spawn.json` value:**
+The constructor calls `loadConfig()` first (reads `enableSpawnSafety` from `config.json`), then calls `loadSpawn()` which read `requireSafeLocation` from the legacy `config` section of `spawn.json` — **overwriting** the value just set by `loadConfig()`. If `spawn.json` was saved when safety was enabled (the default), setting `enableSpawnSafety: false` in `config.json` had no effect — it was silently reverted on every server start.
+
+**Root Cause 3 — `teleportToWorldSpawn()` hardcoded `findSafe=true`:**
+The fallback always passed `true` for safety checks regardless of what `requireSafeLocation` was configured as, making it impossible to safely reach the vanilla world spawn when safety was disabled.
+
+**Fixes applied:**
+
+| File | Change |
+|---|---|
+| `SpawnManager.java` | `teleportToSpawn()`: added `TeleportUtil.preloadChunksForTeleport()` for the 3×3 chunk grid **before** the safety check — matching the pattern already in `HomeManager.teleportToHome()`. Safety is now read at runtime via `ConfigManager.isSpawnSafetyEnabled()` (not from the cached field). `TeleportUtil.teleportPlayer()` is called with `findSafe=false` since safety is fully resolved above, matching `HomeManager`. |
+| `SpawnManager.java` | `loadSpawn()`: removed the `requireSafeLocation` read from the legacy `spawn.json` config section. Safety config is the sole responsibility of `config.json` via `loadConfig()` / `isSpawnSafetyEnabled()`. |
+| `SpawnManager.java` | `teleportToWorldSpawn()`: changed hardcoded `findSafe=true` → `requireSafeLocation` so the fallback respects the configured safety setting. |
+| `ConfigManager.java` | Added `isSpawnSafetyEnabled()` — reads `teleportation.spawnSettings.enableSpawnSafety` at runtime, analogous to `isHomeTeleportSafetyEnabled()`. |
+
+Debug logging added throughout `teleportToSpawn()` — when `logging.enableDebugLogging = true`, log lines show which chunk grid is being preloaded, whether safety is active, and when spawn is moved to a safe location.
+
+---
+
+## ✨ Feature — Build #158 — 2026-05-25
+
+**Named Animation System — `{animation:NAME}` placeholder**
+
+- Tablist had no support for named, reusable text animations defined in a dedicated config file.
+- Requested: an `animations.json` file containing named animations (each with `frames[]` and `frameDuration`), with a universal `{animation:NAME}` placeholder usable anywhere in the mod.
+- **Implemented:**
+  - `AnimationManager.java` — new singleton that loads `animations.json`, ticks frame indices on every server tick using wall-clock ms, and resolves `{animation:NAME}` tokens.
+  - `animations.json` — new default config bundled with the mod; includes `Rainbow`, `PulseStar`, `StatusDot`, `LoadingDots`, `GoldBanner`, `Spinner`, `HeartBeat`.
+  - `TablistManager` — `AnimationManager.tick()` called on every server tick (before refresh-rate guard); `resolveAnimations()` called at end of `applyPlaceholders()`.
+  - `TablistCommand` — new `/tablist animations list` sub-command.
+  - `ConfigManager` — `ANIMATIONS_CONFIG = "animations.json"` registered as a version-tracked config (v1).
+  - `tablist.json` `_doc_header` updated to document `{animation:NAME}`; `_configVersion` bumped `3 → 4`.
+
+---
+
+## 🐛 Bug Fix — Build #157 — 2026-05-25
+
+**`TeleportRequestManager.java` — TPA confirmation message showed `"to you"` instead of the expiry countdown**
+
+- `sendTeleportRequest()` computed a `typeText` string (`"to you"` for `/tpa`, `"you to them"` for `/tpahere`) to describe the request direction, then incorrectly passed it as argument `{1}` of the **sender's** confirmation message `"commands.neoessentials.teleport.request.sent"` (`"Teleport request sent to {0}. Expires in {1} second(s)."`).
+- Result: `"Teleport request sent to Xtron. Expires in to you second(s)."` — `"to you"` appeared where the seconds countdown should be.
+- **Root cause**: `{1}` in the `sent` message expects the expiry time (an integer), but `typeText` (a string) was passed instead. `typeText` should only be used in the **target-side** `received` message (`"{0} wants {1}. Use /tpaccept or /tpdeny."`).
+- **Fix**: `sent` message now receives `requestTimeoutSeconds` as `{1}`; `typeText` is kept only for the `received` message.
+- **Bonus**: Aligned `typeText` values from `"to you"` / `"you to them"` to `"to teleport to you"` / `"you to teleport to them"` to match the phrasing already used in `getPendingRequestInfo()`.
+
+---
+
+## 🧹 Code Quality Pass — Build #156 — 2026-05-25
+
+**`Arrays.asList` → `List.of` / `Set.of` sweep**
+
+- **`ConfigSplitter.java`** — `FILE_SECTIONS_MAP` entry for `main.json`: `Arrays.asList(...)` → `List.of(...)`.
+- **`ProxyIntegration.java`** — Runtime `knownServers.addAll(Arrays.asList(servers))` → `Collections.addAll(knownServers, servers)`.
+- **`PermissionsCommand.java`** — All 15+ inline `java.util.Arrays.asList(...)` → `java.util.List.of(...)` (tab-completion lists).
+- **`FunCommands.java`** — Inline colour list `Arrays.asList(...)` → `List.of(...)`; removed now-unused `import java.util.Arrays`.
+- **`ItemCustomisationCommands.java`** — Inline `Arrays.asList(...)` → `List.of(...)`.
+- **`UtilityCommands.java`** — Static final + inline `Arrays.asList(...)` → `List.of(...)`.
+- **`ServerAdminCommands.java`** — `private static final TIME_NAMES = Arrays.asList(...)` → `List.of(...)`.
+- **`WorldInteractionCommands.java`** — Two static final lists: `Arrays.asList(...)` → `List.of(...)`; removed `import java.util.Arrays`.
+- **`DashboardFileManager.java`** — `private static final DASHBOARD_FILES`: `Arrays.asList(...)` → `List.of(...)`.
+- **`AuthHandler.java`** — `roles.addAll(Arrays.asList("Admin", "Moderator", "Staff"))` → `Collections.addAll(roles, "Admin", "Moderator", "Staff")`; removed `import java.util.Arrays`.
+- **`CommandExecutionHandler.java`** — `new HashSet<>(Arrays.asList(...))` static final set → `Set.of(...)`.
+- **`FileManagementHandler.java`** — `ALLOWED_PATHS`: `Arrays.asList(...)` → `List.of(...)`; `EDITABLE_EXTENSIONS`: `new HashSet<>(Arrays.asList(...))` → `Set.of(...)`.
+- **`AfkManager.java`** — `new HashSet<>(java.util.Arrays.asList(...))` → `new HashSet<>(java.util.List.of(...))`.
+
+**`.get(0)` → `.getFirst()` modernisation (Java 21)**
+
+- **`WarnManager.java`** — `entry.getValue().get(0).getTargetName()` → `.getFirst()`.
+- **`JailCommand.java`** — `locations.get(0).name` → `.getFirst()`.
+- **`NpcShopCommand.java`** — `nearby.get(0)` → `.getFirst()`.
+- **`RealnameCommand.java`** — Two `matches.get(0)` → `.getFirst()`.
+- **`DiscordPermissionSync.java`** — `permissions.get(0)` → `.getFirst()`.
+- **`ProxyIntegration.java`** — `players.get(0)` → `.getFirst()` in `getAnyPlayer()`.
+- **`TaskScheduler.java`** — `commands.get(0)` → `.getFirst()`.
+
+**`ProxyIntegration.java` additional fixes**
+
+- Added `@SuppressWarnings("unused")` to `BUNGEE_CHANNEL` and `BUNGEE_CHANNEL_LEGACY` (public API constants, referenced externally).
+- Added `//noinspection unused` + `@SuppressWarnings("unused")` to `onPluginMessage()` (registered via NeoForge plugin-messaging API, not called from Java code directly).
+- Renamed unused `player` param in stub `sendBungeeMessage()` to `ignoredPlayer`.
+- Added `//noinspection unused` + `@SuppressWarnings("unused")` to `isShowNetworkPlayers()` (public API).
+
+**`CommandExecutionHandler.java` additional fixes**
+
+- Added `//noinspection unused` + `@SuppressWarnings("unused")` to the class — handler is registered by the web-dashboard init code, not instantiated via normal Java call chain visible to IntelliJ.
+- Added `@SuppressWarnings("MismatchedQueryAndUpdateOfCollection")` to `commandOutputs` — the map is written for future use; IntelliJ "Contents of collection ... are updated but never queried".
+- `commandHistory.remove(0)` → `commandHistory.removeFirst()` (Java 21).
+
+**`FileManagementHandler.java` fix**
+
+- Added `//noinspection resource` before `p.serverLevel()` call — `ServerLevel` implements `AutoCloseable` but its lifecycle is managed entirely by the Minecraft server; closing it manually would be incorrect.
+
+---
+
+## 🧹 Code Quality Pass — Build #155 — 2026-05-25
+
+**PermissionScanner.java**
+- Replaced `Arrays.asList()` with `List.of()` for `PERMISSION_PATTERNS` and `DYNAMIC_PATTERNS` static final fields — `List.of()` is unmodifiable and null-hostile, correctly expressing immutable intent.
+- Removed unused `import java.util.Arrays`.
+- Removed always-true `if (sourcePath != null)` null-check — `Paths.get(URI)` never returns null; IDE reported "Condition is always true".
+- Removed `throws IOException` from `scanJarFile()` signature — the entire method body is wrapped in `catch (Exception e)`, so `IOException` is never thrown to callers; IDE reported "Checked exception never thrown".
+- Fixed `peek()` optimization warning — replaced `stream.peek(this::scanClassFile).count()` with `.toList()` + `forEach()`. In Java 21, the terminal `count()` operation may short-circuit intermediate `peek()` calls; collecting first guarantees all elements are processed.
+- Renamed unused `source` parameter in `addDiscoveredPermission()` to `ignoredSource`.
+- Added `//noinspection unused` + `@SuppressWarnings("unused")` to `getFilePermissionMap()`, `generateDynamicPermissions()`, and `exportDiscoveredPermissions()` (intentional public API surface).
+
+**ExternalPermissionProvider.java**
+- `collect(Collectors.toList())` → `.toList()` (×3); removed `import java.util.stream.Collectors`.
+- Added `//noinspection unused` + `@SuppressWarnings("unused")` to `getPermissionsStartingWith()` and `exportForPermissionsEX()` (intentional public API surface).
+
+**PermissionValidator.java**
+- Removed unused `import java.util.stream.Collectors` (no `Collectors.` usage in file).
+
+**PermissionManager.java**
+- Inline `collect(java.util.stream.Collectors.toList())` → `.toList()`.
+
+**BaltopCommand.java**
+- Removed unused `import java.util.stream.Collectors`.
+
+**ModerationManager.java / WarnManager.java**
+- `collect(Collectors.toList())` → `.toList()`; removed `Collectors` imports.
+
+**BanCommand.java / FreezeCommand.java / JailCommand.java / VanishCommand.java (moderation/commands)**
+- `collect(Collectors.toList())` → `.toList()` (×2 each for Ban/Freeze/Jail); removed `Collectors` imports.
+
+**ModRootCommand.java**
+- `collect(Collectors.toList())` → `.toList()`; removed `Collectors` import.
+
+**DocumentationManager.java**
+- `collect(Collectors.toList())` → `.toList()`; removed `Collectors` import.
+
+**EconomyLeaderboard.java**
+- `collect(Collectors.toList())` → `.toList()`; removed `Collectors` import.
+
+**KitManager.java**
+- `collect(Collectors.toList())` → `.toList()`; removed `Collectors` import.
+
+**ListKitsCommand.java**
+- `collect(Collectors.toList())` → `.toList()`; `Collectors` import kept (`Collectors.toSet()` still used).
+
+**ShopEntityManager.java**
+- `collect(Collectors.toList())` → `.toList()`; removed `Collectors` import.
+
+**HelpCommand.java / ListCommand.java / RealnameCommand.java / ServerAdminCommands.java / UtilityCommands.java**
+- `collect(Collectors.toList())` → `.toList()` (multiple instances); removed `Collectors` imports.
+
+**webdashboard/security/AuthenticationManager.java**
+- `collect(Collectors.toList())` → `.toList()`; removed `Collectors` import.
+
+---
+
+## 🧹 Code Quality Pass — Build #154 — 2026-05-20
+
+**IgnoreManager.java**
+- Removed always-false `IGNORE_FILE == null` check (static final field initialised at class-load, never null). `||` branch was dead code — IDE reported "Condition 'IGNORE_FILE == null' is always 'false'".
+- Fixed: `File.mkdirs()` result silently ignored in `save()`. Now logs a WARN if parent directory creation fails.
+- Added `@SuppressWarnings("unused")` to `getIgnoreList()` (intentional public API).
+- Renamed `cleanupPlayer(ServerPlayer player)` unused-param to `ignoredPlayer` (body is intentionally empty by design).
+
+**MuteManager.java**
+- Removed always-false `MUTE_FILE == null` check — same pattern as IgnoreManager.
+- Fixed: `File.mkdirs()` result silently ignored in `save()`.
+- Removed dead `mute(ServerPlayer sender, String targetName)` and `unmute(ServerPlayer sender, String targetName)` overloads — `sender` was accepted but never read; callers now use `mute(String)` / `unmute(String)` directly.
+- Added `@SuppressWarnings("unused")` to `getMuteExpiry()` (intentional public API).
+
+**MuteCommand.java / UnmuteCommand.java**
+- Updated callers to drop the unused `sender` argument and call `MuteManager.mute(targetName)` / `MuteManager.unmute(targetName)` directly.
+
+**MessageUtil.java**
+- Replaced `e.printStackTrace()` with `LOGGER.error(...)` in `loadCustomLanguageFile()` — stack traces should always go through SLF4J.
+- Merged identical `FileNotFoundException` and `Exception` catch branches into a single `Exception` catch.
+- Fixed: `File.delete()` result ignored in `deleteDirectoryRecursively()` — now logs a WARN on failure.
+- Removed unused `import java.io.FileNotFoundException` (no longer referenced after catch merge).
+- Removed dead private `getLanguageVersion(Map)` method (never called).
+- Removed deprecated dead private `escapeNamedPlaceholders(String)` method (`@Deprecated`, never called).
+- Added `@SuppressWarnings("unused")` to intentional API-surface public methods: `getDebugInfo`, `clickableSuggestion`, `balanceComponent`, `playerComponent`, `permissionComponent`, `progressBar`, `loadAllCustomLanguages`.
+
+**PlayerChatFormatManager.java**
+- Fixed: `File.mkdirs()` result ignored in `save()` — now logs WARN on failure.
+- Added `@SuppressWarnings("unused")` to `hasFormat()`.
+
+**ShopManager.java**
+- Modernised `collect(Collectors.toList())` → `.toList()` (Java 21) in both `removeShopsByOwner()` and `getShopsByOwner()`.
+- Removed now-unused `import java.util.stream.Collectors`.
+- Added `@SuppressWarnings("unused")` to `removeShopsByOwner()`.
+
+**PlayerJoinQuitHandler.java**
+- Fixed: `File.mkdirs()` result ignored — now logs WARN.
+- Removed always-true `if (config != null)` dead-code guard (config was already used at line 57 without NPE, so the check at line 103 was redundant).
+- Fixed: `player.getServer().getPlayerList()` called without null-checking `getServer()` at both join and quit broadcast paths (lines 152 and 210). While `ServerPlayer.getServer()` is rarely null, IntelliJ marks it `@Nullable`. Now guarded with `var server = player.getServer(); if (server != null) { ... }`.
+
+**LocalizationManager.java**
+- Fixed resource leak: `Files.list(langDirectory)` in `loadDashboardTranslations()` used without `try`-with-resources. `DirectoryStream<Path>` is `Closeable` — if `forEach` threw, the stream would never be closed. Wrapped in `try (var dirStream = Files.list(...))`.
+- Added `@SuppressWarnings("unused")` to `translate(key, language, args)` and `getAllTranslations()`.
+- Added `isLanguageUnsupported(String)` convenience inverse method so every call site that previously used `!isLanguageSupported(...)` can use the clearer positive form.
+
+**TranslationHandler.java**
+- Updated both `!isLanguageSupported(language)` call sites to use the new `isLanguageUnsupported(language)`.
+
+**TaskManager.java**
+- `history.add(0, execution)` → `history.addFirst(execution)` (Java 21 `Deque` API).
+- `history.remove(history.size() - 1)` → `history.removeLast()`.
+- Simplified time-range check: `if (t < start || t > end) return false; ... return true;` → `return t >= start && t <= end;`.
+
+**BanManager.java**
+- `server.getProfileCache().get(uuid)` returned an `Optional`; code did `.isPresent()` then `.get()` — refactored to `.orElse(null)` to avoid the IDE NPE warning on `Optional.get()`.
+- Removed always-true ternary null checks on `entry.getReason()` and `entry.getSource()` in vanilla-ban import path (both fields are set by `UserBanListEntry` constructor and can't be null at that point).
+
+**Web Dashboard — HTML Accessibility (`for` / `aria-label`)**
+- `index.html` — Changed `href="#players"` / `href="#performance"` / `href="#worlds"` / `href="#events"` to `href="#"` (navigation is JS-driven via `data-page`; unresolvable anchors caused IDE warnings); added `aria-label` to `#broadcastInput`.
+- `shop.html` — Added `aria-label` to `#filterInput` and `#typeFilter`.
+- `permissions.html` — Added `aria-label` to `#userSearchInput`.
+- `kits.html` — Added `aria-label` to `#kitSearch`.
+- `moderation.html` — Added `aria-label` to `#warnSearch`; added `for` attributes to ban-form labels (`banTarget`, `banName`, `banReason`, `banType`, `banDuration`).
+- `users.html` — Added `for` to create-user form labels; added `aria-label` to modal `#roleSelect` and `#pwInput`.
+- `cloud.html` — Added `for` to Dropbox and Google Drive config labels.
+- `discord.html` — Added `for` to OAuth2 config labels (`cfgDefaultRole`, `cfgClientId`, `cfgClientSecret`, `cfgRedirectUri`).
+- `holograms.html` — Added `aria-label` to `#holoSearch`; added `for` to all Create-modal and Edit-modal labels.
+
+---
+
+## ✨ Bug Hunt — Build #147 — 2026-05-19
+
+- **`MuteManager` — Mutes Not Persisted Across Server Restarts → ✅ FIXED**
+  All player mutes were stored in an in-memory `ConcurrentHashMap.newKeySet()` with no backing file. Every server restart silently cleared all mutes. Players who had been muted would be able to chat again after any restart.
+  - **Root cause**: `MuteManager` had no `load()` / `save()` methods and no data file. The static `mutedPlayers` set existed only in JVM memory.
+  - **Additionally**: Timed (`/tempmute`) mutes had no expiry tracking — the set stored only player names, not when the mute should expire. Even while the server was running, there was no way for a timed mute to auto-expire.
+  - **Fix**:
+    - Rewrote `MuteManager` to store `Map<String, Long>` (lowercase name → expiry timestamp; `0` = permanent).
+    - Added `load()` called from a `static {}` block on class init; loads `data/moderation/mutes.json`.
+    - Added `save()` called on every `mute()` / `unmute()`.
+    - `isMuted()` now checks expiry — auto-removes expired timed mutes and calls `save()`.
+    - Added `mute(String targetName, long durationMillis)` overload for timed mutes.
+    - Added `getMuteExpiry(String playerName)` helper for UI/command display.
+  - Affected files: `MuteManager.java`
+
+- **`IgnoreManager` — Ignore Lists Not Persisted Across Server Restarts → ✅ FIXED**
+  Player ignore lists were stored only in memory (`Map<String, Set<String>>`). Every server restart wiped all ignore lists. Players would have to re-run `/ignore` for every person they had previously ignored.
+  - **Root Cause 1 — No persistence**: No `load()` / `save()` methods, no backing file. Data lived only in JVM heap.
+  - **Root Cause 2 — `cleanupPlayer()` destroyed data on disconnect**: The method removed the disconnecting player's own ignore list (`ignoreMap.remove(playerName)`) AND removed them from all _other_ players' lists (`ignoreMap.values().forEach(... .remove(playerName))`). Even within a single server session, a player's ignore list would be deleted the moment they logged out, meaning it would not apply when they logged back in during the same uptime.
+  - **Fix**:
+    - Rewrote `IgnoreManager` to back the map with `data/chat/ignore_lists.json`.
+    - Added `load()` + `save()` — `save()` called on every `ignore()` / `unignore()`.
+    - `cleanupPlayer()` is now a deliberate no-op (ignore lists are permanent preferences, not session state).
+  - Affected files: `IgnoreManager.java`
+
+- **`BanManager` — Temporary IP Bans Never Expire + Expiry Not Saved/Loaded → ✅ FIXED**
+  Three interlocking bugs caused temporary IP bans (`/banip <ip> <duration>`) to be effectively permanent:
+  1. **`isIPBanned()` never checked expiry**: The method called `ipBans.containsKey(ipAddress)` — a pure key existence check with no expiry logic, unlike `isPlayerBanned()` which correctly calls `ban.isExpired()`.
+  2. **`saveIPBans()` never wrote `expireTime`**: The `JsonObject` built during save omitted the `expireTime` field entirely. Even if loading had checked it, the value would have been missing from the file.
+  3. **`loadIPBans()` never read `expireTime`**: The deserialization loop never read the `expireTime` field, so `ban.expireTime` was always left at the constructor default of `0` (permanent) after a restart.
+  - **Fix**:
+    - `isIPBanned()` now looks up the `IPBanEntry`, calls `ban.isExpired()`, auto-removes via `ipBans.remove()` + `saveIPBans()` when `autoExpireTempBans` is enabled, and returns `false` for expired bans.
+    - `saveIPBans()` now includes `banObj.addProperty("expireTime", ban.expireTime)`.
+    - `loadIPBans()` now reads the `expireTime` field (`banObj.has("expireTime") ? ... : 0`) and skips entries that are already expired at load time.
+  - Affected files: `BanManager.java`
+
+- **`PlayerJoinQuitHandler` — `newPlayerKit` Blocked by Kit Permissions → ✅ FIXED**
+  The "starter kit on first join" feature called `kitManager.giveKit(player, kitName)`, which internally calls `canUseKit()` — a full permission/cooldown/max-uses check. New players who weren't yet in any permission group with the kit node would receive the error `"You don't have permission to use this kit"` instead of their starter items. The config comment said permissions were bypassed, but the code did not bypass them.
+  - **Fix**: On first join, the kit items are now given directly by iterating `starterKit.getItems()` and calling `inventory.add()` / `player.drop()`, completely bypassing `canUseKit()`. Logging, cooldown tracking, and usage limits are intentionally skipped for the first-join gift.
+  - Affected files: `PlayerJoinQuitHandler.java`
+
+- **`PlayerJoinQuitHandler` — `first_joined.json` Written to Wrong Directory → ✅ FIXED**
+  The file tracking which players have already received their starter kit used a raw relative path: `new java.io.File("neoessentials/first_joined.json")`. On dedicated servers where the working directory is not the server root (or differs from the NeoEssentials data directory), this file would be created in the wrong location — causing every join to be treated as a first join and re-giving the starter kit on each login.
+  - **Fix**: Changed to `ResourceUtil.getDataFile("first_joined.json")` for a consistent absolute path. Also added a `parent.mkdirs()` guard before the write so the directory is created if it doesn't exist.
+  - Affected files: `PlayerJoinQuitHandler.java`
+
+---
+
+- **NeoEssentials AFK Kick Timeout Not Working (NeoForge 1.21.1, build.1.0.2.6+119)**
+  Players were never kicked for being AFK even when `kickTimeout` was set to a value greater than 0 in config.
+
+    - Root Causes:
+        1. **Hidden `kickAfkPlayers` gate**: `loadConfiguration()` only set `kickAfkPlayers = true` when the JSON key `"kickAfkPlayers": true` was explicitly present in config. The bundled `config.json` never included this key, so `kickAfkPlayers` stayed `false` — silently suppressing all AFK kicks regardless of `kickTimeout`.
+        2. **`neoessentials.afk.exempt` permission not enforced**: `checkForAfkPlayers()` never checked the kick-exempt permission before disconnecting a player, making the permission node effectively non-functional.
+        3. **Wiki listed wrong permission name**: Wiki said `neoessentials.afk.kickexempt`; the actual registered node is `neoessentials.afk.exempt`.
+    - Fix Applied:
+        - **`AfkManager.loadConfiguration()`**: Timeout keys (`kickTimeout` / `kickTimeoutMinutes`) are now parsed **before** `kickAfkPlayers` is evaluated. When `"kickAfkPlayers"` is absent from config, it is auto-derived as `true` whenever `kickTimeout > 0`. Setting `"kickAfkPlayers": false` explicitly still force-disables kicking.
+        - **`AfkManager.checkForAfkPlayers()`**: Added `PermissionAPI.hasPermission(uuid, "neoessentials.afk.exempt")` check before the kick block — players with this permission are skipped.
+        - **`config.json`** (`afk` section): Added `timeout_comment`, `kickTimeout_comment`, and `kickAfkPlayers_comment` inline documentation so server admins know that only `kickTimeout > 0` is needed to activate AFK kicking.
+        - **`AFKSystem.md` wiki**: Fixed permission name from `neoessentials.afk.kickexempt` → `neoessentials.afk.exempt` to match `PermissionRegistry`.
+
+- **NeoEssentials Teleportation Safety Checks Ignored Config (NeoForge 1.21.1, build.1.0.2.6+119)**
+  Safety checks ran unconditionally even when all safety flags were disabled in config, causing `/back` to fail with *"No safe landing spot found"* for destinations in caves, underground bases, or any location that didn't pass the `isSafe()` check.
+    - Root Causes:
+        1. **Missing `enableBackSafety` key in bundled `config.json`**: The `backSettings` section had no `enableBackSafety` key, so `ConfigManager.isBackTeleportSafetyEnabled()` always returned the hardcoded default `true`. Server admins had no way to disable back-teleport safety even if they wanted to, because the key wasn't present to configure.
+        2. **Hardcoded `findSafe=true` in `/top`, `/jump`, `/jumpto`**: `MiscTeleportManager.teleportToTop()`, `teleportJump()`, and `teleportToLookingAt()` all called `TeleportUtil.teleportPlayer(..., true)` unconditionally. These commands already compute a valid destination themselves (top block scan, open-air scan, player look-at), so re-running `findSafeLocation()` was redundant and could fail on valid spots.
+    - Fix Applied:
+        - **`config.json`** (`teleportation.backSettings`): Added `"enableBackSafety": true` with descriptive comment so admins can set it to `false` to skip safety enforcement on `/back`.
+        - **`MiscTeleportManager.java`**: Changed `teleportToTop()`, `teleportJump()`, and `teleportToLookingAt()` to pass `findSafe=false` to `TeleportUtil.teleportPlayer()`. These methods already guarantee a valid open-air destination, making the redundant safety scan both unnecessary and harmful.
+        - `/tpr` (random teleport) intentionally retains `findSafe=true` since random coordinates are not pre-validated.
+
+- **NeoEssentials Economy Manager NullPointerException on Shutdown (NeoForge 1.21.1, build.1.0.2.6+119) → ✅ FIXED**
+  Server shutdown threw an NPE deep inside `EconomyManager`, crashing the shutdown sequence with a stack trace.
+    - Environment:
+        - NeoEssentials Version: `1.0.2.6 build 119`
+        - Minecraft Version: `1.21.1`
+        - NeoForge Version: `21.1.227`
+        - Java Version: `openjdk 21.0.10`
+        - Dedicated Server
+    - Observed Behavior:
+        - Server log on stop:
+          ```
+          Failed to shutdown Economy Manager
+          java.lang.NullPointerException: Cannot invoke "ConcurrentHashMap.entrySet()" because "this.balancesCache" is null
+          ```
+        - Only occurred when the economy module was **disabled** in config.
+    - **Root Cause**: `balancesCache` was declared as a bare field (`private ConcurrentHashMap<UUID, BigDecimal> balancesCache;`) with no initializer. The `EconomyManager` constructor exits early when `ConfigManager.isEconomyEnabled()` returns `false` — before the line `balancesCache = new ConcurrentHashMap<>()` was ever reached. When `shutdown()` called `saveBalancesAtomic()`, the method immediately dereferenced the null field via `balancesCache.entrySet()`. The same null field would have caused NPEs in `logCacheMetrics()`, `getAllBalances()`, and `getCacheStats()` for the same reason.
+    - **Fix**:
+        1. **Initialized `balancesCache` at the field declaration** (`= new ConcurrentHashMap<>()`) so it is never `null` regardless of whether the constructor completes fully.
+        2. Added an `initialized` boolean flag set to `true` only once the constructor finishes a full initialization (economy enabled, balances loaded, tasks scheduled).
+        3. Added `if (!initialized) return;` guards at the top of `saveBalancesAtomic()`, `saveLastActivityAtomic()`, and `logCacheMetrics()` — so when the economy is disabled, these no-ops emit nothing and write no files.
+        4. In `shutdown()`, added the same `initialized` check: if the economy was never initialized, the executor is stopped immediately with `shutdownNow()` and a clear log message is emitted instead of proceeding to the (now-redundant) save calls.
+    - Affected files: `EconomyManager.java`
+
+---
+
+- **NeoEssentials Duplicate Translation Keys (NeoForge 1.21.1, build.1.0.2.6+119) → ✅ FIXED**
+  JAR translations failed to load due to duplicate keys in `en_us.json`, causing `JsonSyntaxException` at startup and leaving all translation keys null.
+    - Environment:
+        - NeoEssentials Version: `1.0.2.6 build 119`
+        - Minecraft Version: `1.21.1`
+        - NeoForge Version: `21.1.227`
+        - Java Version: `openjdk 21.0.10`
+        - Dedicated Server
+    - Observed Behavior:
+        - Server log at startup:
+          ```
+          Failed to load JAR translations: duplicate key: commands.neoessentials.teleport.home.delete_no_pending
+          com.google.gson.JsonSyntaxException: duplicate key: commands.neoessentials.teleport.home.delete_no_pending
+          ```
+        - All translation keys returned `null`; players saw raw key names or garbled text.
+        - Version-merge logic never ran, so deployed server lang files were never updated.
+    - **Root Cause**: `en_us.json` contained 13 duplicate keys across several sections:
+        - `commands.neoessentials.teleport.home.delete_no_pending` (×2)
+        - Five `commands.neoessentials.kits.admin.*` keys each defined twice
+        - `commands.neoessentials.seen.online` and `seen.offline` (×2 each)
+        - `commands.neoessentials.realname.not_found` (×2)
+        - `commands.neoessentials.teleport.admin.tpall.no_players` (×2)
+        - `commands.neoessentials.general.player_not_found` (×2 — identical)
+        - A missing comma between `mutelist.list` and `gamemode.spectator` caused an additional JSON syntax error.
+        Gson (used by the mod on NeoForge 21.1.x) throws `JsonSyntaxException` on duplicate keys.
+    - **Fix**: Removed all duplicate entries from `en_us.json`, keeping the best version of each; fixed the missing comma. Bumped `_langVersion` from `15` → `16` in `MessageUtil.java` so all deployed server-side lang files are automatically re-merged on next server start.
+    - Affected files: `src/main/resources/data/lang/en_us.json`, `MessageUtil.java`
+
+---
+
+- **NeoEssentials Home Delete Message Formatting Failure (NeoForge 1.21.1, build.1.0.2.6+119) → ✅ FIXED**
+  Deleting a home triggered a `MessageFormat` exception, displaying a raw error in the log and falling back to the unformatted template string.
+    - Environment:
+        - NeoEssentials Version: `1.0.2.6 build 119`
+        - Minecraft Version: `1.21.1`
+        - NeoForge Version: `21.1.227`
+        - Java Version: `openjdk 21.0.10`
+        - Dedicated Server
+    - Observed Behavior:
+        - Log error on `/delhome`:
+          ```
+          Failed to format message - Key: commands.neoessentials.teleport.home.delete_success,
+          Template: 'Home '{HOME}' has been deleted successfully.', Args: [base],
+          Error: can't parse argument number: 'HOME'
+          ```
+        - Player saw unformatted template text; home name was never interpolated.
+    - **Root Cause**: Two separate problems interacted:
+        1. Some deployed server-side lang files contained legacy `{HOME}`-style named placeholders (e.g. `Home '{HOME}' has been deleted successfully.`) from an older version of the mod before positional `{0}` args were adopted.
+        2. The `escapeNamedPlaceholders()` method in `MessageUtil` tried to wrap named tokens in MessageFormat quote spans (`'{'NAME'}'`), but when a token was already surrounded by single-quotes in the template (e.g. `'{HOME}'`), the resulting string `''{'HOME'}''` was mis-parsed by `MessageFormat`, causing `can't parse argument number: 'HOME'`.
+        Because the JAR translations **failed to load** (due to the duplicate-key bug above), the version-merge never triggered, so old server files remained in use indefinitely.
+    - **Fix**:
+        - **Removed `MessageFormat` from the localization pipeline entirely.** `MessageUtil.localize()` now uses a simple custom `applyArgs()` method that:
+          - Converts `''` → `'` (backward-compat with existing templates that use MessageFormat-style single-quote escaping),
+          - Replaces `{0}`, `{1}`, … with the corresponding positional args via `String.replace()`,
+          - Leaves all named tokens (`{HOME}`, `{MESSAGE}`, `{neoessentials_*}`) untouched for later resolution by `PlaceholderAPI`.
+        - Added **automatic migration** of legacy `{HOME}`-style keys during the version-bump merge: if a key in the deployed server file still contains an uppercase named placeholder (`{[A-Z][A-Z0-9_]+}`) but the JAR version has a positional `{0}`, the server file value is overwritten with the JAR value.
+        - Bumped `CURRENT_LANG_VERSION` to `16` to trigger the merge on all existing deployments.
+    - Affected files: `MessageUtil.java`
+
+---
+
+- **NeoEssentials /help Pagination Broken (NeoForge 1.21.1, build.1.0.2.6+69) → ✅ FIXED**
+  The `/help` command works for the first page, but `/help 2` (and subsequent pages) does not function at all.
+    - Environment:
+        - NeoEssentials Version: `1.0.2.6 build 69`
+        - Minecraft Version: `1.21.1`
+        - NeoForge Version: `21.1.227`
+        - Java Version: `openjdk 21.0.10`
+        - Dedicated Server
+    - Observed Behavior:
+        - `/help` displays the first page of commands correctly.
+        - `/help 2` produces no output or fails to display the second page.
+        - Pagination appears to be ignored or broken in command registration.
+        - Console reports error of "Unknown command or insufficient permissions".
+    - Expected Behavior:
+        - `/help <page>` should display the corresponding page of available commands.
+        - Should work in console and for players, with correct page counts and navigation.
+    - **Root Cause**: Vanilla `/help <command:string>` claimed `"2"` before NeoEssentials' integer `<page>` argument could fire. Additionally, `neoessentials.help` was missing from the `default` group so non-OP players were blocked entirely.
+    - **Fix**: Replaced integer `<page>` branch with a single `<page_or_command>` string argument that checks `Integer.parseInt()` first. Added `neoessentials.help` to the `default` group in `permissions.json`.
+    - Affected files: `HelpCommand.java`, `permissions.json`
+
+---
+
+- **NeoEssentials Registry Key Error for Shop NPC (NeoForge 1.21.1, build.1.0.2.6+21) → ✅ FIXED**
+  Client disconnects when server sends registries containing unknown keys related to NeoEssentials shop NPCs.
+    - Environment:
+        - NeoEssentials Version: `1.0.2.6 build 21`
+        - Minecraft Version: `1.21.1`
+        - NeoForge Version: `21.1.222`
+        - Java Version: `openjdk 21.0.10`
+        - Dedicated Server
+    - Observed Behavior:
+        - Client disconnects with warning:
+          ```
+          Client disconnected with reason: The server send registries with unknown keys: ResourceKey[minecraft:entity_type / neoessentials:shop_npc]
+          ```
+        - Occurs when server attempts to sync registry data for NeoEssentials custom entity type `shop_npc`.
+        - Client does not recognize the registry key, leading to forced disconnect.
+    - Expected Behavior:
+        - Client should recognize and handle NeoEssentials custom entity types without disconnecting.
+    - **Root Cause**: NeoForge 21.1.x mandatorily synchronises every `DeferredRegister<EntityType<?>>` entry to clients during the login handshake. The custom `neoessentials:shop_npc` type was registered server-side only, so every vanilla client disconnected on join with the unknown-key error.
+    - **Fix**: Removed the custom `EntityType` entirely. Shop NPCs are now plain vanilla `ArmorStand` entities tagged with the NBT key `NeoEssentials_ShopId` (UUID value stored as two longs). Right-click interaction is intercepted by `ShopEntityRegistry` via `PlayerInteractEvent.EntityInteract` on the GAME event bus — no custom entity type registration required, no registry sync issue possible.
+    - Affected files: `ShopEntityRegistry.java`, `ShopNpcEntity.java`, `ShopEntityManager.java`
+
+---
+
+- **NeoEssentials Permission Validation Ignores External Mod Permissions (NeoForge 1.21.1, builds 81–97) → ✅ FIXED**
+  Permission validation fails to recognize permission nodes from other mods (e.g., WorldEdit), and some NeoEssentials nodes are flagged as unknown.
+    - Environment:
+        - NeoEssentials Versions: `1.0.2.6 build 81` (last working), `1.0.2.6 build 87`, `1.0.2.6 build 97` (errors observed)
+        - Minecraft Version: `1.21.1`
+        - NeoForge Version: `21.1.227`
+        - Java Version: `openjdk 21.0.10`
+        - Dedicated Server
+    - Observed Behavior:
+        - Permission validator logs warnings such as:
+          ```
+          ✗ Group 'moderateur': Unknown permission 'worldedit.selection.pos'
+          ✗ Group 'moderateur': Unknown permission 'neoessentials.chat.msgtoggle.bypass'
+          ✗ Group 'architecte': Unknown permission 'worldedit.selection.pos'
+          ⚠ PERMISSION VALIDATION FOUND 3 ISSUES!
+          ⚠ Some permissions may not work correctly!
+          ```
+        - Other mods' permissions (e.g., WorldEdit) are not recognized.
+        - NeoEssentials-specific nodes (`neoessentials.chat.msgtoggle.bypass`) also flagged as unknown.
+        - Builds 87 and 97 show errors, while build 81 still works correctly.
+    - Expected Behavior:
+        - NeoEssentials should respect and validate external mod permissions (WorldEdit, LuckPerms, etc.).
+        - NeoEssentials permission nodes should be properly registered and recognized.
+    - **Root Cause 1**: `PermissionValidator` only checked nodes against the internal NeoEssentials registry. Any permission node whose namespace did not begin with `neoessentials.` was treated as unknown, generating spurious warnings for WorldEdit, LuckPerms, etc.
+    - **Root Cause 2**: `neoessentials.chat.msgtoggle.bypass` was not registered in `PermissionRegistry.registerAllPermissions()`.
+    - **Fix 1 (`PermissionValidator.java`)**: Validator now skips the "unknown" warning for any node whose namespace does not match `neoessentials` — external-mod nodes are silently accepted as valid. Warnings are only emitted for `neoessentials.*` nodes genuinely absent from the registry.
+    - **Fix 2 (`PermissionRegistry.java`)**: Registered `neoessentials.chat.msgtoggle.bypass` and all other missing nodes surfaced during audit in `registerAllPermissions()`.
+    - Affected files: `PermissionValidator.java`, `PermissionRegistry.java`
+
+---
+
+- **NeoEssentials Default Permissions Not Applied with LuckPerms (NeoForge 1.21.1, build.1.0.2.6+69) → ✅ FIXED**
+  Default permissions documented for NeoEssentials are not being granted to users in the LuckPerms default group.
+    - Environment:
+        - NeoEssentials Version: `1.0.2.6 build 69`
+        - Minecraft Version: `1.21.1`
+        - NeoForge Version: `21.1.227`
+        - Java Version: `openjdk 21.0.10`
+        - Dedicated Server
+    - Observed Behavior:
+        - Users in the LuckPerms default group do not receive the ✅ default permissions listed in NeoEssentials documentation.
+        - Removing **FTB Essentials** restored MiniMOTD functionality, but highlighted that NeoEssentials and FTB Essentials were both trying to register home aliases, resulting in neither working.
+        - Conflicts between NeoEssentials and FTB Essentials cause overlapping command registration and permission handling.
+    - Expected Behavior:
+        - NeoEssentials should correctly apply its documented default permissions to the LuckPerms default group.
+        - Home aliases should not conflict when multiple mods are present.
+    - **Root Cause 1 — `externalAvailable` guard blocked registry defaults when LuckPerms was unhealthy**:
+      `PermissionAPI.hasPermission()` guarded the registry-default fallback with `if (externalAvailable)`. When `LuckPermsAdapter` accumulated ≥ 5 consecutive failures (e.g. during startup before user data was cached), `isHealthy()` returned `false`, `externalAvailable = false`, and the registry-default block was never reached. Non-OP players lost all NeoEssentials default permissions without any visible error.
+    - **Root Cause 2 — `queryTristate` called twice per check, doubling failure count**:
+      `hasPermission()` called `queryTristate` once, and if it returned anything other than `TRUE`, `checkRegistryDefault()` called `isExplicitlyDenied()` which called `queryTristate` a **second time** for the same node. Every failed load incremented `consecutiveFailures` **twice**, causing the adapter to flip to "unhealthy" in half as many checks — directly triggering Root Cause 1.
+    - **Root Cause 3 — Home command aliases conflicted with FTB Essentials**:
+      Both NeoEssentials and FTB Essentials registered `/home`, `/sethome`, `/delhome`, and `/homes`, causing Brigadier node-merge conflicts. Neither mod's `requires()` predicate applied cleanly, so `/home` tab-completed but failed silently for players who lacked the conflicting mod's permission node.
+    - **Fix 1 (`PermissionAPI.java`)**: Removed the `if (externalAvailable)` guard from the registry-default block. Registry defaults are now always evaluated as a last resort before vanilla-OP fallback. When the adapter is healthy the cached `explicitDeny` flag is used (no extra API call). When the adapter is unhealthy `explicitDeny == null`, treated conservatively as "not denied" — NeoEssentials defaults still apply even when LuckPerms is temporarily unreachable.
+    - **Fix 2 (`PermissionAPI.java`)**: Eliminated the double `queryTristate` call. After `hasPermission()` returns `false`, the code calls `isExplicitlyDenied()` once and caches the result in `Boolean explicitDeny`. New helper `checkRegistryDefaultNoAdapterCall()` reads that cached value instead of calling back into the adapter, halving LuckPerms API calls per check and preventing premature failure-counter growth.
+    - **Fix 3 (`HomeCommands.java`)**: Added `CONFLICTING_HOME_MODS` detection (`ftbessentials`, `ftb_essentials`, `essentials`). Short aliases (`/h`, `/createhome`) are suppressed when a conflicting mod is present. A clear startup warning is logged. The `isCommandRegistered()` guard prevents duplicate registration.
+
+---
+
+- **NeoEssentials Chat Config File Misread (NeoForge 1.21.1, build.1.0.2.6+69) → ✅ FIXED in build.107**
+  Chat configuration failed to load unless the file was symlinked or renamed.
+  - **Root cause:** `getConfig("chat")` tried to open a file literally named `chat` (no `.json`) in old code. After the section-extraction guard was added, a stale MAIN_CONFIG cache (populated before split configs were activated) could still leave the `"chat"` section missing, returning an empty object.
+  - **Fix 1 (`ConfigManager.java`):** `getConfig(sectionName)` now falls back to reading `sectionName.json` directly from disk and unwrapping the nested section if the merged MAIN_CONFIG doesn't contain the key.
+  - **Fix 2 (`ConfigSplitter.java`):** `migrateToSplitConfigs()` now calls `ConfigManager.getInstance().clearCache()` immediately after creating split files — the stale entry is evicted without requiring a manual `/neoe reload`.
+
+- **Gson HTML Escaping Corrupts Chat Format Strings → ✅ FIXED in build.109**
+  Gson's default HTML-escaping converted `<`, `>`, `&` in saved JSON to `\u003c`, `\u003e`, `\u0026`, corrupting chat format strings like `<{prefix} {name}> {MESSAGE}`.
+  - **Fix:** `.disableHtmlEscaping()` added to every `GsonBuilder` instance that writes JSON files (30+ files across config, chat, moderation, scheduler, web-dashboard, i18n, and more).
+
+## ✨ Build #86 — 2026-04-27 — `/nick` System Non-Functional + Shop Entity Compile Errors
+
+- **`/nick` sets nickname but tab list and chat still show real username → ✅ FIXED in build.86**
+  Player reported: "I only get 'Nickname set successfully' but when I open chat or press tab I still have my original name. Others still see my original nickname."
   | `/warp` (no args) | Now shows paginated warp list (page 1). Matches Essentials `args.length==0` behaviour. |
   | Per-warp permission | `isPerWarpPermissionEnabled()` added to ConfigManager. When `true`, `/warp <name>` checks `neoessentials.warps.<name>`. |
   | `perWarpPermission` config | Added `perWarpPermission: false` default to `warpSettings` in `config.json`. |
@@ -336,15 +621,11 @@
 
   **Root causes found (vs EssentialsX `Commandeco.java`, `Commandpay.java`, `BalanceTopImpl.java`):**
 
-  - **`/eco reset <player>` missing** — Essentials `EcoCommands` enum has `GIVE`, `TAKE`, `SET`, **`RESET`**. Our `EcoCommand` only had `give`, `take`, `set`. `reset` sets the player's balance back to `startingBalance` from config.
-  - **`/eco give/take <player> <amount%>` missing** — Essentials supports percent-of-balance amounts (e.g. `eco take Steve 10%` takes 10% of Steve's current balance). Ported via `scaleByPowerOfTen(-2)` logic.
-  - **`/eco give/take/set/reset` online-only** — `EcoPlayerUtil.getUUIDByName` existed but `ecoAdminAction` was already using it correctly; however notify-if-online messages were missing for `give`/`set`.
-  - **`/pay` online-only** — `PayCommand` used `validateOnlinePlayer()` which rejected offline targets entirely. Essentials allows offline payment with `essentials.pay.offline` permission.
-  - **`/pay` ignore check missing** — Essentials checks `player.isIgnoredPlayer(user)` in addition to `isAcceptingPay()`. If the online recipient was ignoring the sender, payment still went through. Fixed to check `IgnoreManager.isIgnoring()`.
-  - **`/baltop` blocking sort every call** — `BaltopCommand.execute()` called `EconomyManager.getAllBalances()` and sorted inline, on the server thread, every time anyone ran `/baltop`. With many players this would stall the server.
-  - **`/baltop` no pagination** — Only showed 10 entries with no way to see ranks 11+.
-  - **`/baltop` no total wealth** — Essentials shows `balanceTopTotal` (sum of all balances) at the footer.
-  - **`/baltop` no cache age** — No way to know if data was stale.
+  Five root causes identified and fixed:
+  **Root Cause 1 — Wrong API: `player.setCustomName()` has no effect on tab list or chat:**
+  `NickCommand.updatePlayerDisplayName()` called `player.setCustomName(Component)` — the entity cosmetic API designed for mob name tags. On `ServerPlayer` instances this adds a *second* floating label above the player's standard name tag; it does not touch the tab list, chat format pipelines, or any placeholder resolution. The actual tab list display name in Minecraft 1.21.1 is controlled by `ClientboundPlayerInfoUpdatePacket(UPDATE_DISPLAY_NAME)`.
+  **Fix:** `updatePlayerDisplayName()` completely rewritten. Now builds a `ClientboundPlayerInfoUpdatePacket.Entry` with the formatted nickname as `displayName` and broadcasts it to every connected player using the same reflection-based packet construction already used by `FakePlayerManager`. When the nick is cleared, `displayName = null` reverts the entry to the game-profile name.
+  Affected file: `NickCommand.java`
   - **`/baltop` exempt permission missing** — No `baltop.exempt` node; admins/NPCs could appear on the list.
   - **`/baltop` raw UUIDs in output** — `EconomyLeaderboard.formatLeaderboard()` used `entry.getKey()` (UUID string) not a resolved player name.
   - **3 new permission nodes missing** — `pay.offline`, `baltop.exempt`, `eco.eco` (reset alias) unregistered.
@@ -353,17 +634,13 @@
 
   | Area | Change |
   |---|---|
-  | `/eco reset <player>` | New subcommand. Sets balance to `ConfigManager.getEconomyStartingBalance()`. Notifies target if online. Logs to transaction history. |
-  | `/eco give/take <player> <amount%>` | Percent support: detects `%` suffix, applies `current × (amount / 100)`. |
-  | `/eco give/set` online notification | Notifies target player if online with `eco.received_give` / `eco.set_notify` message. |
-  | `/pay` offline support | Resolves offline UUID from profile cache. Blocked unless sender has `neoessentials.economy.pay.offline`. |
-  | `/pay` ignore check | If online recipient ignores sender, payment blocked with "not accepting payments" message (Essentials behaviour). |
-  | `BaltopCommand` — full rewrite | Port of `BalanceTopImpl.calculateBalanceTopMapAsync()`: async `CompletableFuture`, thread-safe `CopyOnWriteArrayList`, `AtomicBoolean` cache lock. |
-  | Cache auto-refresh | Cache rebuilt asynchronously when stale (>60 s) or empty. Never blocks server thread. |
-  | `/baltop [page]` pagination | Default 10/page. Any page number supported. |
-  | Total economy wealth | Footer line shows sum of all non-exempt balances. |
-  | Cache age display | Header shows how many seconds ago data was calculated. |
-  | Exempt players | `neoessentials.economy.baltop.exempt` permission skips player from ranking & total. |
+  **Root Cause 2 — `{neoessentials_displayname}` placeholder ignored NickCommand:**
+  **Root Cause 3 — Hover/click name injection bypassed nickname:**
+  **Root Cause 4 — `TablistManager.getDisplayName()` checked its own unpopulated map:**
+  **Root Cause 5 — Nickname not re-applied on relog:**
+  No packet was sent when a player joined the server, so the stored nickname was invisible until the next `/nick` execution.
+  **Fix:** `NickCommand.onPlayerJoin(ServerPlayer)` public method added, called from `TablistEventHandler.onPlayerJoin()` after the tablist setup. Sends the display-name packet immediately on login.
+  Affected files: `NickCommand.java`, `TablistEventHandler.java`
   | Player name resolution | Profile cache lookup, falls back to UUID string if unresolvable. |
   | Cache invalidation | `BaltopCommand.invalidateCache()` called after every `eco give/take/set/reset` and `pay` to keep data fresh. |
   | Permission nodes | Added: `pay.offline`, `baltop.exempt`, `eco` (eco admin). Updated `pay` description. |
@@ -378,26 +655,8 @@
   - **`/jailfor` missing** — No timed-jail command. Essentials: `Commandtogglejail` uses `DateUtil.parseDateDiff`.
   - **`/deljail` missing** — No command to remove a jail location. Essentials: `Commanddeljail`.
   - **Interaction not blocked for jailed players** — `onPlayerRightClick` only checked freeze/vanish, never jail. Essentials: `onJailPlayerInteract` cancels `PlayerInteractEvent` unless `essentials.jail.allow-interact`.
-  - **Attack not blocked for jailed players** — No `LivingAttackEvent` handler. Essentials: `onJailEntityDamageByEntity` cancels attacks by jailed players unless `essentials.jail.allow-attack`.
-  - **Respawn not redirected to jail** — No `PlayerRespawnEvent` handler. Essentials: `onJailPlayerRespawn` (HIGHEST priority) redirects respawn location back to jail.
-  - **Teleport not intercepted for jailed players** — No teleport event handler. Essentials: `onJailPlayerTeleport` (HIGH priority) overrides teleport destination back to jail. Our tick-based enforcement had escape windows.
-  - **`onPlayerJoin` / `checkJailTimeout` never called from any event** — `JailManager.onPlayerJoin()` existed but was orphaned. `checkJailTimeout()` didn't exist at all.
-  - **Tick-based movement check scanned ALL players every tick** — Extremely expensive. Should only check jailed players and only once per second.
-  - **4 new bypass permission nodes missing** — `jail.allow-break`, `jail.allow-place`, `jail.allow-interact`, `jail.allow-attack` were unregistered.
-
-  **Fixes applied:**
-
-  | Area | Change |
-  |---|---|
-  | `JailEntry.expireAt` | New field. `0` = indefinite. Persisted to/from `jailed_players.json`. |
-  | `JailManager.checkJailTimeout()` | New method. Checks if timed jail expired → auto-unjails. Returns `true` if released. |
-  | `JailManager.jailPlayer(…, durationMillis)` | New overload. `0L` = indefinite (existing behaviour unchanged). Sets `expireAt`. |
-  | `JailManager.formatDuration()` | New static helper. Formats millis as `2h 30m 15s`. |
-  | `JailEntry.getFormattedRemaining()` | Returns remaining jail time or `"indefinite"`. |
-  | `/jailfor <player> <jail> <duration> [reason]` | New command. Duration: `30s`, `5m`, `2h`, `1d`, `1w`. Reuses `MailCommand.parseDuration()`. |
-  | `/deljail <name>` | New command. Warns if players were in that jail. |
-  | `ModerationEventHandler` — full rewrite | Replaced 194-line file with complete Essentials port. |
-  | `onPlayerLogin` | Calls `checkJailTimeout()` first → auto-release if expired. Then calls `onPlayerJoin()` to teleport to jail. |
+---
+- **Shop entity layer — 11 compile errors blocked every build → ✅ FIXED in build.86**
   | `onPlayerRespawn` | Schedules 1-tick delayed teleport back to jail after respawn. |
   | `onPlayerTeleport` | Cancels `TeleportCommandEvent` for jailed players, redirects back to jail. |
   | `onPlayerMove` (dimension change) | Catches cross-dimension escapes via `PlayerChangedDimensionEvent`. |
@@ -418,26 +677,11 @@
   - **`sendall` / `sendtempall` missing** — Admins had no way to broadcast a mail to all players.
   - **`clearall` missing** — No admin command to wipe every player's mailbox.
   - **`clear <index>` and `clear <player>` missing** — Players couldn't delete a specific message by position; admins couldn't clear another player's mailbox. Only own full-clear existed.
-  - **Mute check missing** — Muted players could still send mail. Essentials blocks muted users from sending.
-  - **Ignore check missing** — If target ignored the sender, mail was still delivered. Essentials silently drops it.
-  - **Rate limiting missing** — No per-minute throttle. Old code only had a 50-message hard cap.
-  - **Console couldn't send** — `/mail send <player> <msg>` from console was blocked. Essentials allows it.
-  - **`senderUUID` not stored** — Only sender name was saved; no UUID for future cross-reference.
-  - **Message length cap was 200** — Essentials uses 1000 characters.
-  - **Expired mail not cleaned on read** — Old timed messages stayed in the mailbox forever.
-  - **Login notification not connected** — `hasUnreadMail()` existed but was never called on player join.
-  - **5 missing permission nodes** — `mail.sendtemp`, `mail.sendall`, `mail.sendtempall`, `mail.clear.others`, `mail.clearall` were unregistered.
-
-  **Fixes applied:**
-
-  | Area | Change |
-  |---|---|
-  | `/mail sendtemp <player> <duration> <msg>` | New sub-command. Duration: `30s`, `5m`, `2h`, `1d`, `1w`. Shows expiry in read list. Expired msgs auto-purged on read. |
-  | `/mail sendall <msg>` | Admin broadcast to all online players. Runs async. |
-  | `/mail sendtempall <duration> <msg>` | Admin timed broadcast to all online players. |
-  | `/mail clearall` | Admin wipe of all mailboxes. |
-  | `/mail clear <index>` | Delete a specific message by 1-based index. |
-  | `/mail clear <player> [index]` | Admin: clear another player's mailbox (whole or by index). |
+  | Error | File | Fix |
+  |---|---|---|
+  | `clicked()` return type `ItemStack` incompatible with `void` (MC 1.21.1) | `NpcShopMenu.java` | Changed return type to `void`; removed `ItemStack` return values |
+---
+## ✨ Build #78 — 2026-04-27 — /back History Chain Corruption Fix
   | Mute check | Muted players blocked from sending. Returns `§cYou are muted and cannot send mail.` |
   | Ignore check | If target ignores sender and both are online, mail is silently dropped (Essentials behaviour). |
   | Rate limiting | Configurable `mail.mailsPerMinute` in `config.json` (default 10). Atomic per-minute window. |
@@ -451,30 +695,27 @@
   | Lang keys | 8 new keys added; all existing mail keys updated with better formatting. |
   | Pages | Increased from 5 per page → 9 per page (matches Essentials). |
 
+- **NeoEssentials Proxy Integration with BungeeTabListPlus (Independent Mode) → ✅ Implemented in build.74–77**
+  Full BTLP-inspired tablist rework:
+  - `TablistManager.java` — complete rewrite; 20+ placeholder tokens including proxy/session/stats tokens; per-player + per-group header/footer frame overrides; AFK indicator; group-colour overrides; session tracking; vanish filtering; delegates to sub-systems.
+  - `TablistLayout.java` — new; BTLP-style layout/sorting: 1–4 columns, `sortByGroupWeight`, `groupSections`, `playersByServer`, `excludeServers`, `hiddenServers`, `maxSlotsPerColumn`.
+  - `FakePlayerManager.java` — new; BTLP `fakePlayers` concept; stable UUIDs via `UUID.nameUUIDFromBytes`; reflection-based packet injection; per-viewer injection tracking to avoid duplicate ADD packets.
+  - `ProxyIntegration.java` — new; BungeeCord plugin-messaging bridge; `GetServers` / `PlayerCount` / `GetServer` sub-channel handling; `{network_online}`, `{server_online:NAME}`, `{current_server}` placeholders; per-player server tracking; independent of tablist rendering.
+  - `TablistCommand.java` — extended with BTLP sub-commands: `proxy`, `fakeplayer`, `layout`, `independent`.
+  - `TablistEventHandler.java` — added join/quit lifecycle hooks; session start time tracking.
+  - `tablist.json` — `_configVersion` 2→3; added `independentMode`, `proxy`, `fakePlayers`, `layout` sections with full documentation comments.
 
   *(Fixed: 2026-03-01)*
 
   **Root causes found:**
 
-  - **~50+ permission nodes used in commands but never registered in `PermissionRegistry`** — commands like `/list`, `/near`, `/nick`, `/motd`, `/mail`, `/ban`, `/kick`, `/freeze`, `/jail`, `/vanish`, and many others checked permissions that weren't in the registry. This meant `PermissionScanner` wouldn't find them, `/permissions list` wouldn't show them, and LuckPerms/FTB Ranks export was incomplete.
+- **`/back` acting weird after using warps/tps/back multiple times → ✅ FIXED in build.78**
+  After a server restart `/back` worked correctly, but degraded after multiple teleport operations (warps, /tp, /tpa accepts, /back chains). Three root causes were identified and fixed:
 
-  - **Lang message keys being confused for permission nodes** — strings like `neoessentials.moderation.ban_broadcast`, `neoessentials.moderation.ban_success` etc. are **lang keys** (translation strings), not permission nodes. The scanner was incorrectly picking them up as permissions because they follow the same `neoessentials.*` pattern.
-
-  - **`MODERATION` category missing from `PermissionCategory` enum** — all moderation permissions (ban, kick, freeze, jail, vanish) were falling through to `MISC` in both the `PermissionRegistry` categorize helper and `PermissionBridge.categorizePermission()`.
-
-  - **Permission denial gave no indication of what permission was required** — every denied command showed only `"You don't have permission to use this command"` with no hint of the actual node needed. Server admins had no way to know what to grant.
-
-  **Fixes applied:**
-
-  | Category | Newly Registered Nodes |
-  |---|---|
-  | **Moderation** | `ban`, `banip`, `banlist`, `tempban`, `unban`, `unbanip`, `kick`, `kickall`, `freeze`, `unfreeze`, `freezeall`, `unfreezeall`, `freezelist`, `jail`, `unjail`, `setjail`, `jaillist`, `jailinfo`, `vanish`, `vanish.others`, `seevanished`, `vanishlist`, `notify`, `notifications` |
-  | **Utilities** | `list`, `near`, `nick`, `nick.color`, `nick.others`, `staff`, `motd`, `motd.set`, `motd.broadcast`, `motd.reload`, `book`, `book.unlock`, `book.title`, `book.author`, `depth`, `depth.others`, `gamemode`, `gamemode.others`, `helpop`, `helpop.receive` |
-  | **Mail** | `mail`, `mail.send`, `mail.clear` |
-  | **Items** | `item.enchant.any`, `item.spawn` |
-  | **Teleport** | `teleport.settpr`, `teleport.tp`, `teleport.tphere`, `teleport.tppos`, `teleport.pwarp`, `teleport.pwarp.create`, `teleport.pwarp.delete`, `teleport.pwarp.list` |
-  | **Kits** | `kits.create`, `kits.delete`, `kits.override` |
-  | **Permissions sub-commands** | `permissions.check`, `permissions.search`, `permissions.list.groups`, `permissions.list.users`, `permissions.info.user`, `permissions.info.group`, `permissions.user.permissions`, `permissions.user.groups`, `permissions.user.clear`, `permissions.group.create`, `permissions.group.delete`, `permissions.group.rename`, `permissions.group.clone`, `permissions.group.inherit`, `permissions.group.permissions`, `permissions.group.modify`, `permissions.group.clear` |
+  **Root Cause 1 — Wrong player's back location saved on `/tpaccept` (primary bug):**
+  `TeleportRequestCommands.executeTpAccept()` called `MiscTeleportManager.saveBackLocation(teleportedPlayer)` where `teleportedPlayer` is the **acceptor** (the player who runs `/tpaccept`). For a `/tpa` request, the acceptor is NOT the one being teleported — the requester is. This caused the acceptor's back location to be silently overwritten with their current (unchanged) position every time they accepted someone's `/tpa`. Consequently, running `/back` after accepting a `/tpa` would either teleport the acceptor to their own current location (no-op) or to a stale position, not their intended prior destination. `TeleportRequestManager.executeTeleportRequest()` already correctly saves the back location for the actual teleporter, so the Commands-level save was both **wrong** (for `/tpa`) and **redundant** (for `/tpahere`).
+  **Fix**: Removed `saveBackLocation(teleportedPlayer)` from `TeleportRequestCommands.executeTpAccept()` entirely. The Manager is the sole authoritative back-location saver for TPA/TPAHERE teleports.
+  Affected file: `TeleportRequestCommands.java`
   | **Dashboard** | `admin.dashboard`, `dashboard.access`, `dashboard.view`, `dashboard.manage`, `dashboard.moderator`, `dashboard.admin` |
   | **Vanish alias** | `vanish.see` |
 
@@ -490,15 +731,17 @@
     `"You don't have permission. §7Required (any): §f<node1>§7 or §f<node2>"`
   - `PermissionValidator.validateTargetPermission()` — same treatment
 
+- **SocialSpy broadcast missing translation key `neoessentials.socialspy.format` → ✅ FIXED in build.70**
+  `SocialSpyManager.broadcast()` called `MessageUtil.component("neoessentials.socialspy.format", ...)` but the key was absent from `en_us.json`, causing the spy message to display a raw humanized fallback string.
+    - Fix Applied (build.70): Added `"neoessentials.socialspy.format": "&8[&eSocialSpy&8] &b{0} &7→ &b{1}&7: &f{2}"` to `en_us.json`.  Arguments `{0}` = sender name, `{1}` = receiver name, `{2}` = message text.
+    - `_langVersion` bumped `13 → 14`; `CURRENT_LANG_VERSION` constant in `MessageUtil` updated to match — existing deployments will auto-merge the new key on next server start.
+    - Affected files: `en_us.json`, `MessageUtil.java`
 
-- **Languages EN, FR, DE, ES, etc. incomplete — hardcoded strings, no custom language file support**
-  *(Fixed: 2026-03-01)*
-
-  **Root causes found:**
-
-  - **Only `en_us.json` existed** — no translation files for any other language were bundled in the JAR. The infrastructure (`CustomLanguageManager`, `LocalizationManager`) was fully built but had nothing to serve.
-
-  - **Broken colour codes in `en_us.json`** — the TPR/teleport keys added in a previous session had bare letter colour codes (e.g. `"eSearching..."` instead of `"§eSearching..."`), causing those messages to appear without formatting in-game.
+  **Root Cause 2 — Race condition: warmup-period concurrent teleport overwrites undo-back timestamp:**
+## ✨ Build #77 — 2026-04-27 — BungeeTabListPlus-Inspired Tablist Rework
+- **Tablist duplicate class definition compile error → ✅ FIXED in build.77**
+  `TablistCommand.java` contained two complete `class TablistCommand { ... }` definitions — the new BTLP-style class (lines 1–471) followed immediately by the old handler class (lines 473–727). This caused a compile-time "class already defined in package" error. **Fix**: Removed the duplicate old block; retained only the full BTLP-style implementation.
+  Affected file: `TablistCommand.java`
 
   - **`CustomLanguageManager.initialize()` only deployed `en_us.json`** — when the server started it copied only `en_us.json` from the JAR to disk. No other bundled lang files were ever extracted, so even if they existed in the JAR they would never reach the `languages/custom/` directory where the system reads from.
 
@@ -515,30 +758,28 @@
   | Added `nl_nl.json` | Dutch (Netherlands) — full coverage |
   | Added `pl_pl.json` | Polish (Poland) — full coverage |
   | Added `ru_ru.json` | Russian (Russia) — full coverage |
-  | Added `deployBundledLanguageFiles()` | New method in `CustomLanguageManager` — on every server start, iterates all 8 non-English bundled lang codes, copies missing files from JAR to `neoessentials/languages/custom/`, and merges NEW keys into existing files without overwriting user edits |
-
-  **How translations fall back:**
-  1. Custom user file on disk (`neoessentials/languages/custom/<lang>.json`) — highest priority
-  2. Bundled JAR translation for that language
-  3. `en_us.json` (English fallback via `MessageUtil`)
-  4. Translation key itself (last resort)
-
-  **Community contribution note:** All non-English files are tagged `"_author": "NeoEssentials (machine-translated, community corrections welcome)"` — admins can edit the files in `neoessentials/languages/custom/` and run `/language reload` to apply changes without restart.
-
-- **Command /AFK not working properly**
-  *(Fixed: 2026-03-01)*
-  Five separate root causes were found and fixed:
-
-  - **Root cause 1 — `AfkManager.loadConfiguration()` was never called:**
-    The method to read AFK settings from `config.json` (timeout, kick settings, broadcast messages, activity tracking, etc.) existed but was never wired up. `AfkManager` ran entirely on hardcoded defaults regardless of what was in the config file.
-    **Fix:** Added `AfkManager.getInstance().loadConfiguration(afkObj)` call to `NeoEssentials.onServerStarted()`, right after `ChatManager` is initialized.
-
-  - **Root cause 2 — `AfkActivityHandler` suspicious-score blocked real player activity:**
-    The anti-AFK-farming filter incremented the suspicious score by 10 for every action beyond 10 of the same type in 60 seconds. The threshold to be considered "suspicious" was 100 — meaning just 10 block interactions (perfectly normal building) would permanently block that player's activity from resetting their AFK timer. The score decay was also broken: it compared `now - lastActivity` where `lastActivity` was set to `now` on every call, so the difference was always ~0 and the score never decayed.
+- **`ProxyIntegration` — `@Override write(FriendlyByteBuf)` method does not override supertype → ✅ FIXED in build.77**
+## ✨ Build #73 — 2026-04-27 — Messaging & SocialSpy Improvements
+  Affected file: `ProxyIntegration.java`
     **Fix:** Raised `REPETITIVE_ACTION_THRESHOLD` from 10 → 30, raised `SUSPICIOUS_SCORE_THRESHOLD` from 100 → 300, fixed score decay to compare against `lastActionTime` for the relevant action type, and reset per-type count when the 60-second window expires.
 
   - **Root cause 3 — `AfkMovementDetector` was missing `@EventBusSubscriber`:**
-    The class had `@SubscribeEvent` methods for player login and logout (to initialize/cleanup position tracking) but was missing the `@EventBusSubscriber(modid = "neoessentials")` class annotation. NeoForge never registered those listeners, so player positions were never cleaned up on logout and never initialized on login.
+- **Fallback formatting if template parsing fails → ✅ Implemented in build.73**
+  `resolveTemplate()` never throws. If PlaceholderAPI fails, the partially-resolved template is returned safely. `MessageUtil.localize()` already had a catch block; `resolveTemplate()` extends that safety to the PlaceholderAPI stage.
+- **Debug logging for missing/misparsed placeholders → ✅ Implemented in build.73**
+  When `logging.enableDebugLogging = true`, any `{TOKEN}` tokens still present in a template after full resolution are logged as `WARN` with the original template and the list of unresolved tokens. SocialSpy adds format-resolution trace logs (which source selected, and the pre/post strings).
+- **Admin-configurable SocialSpy formatting in config → ✅ Implemented in build.73**
+  New `chat.messaging` section in `config.json`:
+  ```json
+  "socialspyFormat":  "",   // override neoessentials.socialspy.format lang key
+  "msgFormatTo":      "",   // override commands.neoessentials.msg.format.to
+## ✨ Build #72 — 2026-04-27 — FTB Ranks Adapter API Correction
+  "replyFormatTo":    "",   // override commands.neoessentials.reply.format.to
+  "replyFormatFrom":  ""    // override commands.neoessentials.reply.format.from
+  ```
+  Leave blank to use lang-file defaults. Config always takes priority when non-empty.
+## ✨ Build #70 — 2026-04-27 — `/msg` & SocialSpy Formatting Fix
+    - `MsgCommand` and `ReplyCommand` migrated to use `resolveTemplate()`.
     **Fix:** Added `@EventBusSubscriber(modid = "neoessentials")` annotation to the class.
 
   - **Root cause 4 — AFK broadcasts silently failed (`MessageUtil.info()` used as raw string):**
@@ -551,105 +792,631 @@
 
 - **NeoEssentials Chat Logging — chat messages not shown in server console (NeoForge 1.21.1, All The Mons)**
   *(Fixed: 2026-03-01)*
-  - **Root cause:** When `enable-chat-formatting` is `true`, `ChatHandler` calls `event.setCanceled(true)` and takes over dispatch itself — sending messages via `sendSystemMessage()` to players only. `sendSystemMessage()` does **not** write to the server console. The only logging was `LOGGER.debug(...)` which is silent at the default log level. Vanilla's console logging never fires because the event is cancelled.
-  - **Fix 1:** Added explicit `LOGGER.info("[channel] <player> message")` after dispatching to each channel type (proximity, permission-gated, global).
-  - **Fix 2:** Added `server.sendSystemMessage(formattedMessage)` so the formatted message also appears in the dedicated server terminal exactly as vanilla would show it.
-  - **Fix 3:** Added `logChatToConsole` boolean to `chat` config section (default `true`). Set to `false` to suppress chat from console/logs entirely if desired.
+- **`/msg` & `/reply` format templates broken by `MessageFormat` named-placeholder collision → ✅ FIXED in build.70**
+---
+    Template: '&7[&aTo &f{neoessentials_displayname}&7] &f{MESSAGE}',
+    Args: [], Error: can't parse argument number: neoessentials_displayname
+---
+    - Fix Applied (build.70):
+- **Tablist player-row prefix/suffix not rendering hex/gradient colors → ✅ FIXED in build.69**
+---
+    - Root Cause: `updatePlayerTeam()` called `Component.literal(prefix)` / `Component.literal(suffix)` and had no rich-text conversion step.
+- **Color codes inside placeholders corrupted after substitution → ✅ FIXED in build.69**
+  `applyPlaceholders()` was internally converting `&` → `§` *before* returning the frame text. This caused `&#RRGGBB` hex tokens to become `§#RRGGBB` (invalid) and `<gradient:…>` tags to pass through unchanged to the `processTablistText()` pipeline where `&`-codes had already been consumed.
+---
+    - Affected file: `TablistManager.java` — `applyPlaceholders()`
+    - Affected file: `TablistManager.java` — `updatePlayerTeam()`
+- **`RichTextFormatter` lacked a tablist-safe text processor → ✅ ADDED in build.69**
+  The existing `processRichText()` method could emit hover/click event markers (used in chat) that are silently dropped by `ClientboundTabListPacket`, causing malformed output.
+    - Fix Applied (build.69): Added `RichTextFormatter.processTablistText(String)` — runs the full gradient → rainbow → named-color → format-tag → `<color:#RRGGBB>` pipeline, strips any hover/click markers, then calls `ChatComponentUtil.parseColorCodes()`. Enabled unconditionally (does not depend on the `enableChatEnhancements` server flag).
+    - Affected file: `RichTextFormatter.java`
   - Config version bumped to 20.
 
+  6. **Extended placeholder set**
+     Added `{displayname}`, `{server_name}`, `{x}`, `{y}`, `{z}`, `{balance}`, `{time}`, `{bar}` alongside the existing 12 placeholders. Per-group `groupColors` map applies a color prefix to `{displayname}`.
 - **NeoEssentials Teleportation — chunk not loaded causes "No safe teleport location found" even with safety disabled (NeoForge 1.21.1, All The Mons)**
   *(Fixed: 2026-03-01)*
-  - **Root cause 1 — `isSafe()` used `canOcclude()`:** This is a strict opaque-cube check that returns `false` for slabs, stairs, glass, trapdoors, and many other solid blocks. Any home or warp set on those blocks was wrongly reported as unsafe.
-    **Fix:** Replaced `canOcclude()` with `getCollisionShape(...).isEmpty()` in both `TeleportLocation.isSafe()` and `TeleportUtil.isSafeLocation()` — correctly matches the physical collision surface like Essentials does.
+---
   - **Root cause 2 — `isSafe()` never checked dangerous blocks:** Lava, fire, cactus, nether portal, magma, etc. were all considered "safe" as long as feet/head space was air.
     **Fix:** Added `isDangerous()` helper in both `TeleportLocation` and `TeleportUtil` covering: lava, water, fire, soul fire, magma, cactus, sweet berry bush, wither rose, nether portal, campfire, soul campfire, powder snow.
-  - **Root cause 3 — `findSafeLocation()` never did a top-down column scan first:** The XZ radius search with only a ±8Y window regularly failed to find the surface, especially for cross-dimension warps where the destination chunk was freshly loaded.
+## ✨ Build #67 — 2026-04-24 — Custom Player Tablist (full feature)
     **Fix:** `findSafeLocation()` now first does a full top-down column scan at the same X,Z (finds the surface in one pass), then falls back to the XZ expanding radius. `TeleportUtil.getHighestSafeY()` updated to use the same logic.
-  - **Root cause 4 — `TeleportRequestManager` blocked `/tpa` entirely when destination was unsafe:** Matched old Bukkit plugin behaviour — no fallback, just an error. Essentials finds a nearby safe spot first.
-    **Fix:** `executeTeleportRequest()` now calls `findSafeLocation()` first, warns the player ("teleporting to nearest safe location"), and only blocks if absolutely no safe location is found within 16 blocks.
-  - **Root cause 5 — Double-safety in `HomeManager` and `WarpManager`:** Both managers already resolved a safe location before calling `TeleportUtil.teleportPlayer(..., findSafe=true)`, causing a second safety pass that could override the already-resolved location.
+- **Custom Player Tablist system implemented → ✅ Build #67**
+  **What was built:**
     **Fix:** Both managers now pass `findSafe=false` since safety is fully handled before the `TeleportUtil` call.
 
+  7. **Vanish + AFK integration**
+     `hideVanished: true` excludes vanished players from `{online}` for non-staff viewers. `showAfkIndicator: true` appends configurable `afkSuffix` (default `&7[AFK]`) to AFK players in the tab row.
 - **`/tpr` (Random Teleport) — basic brute-force with no config, safety, or biome awareness**
   *(Fixed: 2026-03-01)*
   - Old implementation was 50 blind random attempts with no safety checks, no cooldown, no world border awareness, no biome exclusions, no cache, no nether support.
   - **Fix:** Full port of EssentialsX's `RandomTeleport` system as `RandomTeleportManager.java`:
-    - Equally-distributed offsets using the 4-rotation rectangle method (no centre-clustering)
-    - Nether-aware Y detection (scans up from Y=32 below the bedrock ceiling)
-    - World-border clamping
-    - Pre-computation cache (filled asynchronously after each use, configurable `cacheThreshold`)
-    - Configurable `findAttempts`, `cooldown`, `defaultMinRange`, `defaultMaxRange`
-    - Per-location named slots — `/tpr [locationName]`
-    - Excluded biomes list (global + per-location; oceans/void excluded by default)
-    - Back-location saved before teleporting
-    - Respects global `teleportDelay`
-  - New `/settpr <locationName>` admin command to set RTP centre in-game.
-  - New aliases: `/rtp`, `/randomtp`, `/randomteleport` all work.
+  1. **Hex colors & gradients in header/footer**
+     `TablistManager.updatePlayer()` now builds header and footer through `RichTextFormatter` (build.69 refined this further with the dedicated `processTablistText()` method). Supports `&#RRGGBB`, `<gradient:FF0000-0000FF>text</gradient>`, `<rainbow>text</rainbow>`, named color tags (`<red>`, `<gold>`, …), and format tags (`<bold>`, `<italic>`, …).
   - Config: new `randomTeleportSettings` section added to `teleportation` in `config.json` (version bumped to 19).
   - Language keys added for all new messages.
 
+  8. **`tablist.json` config template**
+     Bundled default config updated with gradient header example, per-group and per-player sections, `groupColors` map, and inline syntax reference comments.
 - **Web Dashboard files not updating when newer versions are available**
   *(Fixed: previous session)*  
   Config version tracking (`_configVersion`) was already in place for config files. Dashboard HTML/JS/CSS files are now versioned and updated from JAR on server start when the bundled version is newer than what is deployed.
 
-- **Dashboard Admin Controls and Permissions on a single page**
-  *(Fixed: previous session)*  
-  Admin controls and permissions management split into their own dedicated HTML pages (`admin.html`, `permissions.html`) instead of being crammed into one page.
+  - Affected files: `TablistManager.java`, `TablistCommand.java`, `tablist.json`
+  2. **Animated header/footer frames**
+     `header` and `footer` in `tablist.json` accept a JSON array. Each refresh tick advances one frame creating smooth text animations. `refreshInterval` (ticks, default 20) controls speed.
 
-- **Dashboard login requiring player to be online on server**
-  *(Fixed: previous session)*  
-  Auth system overhauled — players can register in-game with `/dashboard register` (requires permission), then log in from the web even when offline. Simple Discord Link integration added as an optional auth path; works standalone without the mod installed.
-
+##  Build #66 — 2026-04-24
 - **Dashboard register command not working**
   *(Fixed: previous session)*  
   `/dashboard register` command was not properly creating accounts. Registration flow fixed — generates token, stores credentials, confirms in-game.
 
+- **Tablist prefix not appearing before username → ✅ FIXED in build.66**
+  Group prefix/suffix set in `permissions.json` was not displaying before player names in the tab list. Reported during post-build.64 testing.
+    - Root Causes:
+        1. `getPermissionPrefix()` / `getPermissionSuffix()` called `PermissionSystem.getManager()` which throws `IllegalStateException` before the permission system is fully initialised; the exception was silently swallowed in the `catch`, returning `""` every time.
+        2. All three helpers (`getPermissionPrefix`, `getPermissionSuffix`, `getPermissionGroup`) had inconsistent fallback behaviour — `getPermissionGroup()` returned `"default"` when the user record was absent, but the prefix/suffix helpers returned `""` instead of looking up the default group's values.
+    - Fix Applied (build.66):
+        - Switched all three helpers to use `PermissionAPI.getManager()` (returns `null` instead of throwing), with an explicit null guard.
+        - When the player has no explicit user entry (or `user.getGroup()` is `null`), all three helpers now fall back to `mgr.getDefaultGroup()` before looking up the group's prefix/suffix. The scoreboard team (and thus the tab list prefix row) now reliably shows the correct group prefix for every player, including freshly-joined players whose user entry was auto-created.
+    - Affected file: `TablistManager.java` — `getPermissionPrefix()`, `getPermissionSuffix()`, `getPermissionGroup()`
 - **Rich text (gradients/rainbow) not working despite being enabled in config**
-  *(Fixed: previous session)*  
-  Rich text tag parsing was not being applied to outgoing chat components. Fixed the chat processing pipeline to apply gradient/rainbow rendering when `richText.enabled` is `true`.
+  3. **Per-group header/footer**
+     New `"groups"` section in `tablist.json` — each permission group (e.g. `admin`, `moderator`) can define its own `header`/`footer` arrays. Priority: **per-player → per-group → global**.
 
-- **`/home` and `/warp` commands checking for safe teleports even when safety disabled in config**
-  *(Fixed: previous session — and further strengthened 2026-03-01 per above)*  
-  Config flag was being read correctly but the `findSafe=true` hardcoded argument to `TeleportUtil.teleportPlayer()` was overriding it. Fixed so that when safety is disabled in config, no safe-location search is performed.
-
+- **Warn command not logging to server console → ✅ FIXED in build.66**
+  `/warn <player> <reason>` used `source.sendSuccess(..., broadcastToOps=true)` but had no explicit `LOGGER.info()` call — unlike `executeClearWarnings()` and `executeRemoveWarn()` which both had direct logger calls. On some server configurations (particularly when stdin is not a terminal, or the server uses a custom logging appender), `sendSuccess` feedback is not routed to the persistent log file.
+    - Observed: Warn records were being saved correctly to `warns.json`, but no timestamped console/log line appeared for `/warn` specifically. Other warn commands (`/clearwarnings`, `/removewarn`) did log correctly.
+    - Fix Applied (build.66): Added `LOGGER.info("[Warn] {} warned {} for: {} (warn #{}, ID: {})", warnedBy, playerName, reason, total, shortId)` in `WarnCommand.executeWarn()`, matching the style of the other warn-management commands.
+    - Affected file: `WarnCommand.java` — `executeWarn()`
 - **PowerTool system — powertools affecting item slots instead of items**
   *(Fixed: previous session)*  
   PowerTool data was keyed on inventory slot index rather than item identity (NBT/item type). When a player moved items around, the powertool followed the slot, not the item. Fixed to key on item identity so the command travels with the item regardless of which slot it occupies.
 
-- **Essentials teleportation system ported to NeoForge**
-  *(Fixed: 2026-03-01)*  
-  Investigated `./docs/Essentials/Essentials/src/main/java/com/earth2me/*` (CraftBukkit plugin source) and converted the teleportation architecture to NeoForge 1.21.1:
-  - `RandomTeleportManager` (see `/tpr` fix above)
-  - `isSafe()` / `findSafeLocation()` logic ported from `LocationUtil.java`
-  - Dangerous block list ported from `DAMAGING_TYPES` / `LAVA_TYPES`
+---
+
+- **WarnManager failed to compile — duplicate `getInstance()` method → ✅ FIXED in build.66**
+  `WarnManager.java` contained two identical `public static WarnManager getInstance()` declarations (lines 28 and 44), causing `error: method getInstance() is already defined in class WarnManager` at compile time. The mod JAR could not be built until this was resolved.
+    - Fix Applied (build.66): Removed the duplicate declaration at line 44 (line 28 is the canonical definition, adjacent to the `INSTANCE` field).
+    - Affected file: `WarnManager.java`
+
+---
+
+##  Build #64 — 2026-04-24
+
+- **`/help [page]` returns "no permission" for regular players → ✅ FIXED in build.64**
+  Non-operator players received a "no permission" response when running `/help` or `/help <page>`. The `HelpCommand` guards the command with `PermissionAPI.hasPermission(uuid, "neoessentials.help")`, but this node was absent from the `default` group in `permissions.json`, so all non-op players were blocked.
+    - Root Cause: `neoessentials.help` was missing from the `default` group's `permissions` array in both the bundled `src/main/resources/data/config/neoessentials/permissions.json` and the deployed `run/config/neoessentials/permissions.json`.
+    - Fix Applied (build.64): Added `"neoessentials.help"` to the `default` group's permission list in `permissions.json`. Help is now accessible to all players by default with no operator status required.
+    - Affected file: `permissions.json` — `default` group
+  4. **Per-player header/footer overrides**
+     - `"players"` UUID map in `tablist.json` for persistent per-player frames.
+     - New runtime commands: `/tablist player <name> header <text>`, `/tablist player <name> footer <text>`, `/tablist player <name> reset`.
   - Top-down column scan ported from Essentials surface-finding behaviour
 
 ---
 
-# 🎯 Additional Features
+- **Localization Audit — 54 missing translation keys + no fallback for unknown keys → ✅ FIXED in build.64**
+  *(See full entry further below in this file)*
 
-- **Economy integration**: Chest sign shops, Player Chest shops, Entity shops, dynamic pricing, CSV Dynamic pricing list import/export, and ect. more.
-- **Holographic displays**: Support for holographic displays to show any information.
-- **Chat formatting options**: More options for customizing chat format.
-- **Inventory See**: Ability to view other players' inventories, editable inventories, and ender chests, based on permissions.
-- **Minecraft Assets API support**: Figure out a way to integrate Minecraft Assets API for better resource assests to show in web-dashboards and other places.
-- **Web-dashboard improvements**: Backup/restore functionality, more detailed statistics, and better user management, Backup/Restore from online storage services (Google Drive, Dropbox, etc).
-- **Player Tablist**: Custom code for a custom player tab list that is highly customizable {References: Bungee Tablist Plus, TAB [1.7.x - 1.21.11], ☆ Simple TabList ☆《1.16.x - 1.21.x》- Animated - Hex colors}
-- **Utility Systems**: Check if all these are in place, Nicknames, MOTD, near, ping, depth, helpop, rules, suicide, etc.
-- **API & Placeholder System**: Apply more PlaceholderAPI integration, create more custom placeholders or allow the creation of more custom placeholders, REST API endpoints.
-- **Permissions System Improvements**:
-  - Wildcard & Hierarchical Permissions: Support for wildcards (e.g., neoessentials.*) and hierarchical permission inheritance, so granting a parent node gives access to all child nodes.
-    Contextual Permissions: Allow permissions to be context-sensitive (e.g., per-world, per-channel, per-region, or time-based).
-    Dynamic Permission Reloading: Add a command or event to reload permissions without restarting the server.
-    Permission Checks in All Features: Ensure every command, event, and feature checks permissions strictly, including edge cases and new features.
-    Permission Debugging Tools: Add commands to debug/check a user's effective permissions, showing where a permission is granted or denied.
-    Permission Groups & Priorities: Allow group priorities, so if a user is in multiple groups, the highest priority group's permissions/prefixes/suffixes are used.
-    Permission Expiry: Support temporary permissions that expire after a set time or event.
-    API for Other Mods: Expose a clean API for other mods/plugins to check and register permissions.
-    Permission Aliases: Allow aliases for permission nodes for easier migration or compatibility.
-    Audit Logging: Log permission changes, grants, and denials for security and debugging.
-    GUI Management: Provide a web or in-game GUI for managing permissions, groups, and users.
-    Integration with External Systems: Improve and document integration with LuckPerms, FTB Ranks, and other permission mods, including fallback logic.
-    Permission Suggestions: When a command is denied, suggest the required permission node in the error message.
-    Fine-Grained Command Control: Allow per-argument or per-subcommand permissions (e.g., /home set vs /home delete).
-    Custom Permission Conditions: Allow custom logic for permission checks (e.g., based on player stats, inventory, or server state).
+---
+#  Additional Features
+
+##  Configuration Notes (not code bugs)
+
+- **`/kick` and `/ban` returning "no permission" for moderators**
+  Reported during post-build.64 testing. Investigation confirmed this is **not a code bug** — the permission nodes `neoessentials.moderation.kick` and `neoessentials.moderation.ban` are correctly present in the `moderator` group in `permissions.json`.
+  The cause is that players must be **explicitly assigned** to the `moderator` (or `admin`) group before those permissions apply. New players are auto-created in the `default` group; the `default` group intentionally does not include moderation permissions.
+    - **Resolution**: Assign the player to the correct group in-game:
+      ```
+      /permissions user <playername> setgroup moderator
+      ```
+      Or promote to admin:
+      ```
+      /permissions user <playername> setgroup admin
+      ```
+      Changes take effect immediately without a server restart. Use `/permissions user <playername> info` to verify the current group assignment.
+
+- **Chat color codes / formatting**
+  Reported during post-build.64 testing. Confirmed working — `ChatFormatter` correctly processes `&` codes and `§` codes via `ChatComponentUtil.parseColorCodes()`. No code change required.
+
+---
+
+## ✅ Previously Fixed Issues (older builds)
+
+- **NeoEssentials Freeze System Not Working (NeoForge 1.21.1, build.1.0.2.6+52) → ✅ FIXED in build.1.0.2.6+53**
+  `/freeze <player>` reports success and the player receives a message, but they can still walk around freely, interact with blocks, and nothing prevents them from moving.
+    - Environment:
+        - Mod Version: `neoessentials-1.0.2.6+52`
+        - Minecraft Version: `1.21.1`
+        - NeoForge Version: `21.1.220`
+        - Java Version: `openjdk 21`
+        - Dedicated Server
+    - Observed Behavior:
+        - Frozen player can walk and move around the world freely — no position lock.
+        - Frozen player receives the notification message twice on `/freeze`.
+        - Frozen player's notification sometimes shows the raw key string `neoessentials.moderation.frozen_message` instead of the actual message.
+        - When a frozen player reconnects, they receive no reminder and no position lock is applied.
+        - When the Jail system is disabled in config, freeze enforcement also stops working entirely.
+    - Root Causes (5 bugs found across `ModerationEventHandler.java`, `FreezeManager.java`, `FreezeCommand.java`):
+        1. **`FreezeManager.enforceFreezePosition()` was never called** — the method exists and correctly teleports the player back if they have moved, but it had zero call-sites in the event handler. Frozen players could walk anywhere without restriction.
+        2. **`FreezeManager.onPlayerJoin()` was never called on login** — `ModerationEventHandler.onPlayerLogin()` called `VanishManager.onPlayerJoin()` and `JailManager.onPlayerJoin()` but had no equivalent call for `FreezeManager`. Reconnecting frozen players never got the reminder message and their `frozenPosition` was never initialised from their spawn position.
+        3. **`onServerTick` returned early on `!isJailSystemEnabled()`** — even if freeze enforcement had been wired in, the early `return` on jail being disabled would have prevented it from running. Freeze enforcement must run independently of the jail system's enabled flag.
+        4. **Wrong message key in `FreezeCommand`** — `executeFreeze()` checked `template.equals("commands.neoessentials.moderation.frozen_message")` but `ConfigManager.getFreezeMessage()` returns the default `"neoessentials.moderation.frozen_message"` (no `commands.` prefix). The condition always evaluated to `false` → the `else` branch ran `.replace()` on the raw fallback key → the player saw the literal string `neoessentials.moderation.frozen_message` as their notification. Same bug in `executeUnfreeze()` with `unfrozen_message`.
+        5. **Duplicate player notification on `/freeze`** — `FreezeManager.freezePlayer()` sent the frozen message to the player, and `FreezeCommand.executeFreeze()` also sent it → the player received two identical notifications.
+    - Fix Applied (build.1.0.2.6+53):
+        - **`ModerationEventHandler.onPlayerLogin()`**: Added `FreezeManager.getInstance().onPlayerJoin(player)` call, gated by `isFreezeSystemEnabled()`, matching the pattern already used for vanish and jail.
+        - **`ModerationEventHandler.onServerTick()`**: Added a separate freeze-enforcement loop that runs **before** the jail guard. Every online frozen player has `enforceFreezePosition()` called once per second (20-tick cycle). The loop is independently gated by `isFreezeSystemEnabled()` so it works regardless of whether jail is enabled or disabled.
+        - **`FreezeManager.freezePlayer()`**: Removed the player notification send. Commands (`executeFreeze`, `executeFreezeAll`) are the sole senders, eliminating the duplicate message.
+        - **`FreezeCommand.executeFreeze()`**: Fixed key check from `"commands.neoessentials.moderation.frozen_message"` → `"neoessentials.moderation.frozen_message"` to match `ConfigManager.getFreezeMessage()`'s actual fallback value.
+        - **`FreezeCommand.executeUnfreeze()`**: Fixed key check from `"commands.neoessentials.moderation.unfrozen_message"` → `"neoessentials.moderation.unfrozen_message"` to match `ConfigManager.getUnfreezeMessage()`'s actual fallback value.
+
+---
+
+- **NeoEssentials Vanish — Players Remain Visible Despite "You are now vanished" Message (NeoForge 1.21.1, build.1.0.2.6+50) → ✅ FIXED in build.1.0.2.6+52**
+  After running `/vanish`, the confirmation message appears in chat but other players can still see the vanished player in the world.
+    - Environment:
+        - Mod Version: `neoessentials-1.0.2.6+50`
+        - Minecraft Version: `1.21.1`
+        - NeoForge Version: `21.1.220`
+        - Java Version: `openjdk 21`
+        - Dedicated Server (LuckPerms present)
+    - Root Causes (4 bugs found in `VanishManager.java`):
+        1. **Entity never removed from the world** — `hidePlayerFromOthers()` opened with `if (!isHideFromTabListEnabled()) return;`. It never sent `ClientboundRemoveEntitiesPacket`, so the player's body was always visible regardless of config.
+        2. **`showPlayerToSpecific()` was completely empty** — contained only a comment and sent zero packets. Unvanishing therefore did nothing for observers already online.
+        3. **Priority check logic was inverted** — `hidePlayerFromOthers()` used `if (viewerPriority > vanishedPriority)`. Both defaults are `10`, so `10 > 10 = false` → nobody was ever hidden.
+        4. **Newly joining players could always see vanished players** — `onPlayerJoin()` never hid already-vanished players from the joining player.
+    - Fix Applied (build.1.0.2.6+51):
+        - **`hidePlayerFromSpecific()`**: Now sends both `ClientboundPlayerInfoRemovePacket` (conditional on tab-list config) **and** `ClientboundRemoveEntitiesPacket` (always).
+        - **`showPlayerToSpecific()`**: Fully implemented — sends the complete packet sequence: `ClientboundPlayerInfoUpdatePacket.createPlayerInitializing()`, `ClientboundAddEntityPacket`, `ClientboundSetEntityDataPacket`, `ClientboundSetEquipmentPacket`, `ClientboundRotateHeadPacket`.
+        - **`hidePlayerFromOthers()`**: Removed early `return`. Fixed priority check: observer may see vanished only when explicitly in `viewerPriorities` AND priority `<=` vanished player's.
+        - **`onPlayerJoin()`**: Deferred by 1 tick so `ClientboundRemoveEntitiesPacket` arrives after vanilla entity-spawn packets. Added missing branch: hides all vanished players from joining player if they lack see-vanished permission.
+
+---
+
+- **NeoEssentials Teleportation Safety Bug (NeoForge 1.21.1, build.1.0.2.5) → ✅ FIXED in build.1.0.2.6+36**
+  Teleportation to `/home` fails with *"No safe teleport location found"* even when `enableHomeSafety` is `false`.
+    - Root Causes:
+        1. **Config flag not respected** — safety was always applied regardless of the setting.
+        2. **Unloaded chunk caused false failure** — `findSafeLocation()` scans ±16 blocks in X/Z, crossing unloaded chunk boundaries whose `isSafe()` checks always returned `false`.
+    - Fix Applied (build.1.0.2.6+36):
+        - `teleportToHome()` now reads `isHomeTeleportSafetyEnabled()` at runtime.
+        - `TeleportUtil.preloadChunksForTeleport()` added — force-loads the 3×3 chunk grid unconditionally.
+        - Safety block only executed when `requireSafe=true`; skipped entirely when `enableHomeSafety=false`.
+
+---
+
+- **NeoEssentials Web Dashboard Permissions & Admin Control Blank (NeoForge 1.21.1, build.1.0.2.6) → ✅ FIXED in build.1.0.2.6+46**
+  The web dashboard shows blank menus for permissions and admin controls after login.
+    - Root Causes:
+        1. `showLoginScreen()` hid `dashboardWrapper` on sub-pages that have no `loginContainer`.
+        2. `permissions.js` init guard never matched — `initPermissionSystem()` was never called.
+        3. Nine `fetchWithAuth()` calls missing `.json()` — all modal actions silently failed.
+        4. Username not shown on sub-page topbars (`id="userName"` vs `id="usernameDisplay"` mismatch).
+    - Fix Applied (build.1.0.2.6+46):
+        - `showLoginScreen()` now redirects to `index.html` when called on sub-pages.
+        - `permissions.js` init changed to use `document.getElementById('permOverviewTab')`.
+        - All 9 `fetchWithAuth` calls fixed to call `.json()`.
+        - `showDashboard()` username fallback added.
+
+---
+
+- **NeoEssentials Teleportation Message Bug (NeoForge 1.21.1, build.1.0.2.6+21) → ✅ Fixed in build.1.0.2.6+38**
+  Teleportation messages sometimes display raw translation keys instead of localized text.
+    - Root Causes: All `commands.neoessentials.teleport.spawn.*` keys were missing from `en_us.json`.
+    - Fix Applied: Added all missing spawn/warp/home message keys. Bumped `_langVersion` 10→11.
+
+---
+
+- **NeoEssentials Teleport Cooldowns & Warmups Not Working (NeoForge 1.21.1, build.1.0.2.6+21) → ✅ Fixed in build.1.0.2.6+38**
+  Cooldowns and warmups configured for teleportation commands do not function at all.
+    - Root Causes:
+        1. `HomeManager`: `teleportDelay` hardcoded to `3`; cooldown never checked.
+        2. `WarpManager`: `warpCooldown` config present but never read or enforced.
+        3. `SpawnManager`: `spawnCooldown` never read or enforced; warmup overridden by `loadSpawn()`.
+        4. No warmup countdown messages sent to players.
+    - Fix Applied: All three managers now read cooldown/warmup from config, enforce them, and send warmup messages before delayed teleports.
+
+---
+
+- **NeoEssentials Inventory & Ender Chest Commands Not Restricted (NeoForge 1.21.1, build.1.0.2.6+21) → ✅ Fixed in build.1.0.2.6+40**
+  Non-OP and non-admin players could use `/inv` and `/ec` commands, leading to duplication exploits.
+    - Root Causes:
+        1. Brigadier `redirect()` aliases had no `requires()` predicate — everyone could use them.
+        2. Typo: `.getChild("enderchestdit")` (missing 'e') caused NPE on `/ecedit`.
+        3. Missing permission nodes in `permissions.json` moderator group.
+        4. Hardcoded raw message strings instead of translation keys.
+    - Fix Applied: Replaced all `redirect()`-based aliases with full registrations including `requires()`. Typo fixed. Permission nodes and translation keys added.
+
+---
+
+- **NeoEssentials Vanish Cannot Be Disabled (NeoForge 1.21.1, builds 1.0.2.5 & 1.0.2.6+21) → ✅ FIXED in build.41**
+  Disabling the vanish module in config does not actually disable it.
+    - Root Causes:
+        1. `isVanishSystemEnabled()` read from wrong config path — always returned `true`.
+        2. Interaction guards did not check `isVanishSystemEnabled()`.
+        3. `VanishManager.onPlayerJoin()` was never called on login.
+    - Fix Applied: Config path fixed. All interaction guards updated. `onPlayerJoin()` wired in `ModerationEventHandler`.
+
+---
+
+- **NeoEssentials Home Confirmation Actions Broken (NeoForge 1.21.1, build.1.0.2.6+21) → ✅ FIXED in build.44**
+  Clicking confirm on `/sethome` overwrite or `/delhome` appends "confirm" to the home name repeatedly.
+    - Root Cause: `confirm`/`deny` literals were registered as Brigadier children **under** the `<name>` argument. Client dispatched `/sethome Colony confirm`; server received `"Colony confirm"` as the name value.
+    - Fix Applied: Moved `confirm`/`deny` to top-level literal siblings of `<name>`. Home name now held server-side and retrieved from pending maps.
+
+---
+
+- **NeoEssentials /back Command Fails in Unloaded Chunks (NeoForge 1.21.1, build.1.0.2.6+21) → ✅ FIXED in build.1.0.2.6+42**
+  The `/back` command cannot find last death points or previous locations if they are in unloaded chunks.
+    - Root Causes:
+        1. `TeleportUtil` only loaded the single target chunk; `findSafeLocation()` scans ±16 blocks crossing into unloaded neighbour chunks.
+        2. `MiscTeleportManager.teleportDelay` was hardcoded to `3` — never read from config.
+    - Fix Applied:
+        - `TeleportUtil`: Added `preloadChunksForTeleport()` loading a 3×3 chunk grid.
+        - `ConfigManager`: Added `getBackTeleportDelay()`, `isDeathBackEnabled()`, `isTeleportBackEnabled()`.
+        - `MiscTeleportManager`: Added `loadConfig()` reading all back-settings from config.
+
+---
+
+- **Permissions System — GUI, External Systems & Fine-Grained Control not complete**
+  *(Status: Fixed → v1.0.2.6+build.30)*
+
+  **Root cause**: Three remaining Permissions System items were unimplemented: GUI Management, External Systems documentation, Fine-Grained Command Control.
+
+  **Fix (build.30)**:
+  - `PermissionEndpoint` — 12 new REST methods added (context CRUD, temp CRUD, alias management, system status).
+  - `PermissionSystem.md` — 3 new major sections: External Permission Mods, Fine-Grained Command Control, GUI Management Web Dashboard API.
+
+---
+
+- **Permissions System — Contextual permissions, conditions, API, and aliases not implemented**
+  *(Status: Fixed → v1.0.2.6+build.28)*
+
+  **Fix (build.28)**:
+  - `PermissionContext` value object capturing `worldId`, `dayTime`, `gamemode`.
+  - `PermissionUser` / `PermissionGroup` extended with `contextualPermissions` and `conditions` maps.
+  - `PermissionManager.hasPermission(UUID, String, PermissionContext)` — context-aware overload.
+  - `PermissionConditionManager` — evaluates `time:day`, `gamemode:X`, `world:X`, `health:above/below:N`, `op:true/false` with `AND`/`OR` support.
+  - `PermissionAliasManager` — maps legacy/short node names; resolved transparently in `PermissionAPI.hasPermission`.
+  - `PermissionsService` interface + `PermissionsServiceImpl` — clean API for external mods via `NeoEssentialsAPI.getPermissionsService()`.
+  - `NeoEssentialsAPI.API_VERSION` bumped `1.0.0` → `1.1.0`.
+
+---
+
+- **NeoEssentials Permissions Not Recognising OP / FTB Ranks NoSuchMethodException**
+  *(Status: Fixed → v1.0.2.6+build.9)*
+
+  **Root cause**: External mod permissions not routed through `permissions.json`; OP bypass skipped when external adapter registered; FTB Ranks called non-existent `hasPermission(UUID, String)`.
+
+  **Fix**:
+  - Created `NeoEssentialsPermissionHandler` implementing NeoForge's `IPermissionHandler` — every Boolean permission-node check from any mod now goes through `permissions.json`.
+  - Auto-activates as `neoessentials:handler` when no competing permission mod is present.
+  - OP bypass now checked *before* any external adapter.
+
+---
+
+- **NeoEssentials Invalid Wildcard Permission Formats — Startup Warnings**
+  *(Status: Fixed → v1.0.2.6+build.8)*
+
+  **Root cause**: `PermissionRegistry.isValidPermission()` regex `^[a-z0-9._-]+$` rejected `*`, causing `neoessentials.spawner.*` etc. to log `WARN Invalid permission format` and be dropped from the registry.
+
+  **Fix**: Regex updated to explicitly handle `.*` suffix. Both `PermissionRegistry` and `PermissionScanner` fixed.
+
+---
+
+- **NeoEssentials Chat Colors — Format String Colors Stripped (All White Output)**
+  *(Status: Fixed → v1.0.2.6+build.8)*
+
+  **Root cause**: `ChatFormatter.formatMessage()` called `processRichText()` then `component.getString()` which strips all formatting codes, returning plain white text to the enhancement pipeline.
+
+  **Fix**:
+  - Added `RichTextFormatter.preprocessTags(String)` — converts gradient/rainbow tags to `&#RRGGBB` hex codes as plain strings.
+  - `ChatFormatter` now calls `preprocessTags()` instead of `processRichText()` so `&` codes survive into `buildComponentFromMarkup()`.
+
+---
+
+- **NeoEssentials Kits System — ClassCastException (`JsonArray` cast to `JsonObject`)**
+  *(Status: Fixed → v1.0.2.6+build.5)*
+
+  **Root cause**: `ConfigSplitter` mapped `"kits"` section to `kits.json`. `KitManager` also wrote kit definitions there as a `JsonArray`. `mergeSplitConfigs()` extracted it and `getAsJsonObject("kits")` crashed with `ClassCastException`.
+
+  **Fix**: `ConfigSplitter` now maps `"kits"` → `"main.json"`. `mergeSplitConfigs()` only merges the key when `isJsonObject()` is true. All ConfigManager kit-settings helpers carry explicit `isJsonObject()` guards.
+
+---
+
+- **NeoEssentials Permissions Not Recognising OP / FTB Ranks NoSuchMethodException**
+  *(Status: Fixed → v1.0.2.6+build.5)*
+
+  **Fix**: OP bypass now checked before delegating to external adapter. `FtbRanksAdapter` probes two API strategies; first to resolve is used for all subsequent checks.
+
+---
+
+- **NeoEssentials Admin Shop `?` Item Assignment — "This shop is not yet ready"**
+  *(Status: Fixed → v1.0.2.6+build.5)*
+
+  **Root cause**: Admin shops have `ownerUUID = null`; ownership check always returned false for admin shops.
+
+  **Fix**: Handler now checks `shop.isAdminShop()` first; any player with `neoessentials.shop.create.admin` may assign the item.
+
+---
+
+- **NeoEssentials `/help 2` Pagination — "No command found"**
+  *(Status: Fixed → v1.0.2.6+build.5)*
+
+  **Root cause**: Vanilla `/help <command:string>` claimed `"2"` before NeoEssentials' integer `<page>` argument could fire.
+
+  **Fix**: Replaced integer `<page>` branch with a single `<page_or_command>` string argument that checks `Integer.parseInt()` first.
+
+---
+
+- **NeoEssentials Ban/Unban — Vanilla Bans Not Detected by `/unban`**
+  *(Status: Fixed → v1.0.2.6+build.5)*
+
+  **Root cause**: `BanManager` maintained its own list separately from Minecraft's `banned-players.json`.
+
+  **Fix**: `isPlayerBanned()` falls back to vanilla `UserBanList`. `banPlayer()` / `tempBanPlayer()` write to vanilla list. `unbanPlayer()` removes from vanilla list.
+
+---
+
+- **NeoEssentials Rules Command — "Rules are not set" With Existing `rules.json`**
+  *(Status: Fixed → v1.0.2.6+build.5)*
+
+  **Root cause**: Renamed `rules.json` → `rules_data.json` in 1.0.2.6; `loadRulesData()` only looked for the new name.
+
+  **Fix**: `loadRulesData()` checks `rules_data.json` first; falls back to legacy `rules.json` and auto-migrates.
+
+---
+
+- **NeoEssentials MOTD — Save Path Inconsistency**
+  *(Status: Fixed → v1.0.2.6+build.5)*
+
+  **Root cause**: `MotdCommand` used raw `Paths.get("config", "neoessentials", "motd_data.json")` instead of `ResourceUtil.getConfigFile()`, causing writes to wrong location on some hosts.
+
+  **Fix**: `MOTD_DATA_FILE` now uses `ResourceUtil.getConfigFile("motd_data.json")`.
+
+---
+
+- **TPA permissions not syncing with new role**
+  *(Status: Fixed → v1.0.2.6+build.4)*
+
+  **Root cause**: `LuckPermsAdapter` was not subscribing to LuckPerms events. Command trees never re-sent to affected players after group changes.
+
+  **Fix**: `LuckPermsAdapter` now subscribes to `UserDataRecalculateEvent` and `GroupDataRecalculateEvent`; both call `server.getCommands().sendCommands(player)`. `hasPermission` now uses live context-aware `QueryOptions` for online players.
+
+    - **Reload command does not apply configuration changes** *(Status: Fixed)*
+
+  **Root cause 1**: `TablistManager` not included in reload sequence.
+  **Root cause 2**: Brigadier command tree not re-sent to online players after reload.
+
+  **Fix**: `reloadConfiguration()` now calls `TablistManager.loadConfig()` + `updateAll()` and `WorthManager.reload()`. Command tree re-pushed to all online players via `server.getCommands().sendCommands(player)`.
+
+---
+
+>  **Features & Improvements** have been moved to [`Features_And_Improvements.md`](./Features_And_Improvements.md)
+
+---
+
+- **NeoEssentials `/back` Returns "No Previous Location" After Death**
+  *(Status: Fixed → v1.0.2.6+build.112)*
+
+  **Reported behavior:** After dying, `/back` always returned "§cNo previous location to return to." even though the player had just died at a known location.
+
+  **Root causes found:**
+
+  1. **Missing explicit `bus = Bus.GAME` on `@EventBusSubscriber`** — `MiscTeleportManager` used `@EventBusSubscriber(modid = "neoessentials")` without specifying the bus. Other classes in the mod explicitly use `bus = Bus.GAME`. While NeoForge defaults to `Bus.GAME`, the lack of an explicit declaration could cause silent registration failures in edge cases.
+
+  2. **`receiveCanceled = false` (default) on death event handler** — If another mod or mechanic cancelled `LivingDeathEvent` at a higher priority (e.g. keep-inventory mods, protection plugins, god-mode handlers), our NORMAL-priority handler was silently skipped and `saveDeathLocation` was never called. The player DID die (death screen shown, respawn triggered), but NeoEssentials never recorded the death position. Changed to `@SubscribeEvent(receiveCanceled = true)` to always capture the position when a `ServerPlayer` dies regardless of event cancellation.
+
+  3. **`PlayerDataStore.flush()` silently failed when directory missing** — `flush()` wrote to `neoessentials/playerdata/back_locations/<UUID>.json`. If the directory didn't exist (fresh install, first ever death), `FileWriter` threw and the exception was caught/logged but the death location was not persisted. After a server restart, `/back` would return "no history". Added an explicit `dataDirectory.mkdirs()` guard inside `flush()`.
+
+  4. **Missing `backSettings` section in default `config.json`** — `enableDeathBack`, `enableTeleportBack`, `teleportDelay`, and `backCooldown` had no explicit entries in the bundled config. Added `teleportation.backSettings` with all four keys.
+
+  **Fixes applied:**
+
+  | File | Change |
+  |---|---|
+  | `MiscTeleportManager.java` | Added `bus = Bus.GAME`; `@SubscribeEvent(receiveCanceled = true)`; INFO-level log in `onPlayerDeathEvent`; `loadConfig` checks `backSettings` then `miscSettings` for `backCooldown`. |
+  | `SpawnOnDeathHandler.java` | Added `bus = Bus.GAME` (consistency). |
+  | `PlayerDataStore.java` | `flush()` now calls `dataDirectory.mkdirs()` before writing; logs ERROR if creation fails. |
+  | `config.json` (bundled) | Added `teleportation.backSettings` section. |
+
+---
+
+## Bugs Discovered — build.150 audit
+
+---
+
+- **`NeoEssentials.java` — `Thread.sleep(2000)` Called on Minecraft Server Main Thread**
+  *(Status: Fixed → v1.0.2.6+build.150)*
+
+  **Root cause**: Inside `GameEvents.onPlayerLoggedIn()`, when an admin first joins after server start and the config-split notification needs to be shown, the code called:
+  ```java
+  server.execute(() -> {
+      Thread.sleep(2000); // ← BLOCKS THE SERVER MAIN THREAD
+      player.sendSystemMessage(...);
+  });
+  ```
+  `server.execute()` submits work to the **Minecraft server tick thread** — the single thread that drives all game logic. Calling `Thread.sleep(2000)` inside that runnable pauses the tick thread for 2 full seconds, causing:
+  - A 2-second complete server freeze visible to all online players (rubber-banding, no block updates, etc.)
+  - `Can't keep up! Did the system time change, or is the server overloaded?` log warnings
+  - In worst case: watchdog timeout and crash if another thread monitors tick time
+
+  **Fix**: Moved the 2-second sleep to a dedicated daemon background thread (`NeoEssentials-AdminNotify`). Once the sleep completes, the message sending is marshalled back to the server thread via `server.execute()` — the same pattern used by `HologramScheduler` and `TablistManager` for safe server-thread callbacks.
+
+  | File | Change |
+  |---|---|
+  | `NeoEssentials.java` | Replaced `server.execute(() -> { Thread.sleep(2000); ... })` with a daemon thread that sleeps off-thread, then calls `server.execute()` only for the message sends. `InterruptedException` now correctly re-interrupts the thread instead of being silently swallowed. |
+
+---
+
+## Bugs Discovered — build.149 audit
+
+---
+
+- **EconomyManager — `lastActivityFile` Uses Raw Relative Path**
+  *(Status: Fixed → v1.0.2.6+build.149)*
+
+  **Root cause**: `lastActivityFile` was declared as `new File("neoessentials/balances_activity.json")` — a raw relative path resolved from the JVM working directory. The companion `balancesFile` on the very next line correctly used `ResourceUtil.getDataFile("balances.json")`.
+
+  **Effect**: On server hosts where the JVM working directory differs from the server root (Pterodactyl, AMP, etc.), `balances_activity.json` was created in or read from a different location than `balances.json`. This caused the inactive-account cleanup scheduler to never find any activity data and silently wipe all economy account balances it classified as "inactive".
+
+  **Fix**: Changed to `ResourceUtil.getDataFile("balances_activity.json")` to match `balancesFile`.
+
+  | File | Change |
+  |---|---|
+  | `EconomyManager.java` | `lastActivityFile` now uses `ResourceUtil.getDataFile("balances_activity.json")`. |
+
+---
+
+- **TeleportRequestManager — `sendTpaRequest()` Dead Code with Missing Safety Checks**
+  *(Status: Fixed → v1.0.2.6+build.149)*
+
+  **Root cause**: A second method `sendTpaRequest(ServerPlayer, ServerPlayer, boolean)` existed alongside `sendTeleportRequest()`. It was never called from anywhere in the codebase — all commands routed through `sendTeleportRequest()`.
+
+  **Effect**: The dead method duplicated the request logic but was missing three critical checks present in `sendTeleportRequest()`:
+  1. **Cooldown** — no `lastRequestTimestamps` check; a player could spam requests if `sendTpaRequest` were ever invoked.
+  2. **`allowMultipleRequests`** — no duplicate-request guard.
+  3. **tptoggle** — no check for whether the target had disabled incoming teleport requests.
+
+  If the method was ever called externally (e.g., by another mod or a future feature), all three protections would have been silently bypassed.
+
+  **Fix**: Removed `sendTpaRequest()` entirely. Also removed the five now-unused imports (`Component`, `MutableComponent`, `ChatFormatting`, `ClickEvent`, `HoverEvent`) that were only used by that method.
+
+  | File | Change |
+  |---|---|
+  | `TeleportRequestManager.java` | Removed dead `sendTpaRequest()` method and its unused imports. |
+
+---
+
+## Bugs Discovered — build.148 audit (historical)
+
+---
+
+- **BanManager — `isIPBanned()` Never Checked Expiry of Temp IP Bans**
+  *(Status: Fixed → v1.0.2.6+build.148)*
+
+  **Root cause**: `isIPBanned()` returned `ipBans.containsKey(ipAddress)` — a pure key existence check with no expiry logic, unlike `isPlayerBanned()` which correctly calls `ban.isExpired()`.
+  **Fix**: Replaced `containsKey` check with a full `isExpired()` check. If the ban is expired and auto-expire is enabled, the entry is removed from `ipBans` and `saveIPBans()` is called immediately.
+
+  | File | Change |
+  |---|---|
+  | `BanManager.java` | `isIPBanned()` now calls `ban.isExpired()`, removes stale entry, and `saveIPBans()` on auto-remove. |
+
+---
+
+- **BanManager — `saveIPBans()` / `loadIPBans()` Drop `expireTime` (Temp IP Bans Become Permanent After Restart)**
+  *(Status: N/A — already handled in current code)*
+
+  **Note**: On re-inspection of the live source, `saveIPBans()` already writes `expireTime` and `loadIPBans()` already reads it back with a null-safe fallback. No change required.
+
+---
+
+- **BanManager — `cleanupExpiredTempBans()` Never Cleans Expired IP Bans**
+  *(Status: Fixed → v1.0.2.6+build.148)*
+
+  **Root cause**: `cleanupExpiredTempBans()` iterated only `playerBans` and never touched `ipBans`. Expired temporary IP bans accumulated in memory and on disk until a manual unban was issued.
+
+  **Effect**: Memory leak over time; expired IP bans remained visible in `/ipbanlist`; `saveIPBans()` wrote expired entries back on unrelated save calls.
+
+  **Fix**: Added a second iterator loop over `ipBans` in `cleanupExpiredTempBans()`, mirroring the player-ban sweep. Calls `saveIPBans()` if any expired IP bans were removed.
+
+  | File | Change |
+  |---|---|
+  | `BanManager.java` | `cleanupExpiredTempBans()` now sweeps both `playerBans` and `ipBans`; logs separately for each type removed. |
+
+---
+
+- **MuteManager — No Persistence (All Mutes Lost on Server Restart)**
+  *(Status: N/A — already handled in current code)*
+
+  **Note**: On re-inspection of the live source, `MuteManager` already has a `load()`/`save()` pair backed by `ResourceUtil.getDataFile("moderation/mutes.json")`, with timed-mute expiry support and auto-remove on lookup. No change required.
+
+---
+
+- **IgnoreManager — No Persistence (All Ignores Lost on Server Restart)**
+  *(Status: N/A — already handled in current code)*
+
+  **Note**: On re-inspection, `IgnoreManager` already has `load()`/`save()` backed by `ResourceUtil.getDataFile("chat/ignore_lists.json")`. `cleanupPlayer()` is intentionally a no-op with an explanatory comment — ignore lists are designed to survive sessions. No change required.
+
+---
+
+- **PlayerJoinQuitHandler — New-Player Welcome Kit Blocked by Permission Check**
+  *(Status: N/A — already handled in current code)*
+
+  **Note**: The first-join kit path already bypasses `KitManager.giveKit()` entirely. It calls `kitManager.getKit(kitName)` to fetch the kit data, then iterates `starterKit.getItems()` and adds them directly to the player's inventory — no `canUseKit()` call, no permission check. No change required.
+
+---
+
+- **PlayerJoinQuitHandler — `first_joined.json` Uses Raw Relative Path**
+  *(Status: N/A — already handled in current code)*
+
+  **Note**: Line 61 already reads `com.zerog.neoessentials.util.ResourceUtil.getDataFile("first_joined.json")`. No change required.
+
+---
+
+- **LocalizationManager / LanguageCommand / MessageUtil — i18n Paths Use Raw `Paths.get()` / `new File()` Instead of `ResourceUtil`**
+  *(Status: Fixed → v1.0.2.6+build.151)* Three files in the i18n/commands/util layer hardcoded raw paths to `neoessentials/...` directories instead of routing through `ResourceUtil`:
+  - `LocalizationManager.java` — `langDirectory = Paths.get("neoessentials", "webdashboard", "lang")`
+  - `LanguageCommand.java` — two calls to `Paths.get("neoessentials", "languages", "templates", fileName)`
+  - `MessageUtil.java` — `new File("neoessentials/languages/custom/...")` in `loadCustomLanguageFile()` and `loadAllCustomLanguages()`
+
+  **Effect**: Same as other raw-path bugs — mismatched paths on hosts where the JVM working directory differs, plus `ResourceUtil.DATA_DIR` changes would be silently bypassed for the entire language/i18n subsystem.
+
+  **Fix**: Replaced all raw paths with `ResourceUtil.getDataPath()` / `ResourceUtil.getDataFile()`. Removed now-unused `Paths` imports from `LocalizationManager` and `LanguageCommand`. Added `ResourceUtil` import to `LocalizationManager` (same package in `MessageUtil`, no import needed).
+
+  | File | Change |
+  |---|---|
+  | `LocalizationManager.java` | `langDirectory` now uses `ResourceUtil.getDataPath("webdashboard/lang")` |
+  | `LanguageCommand.java` | `generateTemplate()` and `exportMissingKeys()` now use `ResourceUtil.getDataPath("languages/templates/...")` |
+  | `MessageUtil.java` | `loadCustomLanguageFile()` and `loadAllCustomLanguages()` now use `ResourceUtil.getDataFile("languages/custom/...")` |
+
+---
+
+- **TaskManager — Scheduler Paths Use Raw `Paths.get()` Instead of `ResourceUtil`**
+  *(Status: Fixed → v1.0.2.6+build.150)*
+
+  **Root cause**: `TASKS_DIR`, `TASKS_FILE`, and `HISTORY_FILE` were all initialised with hardcoded `Paths.get("neoessentials", "scheduler")` / `.resolve(...)` instead of the project-standard `ResourceUtil.getDataPath()`. Every other data-file path in the mod uses `ResourceUtil`; the scheduler was the sole outlier.
+
+  **Effect**: Path inconsistency — if `ResourceUtil.DATA_DIR` were ever changed, scheduler files would silently continue writing to the old location. Also defeats any future path-override mechanism built on top of `ResourceUtil`.
+
+  **Fix**: Replaced all three constants with `ResourceUtil.getDataPath("scheduler")`, `ResourceUtil.getDataPath("scheduler/tasks.json")`, and `ResourceUtil.getDataPath("scheduler/execution_history.json")`. Added `ResourceUtil` import; removed now-unused `Paths` import.
+
+  | File | Change |
+  |---|---|
+  | `TaskManager.java` | `TASKS_DIR`, `TASKS_FILE`, `HISTORY_FILE` now use `ResourceUtil.getDataPath()`. |
+
+---
+
+- **ShopManager / PlayerChatFormatManager — Runtime Data Stored in Config Directory**
+  *(Status: Fixed → v1.0.2.6+build.152)*
+
+  **Root cause**: Two managers stored player-generated runtime data using `ResourceUtil.getConfigPath()` / `getConfigFile()`, which resolves to `config/neoessentials/`. The `CONFIG_DIR` is explicitly intended for server configuration files (read-only after initial setup). Runtime data generated by player actions belongs in `DATA_DIR` (`neoessentials/`).
+
+  - `ShopManager.java` — `getDataFile()` returned `ResourceUtil.getConfigPath("shops.json")`. Shops are player-created at runtime with owner UUIDs, block positions, and chest links.
+  - `PlayerChatFormatManager.java` — Per-player chat format overrides (assigned via admin commands, keyed by UUID) were stored as `config/neoessentials/player_chat_formats.json`.
+
+  **Effect**: Player-created shops and custom chat formats would accumulate in `config/neoessentials/` rather than `neoessentials/`. On typical Minecraft hosting setups the `config/` directory is often excluded from world backups but not from mod config resets, meaning a config wipe could silently delete all player shops and chat format assignments.
+
+  **Fix**: Changed both to use `getDataPath()` / `getDataFile()` with appropriate subdirectories.
+
+  | File | Change |
+  |---|---|
+  | `ShopManager.java` | `getDataFile()` returns `ResourceUtil.getDataPath("shops.json")` |
+  | `PlayerChatFormatManager.java` | `getDataFile()` returns `ResourceUtil.getDataFile("chat/player_chat_formats.json")` |
+
+---
+
+- **ResourcePackManager — `Thread.sleep(1000)` Called on Server Main Thread at Player Login**
+  *(Status: Fixed → v1.0.2.6+build.153)*
+
+  **Root cause**: `onPlayerJoin()` submitted `server.execute(() -> { Thread.sleep(1000); sendResourcePack(player); })`. `server.execute()` enqueues work on the **Minecraft server tick thread** — the single thread that drives all game logic. Sleeping it for 1 second causes a complete server freeze for every player on login: rubber-banding, no block updates, `Can't keep up!` warnings, and potential watchdog crashes.
+
+  **Effect**: Every time a player joined the server, the server tick thread was suspended for 1 second. With multiple concurrent logins, pauses stacked. Same root-cause as the previously fixed `NeoEssentials.java` admin-notify sleep.
+
+  **Fix**: Moved the 1-second sleep to a dedicated daemon background thread (`NeoEssentials-ResourcePackDelay`). Once the sleep completes, the `sendResourcePack()` call is marshalled back to the server tick thread via `server.execute()`.
+
+  | File | Change |
+  |---|---|
+  | `ResourcePackManager.java` | `onPlayerJoin()` no longer calls `Thread.sleep` on the server tick thread; sleep moved to a daemon background thread. |
+

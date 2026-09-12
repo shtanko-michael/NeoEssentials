@@ -6,6 +6,8 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.zerog.neoessentials.api.permissions.PermissionAPI;
 import com.zerog.neoessentials.config.ConfigManager;
+import com.zerog.neoessentials.logging.LogCategory;
+import com.zerog.neoessentials.logging.NeoLog;
 import com.zerog.neoessentials.teleportation.HomeManager;
 import com.zerog.neoessentials.util.MessageUtil;
 import net.minecraft.commands.CommandSourceStack;
@@ -13,6 +15,10 @@ import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
+
+import net.neoforged.fml.ModList;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.UUID;
@@ -27,6 +33,17 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 
 public class HomeCommands {
+    private static final Logger LOGGER = LoggerFactory.getLogger(HomeCommands.class);
+
+    /**
+     * Known mod IDs that register conflicting home-related commands.
+     * If any of these are loaded, short aliases are skipped to avoid
+     * Brigadier node-merge conflicts.
+     */
+    private static final String[] CONFLICTING_HOME_MODS = {
+        "ftbessentials", "ftb_essentials", "essentials"
+    };
+
     // Track pending delete confirmations: player UUID -> home name
     private static final Map<UUID, String> pendingDeleteConfirmations = new ConcurrentHashMap<>();
     
@@ -45,10 +62,7 @@ public class HomeCommands {
         if (context.getSource().getEntity() instanceof ServerPlayer player) {
             HomeManager homeManager = HomeManager.getInstance();
             java.util.List<String> homeNames = homeManager.getHomeNames(player);
-            // Debug logging for home suggestions
-            if (com.zerog.neoessentials.config.ConfigManager.isDebugModeEnabled()) {
-                System.out.println("[DEBUG] Home suggestions for " + player.getName().getString() + ": " + homeNames);
-            }
+            NeoLog.debug(LOGGER, LogCategory.COMMANDS, "Home suggestions for {}: {}", player.getName().getString(), homeNames);
             return SharedSuggestionProvider.suggest(homeNames, builder);
         }
         return builder.buildFuture();
@@ -56,7 +70,10 @@ public class HomeCommands {
     
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         ConfigManager config = ConfigManager.getInstance();
-        
+
+        // Detect conflicting mods and warn the operator once at startup
+        detectHomeCommandConflicts();
+
         // Only register if teleportation module is enabled
         if (config.isTeleportationEnabled()) {
             // Register individual commands based on their command settings
@@ -76,16 +93,66 @@ public class HomeCommands {
                 registerRenameHomeCommand(dispatcher);
             }
         }
+        NeoLog.debug(LOGGER, LogCategory.COMMANDS, "Home command family registered (teleportation enabled: {})", config.isTeleportationEnabled());
     }
     
+    /**
+     * Checks whether any known conflicting mod is present and logs a clear
+     * startup warning so operators know why some home aliases are skipped.
+     */
+    private static void detectHomeCommandConflicts() {
+        for (String modId : CONFLICTING_HOME_MODS) {
+            if (ModList.get().isLoaded(modId)) {
+                NeoLog.warn(LOGGER, LogCategory.COMMANDS, "╔══════════════════════════════════════════════════════════════╗");
+                NeoLog.warn(LOGGER, LogCategory.COMMANDS, "║  HOME COMMAND CONFLICT DETECTED                              ║");
+                NeoLog.warn(LOGGER, LogCategory.COMMANDS, "║  Mod '{}' also registers /home, /sethome and              ║", padRight(modId, 18));
+                NeoLog.warn(LOGGER, LogCategory.COMMANDS, "║  related commands. NeoEssentials will register its own       ║");
+                NeoLog.warn(LOGGER, LogCategory.COMMANDS, "║  home commands; short aliases (/h) will be skipped to        ║");
+                NeoLog.warn(LOGGER, LogCategory.COMMANDS, "║  avoid Brigadier node-merge issues.                          ║");
+                NeoLog.warn(LOGGER, LogCategory.COMMANDS, "║  To avoid conflicts, disable that mod's home commands or     ║");
+                NeoLog.warn(LOGGER, LogCategory.COMMANDS, "║  disable NeoEssentials teleportation in its config.          ║");
+                NeoLog.warn(LOGGER, LogCategory.COMMANDS, "╚══════════════════════════════════════════════════════════════╝");
+            }
+        }
+    }
+
+    /**
+     * Returns {@code true} when at least one known conflicting home-command
+     * mod is present, so that optional short aliases can be suppressed.
+     */
+    private static boolean hasConflictingHomeMod() {
+        for (String modId : CONFLICTING_HOME_MODS) {
+            if (ModList.get().isLoaded(modId)) return true;
+        }
+        return false;
+    }
+
+    /** Right-pad a string to exactly {@code width} characters for log alignment. */
+    private static String padRight(String s, int width) {
+        if (s == null) s = "";
+        return s.length() >= width ? s.substring(0, width) : s + " ".repeat(width - s.length());
+    }
+
+    /**
+     * Checks if a top-level command is already registered in the dispatcher by any mod.
+     * Used to avoid registering optional aliases that would create Brigadier merge issues.
+     */
+    private static boolean isCommandRegistered(CommandDispatcher<CommandSourceStack> dispatcher, String name) {
+        return dispatcher.getRoot().getChild(name) != null;
+    }
+
     /**
      * Register /home [name] command
      */
     private static void registerHomeCommand(CommandDispatcher<CommandSourceStack> dispatcher) {
-        // Register main command
+        // Register main command — NeoEssentials always owns /home regardless of other mods
         registerHomeCommandWithName(dispatcher, "home");
-        // Register alias
-        registerHomeCommandWithName(dispatcher, "h");
+        // Register /h alias only when no conflicting mod is active AND the alias is free
+        if (!hasConflictingHomeMod() && !isCommandRegistered(dispatcher, "h")) {
+            registerHomeCommandWithName(dispatcher, "h");
+        } else if (hasConflictingHomeMod()) {
+            NeoLog.info(LOGGER, LogCategory.COMMANDS, "Skipping /h alias for /home — conflicting mod detected");
+        }
     }
     
     private static void registerHomeCommandWithName(CommandDispatcher<CommandSourceStack> dispatcher, String commandName) {
@@ -113,7 +180,10 @@ public class HomeCommands {
      */
     private static void registerSetHomeCommand(CommandDispatcher<CommandSourceStack> dispatcher) {
         registerSetHomeCommandWithName(dispatcher, "sethome");
-        registerSetHomeCommandWithName(dispatcher, "createhome");
+        // Skip /createhome alias when conflicting mod is active or alias already taken
+        if (!hasConflictingHomeMod() && !isCommandRegistered(dispatcher, "createhome")) {
+            registerSetHomeCommandWithName(dispatcher, "createhome");
+        }
     }
     
     private static void registerSetHomeCommandWithName(CommandDispatcher<CommandSourceStack> dispatcher, String commandName) {
@@ -128,14 +198,17 @@ public class HomeCommands {
                 }
                 return false; // Console can't use homes
             })
+            // confirm/deny are top-level literals so Brigadier never confuses them with
+            // the <name> argument.  The home name is retrieved from the server-side pending
+            // map — it never travels through the command string.
+            .then(Commands.literal("confirm")
+                .executes(HomeCommands::executeSetHomeConfirm)
+            )
+            .then(Commands.literal("deny")
+                .executes(HomeCommands::executeSetHomeDeny)
+            )
             .then(Commands.argument("name", StringArgumentType.word())
                 .executes(HomeCommands::executeSetHome)
-                .then(Commands.literal("confirm")
-                    .executes(HomeCommands::executeSetHomeConfirm)
-                )
-                .then(Commands.literal("deny")
-                    .executes(HomeCommands::executeSetHomeDeny)
-                )
             )
         );
     }
@@ -145,9 +218,17 @@ public class HomeCommands {
      */
     private static void registerDelHomeCommand(CommandDispatcher<CommandSourceStack> dispatcher) {
         registerDelHomeCommandWithName(dispatcher, "delhome");
-        registerDelHomeCommandWithName(dispatcher, "deletehome");
-        registerDelHomeCommandWithName(dispatcher, "removehome");
-        registerDelHomeCommandWithName(dispatcher, "rhome");
+        // Skip optional aliases when a conflicting mod is active or the alias is already claimed
+        // /deletehome is common in other mods; check before registering
+        if (!isCommandRegistered(dispatcher, "deletehome")) {
+            registerDelHomeCommandWithName(dispatcher, "deletehome");
+        }
+        if (!hasConflictingHomeMod() && !isCommandRegistered(dispatcher, "removehome")) {
+            registerDelHomeCommandWithName(dispatcher, "removehome");
+        }
+        if (!hasConflictingHomeMod() && !isCommandRegistered(dispatcher, "rhome")) {
+            registerDelHomeCommandWithName(dispatcher, "rhome");
+        }
     }
     
     private static void registerDelHomeCommandWithName(CommandDispatcher<CommandSourceStack> dispatcher, String commandName) {
@@ -162,15 +243,16 @@ public class HomeCommands {
                 }
                 return false; // Console can't use homes
             })
+            // confirm/deny are top-level literals — home name comes from the pending map.
+            .then(Commands.literal("confirm")
+                .executes(HomeCommands::executeDelHomeConfirm)
+            )
+            .then(Commands.literal("deny")
+                .executes(HomeCommands::executeDelHomeDeny)
+            )
             .then(Commands.argument("name", StringArgumentType.word())
                 .suggests(HOME_SUGGESTIONS)
                 .executes(HomeCommands::executeDelHome)
-                .then(Commands.literal("confirm")
-                    .executes(HomeCommands::executeDelHomeConfirm)
-                )
-                .then(Commands.literal("deny")
-                    .executes(HomeCommands::executeDelHomeDeny)
-                )
             )
         );
     }
@@ -286,6 +368,7 @@ public class HomeCommands {
                 return 0;
             }
             pendingSetHomeConfirmations.put(player.getUUID(), homeName);
+            // Confirm/deny buttons run top-level commands — home name is held server-side.
             player.sendSystemMessage(MessageUtil.homeConfirmComponent(
                 homeName,
                 MessageUtil.localize("commands.neoessentials.home.confirm.action_overwrite"),
@@ -304,7 +387,7 @@ public class HomeCommands {
     }
 
     /**
-     * Execute /sethome <name> confirm
+     * Execute /sethome confirm  (home name read from the server-side pending map)
      */
     private static int executeSetHomeConfirm(CommandContext<CommandSourceStack> context) {
         ServerPlayer player = (ServerPlayer) context.getSource().getEntity();
@@ -312,11 +395,11 @@ public class HomeCommands {
             context.getSource().sendFailure(MessageUtil.error("commands.neoessentials.command.player_only"));
             return 0;
         }
-        String homeName = StringArgumentType.getString(context, "name");
         HomeManager homeManager = HomeManager.getInstance();
-        String pending = pendingSetHomeConfirmations.get(player.getUUID());
-        if (pending == null || !pending.equals(homeName)) {
-            player.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.home.no_pending_overwrite", homeName));
+        // Read the home name from the pending map — it is NOT passed through the command string.
+        String homeName = pendingSetHomeConfirmations.get(player.getUUID());
+        if (homeName == null) {
+            player.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.home.no_pending_overwrite_generic"));
             return 0;
         }
         pendingSetHomeConfirmations.remove(player.getUUID());
@@ -332,7 +415,7 @@ public class HomeCommands {
     }
 
     /**
-     * Execute /sethome <name> deny
+     * Execute /sethome deny  (home name read from the server-side pending map)
      */
     private static int executeSetHomeDeny(CommandContext<CommandSourceStack> context) {
         ServerPlayer player = (ServerPlayer) context.getSource().getEntity();
@@ -340,14 +423,12 @@ public class HomeCommands {
             context.getSource().sendFailure(MessageUtil.error("commands.neoessentials.command.player_only"));
             return 0;
         }
-        String homeName = StringArgumentType.getString(context, "name");
-        String pending = pendingSetHomeConfirmations.get(player.getUUID());
-        if (pending != null && pending.equals(homeName)) {
-            pendingSetHomeConfirmations.remove(player.getUUID());
+        String homeName = pendingSetHomeConfirmations.remove(player.getUUID());
+        if (homeName != null) {
             player.sendSystemMessage(MessageUtil.info("commands.neoessentials.teleport.home.overwrite_cancelled", homeName));
             return 1;
         }
-        player.sendSystemMessage(MessageUtil.warning("commands.neoessentials.teleport.home.no_pending_overwrite", homeName));
+        player.sendSystemMessage(MessageUtil.warning("commands.neoessentials.teleport.home.no_pending_overwrite_generic"));
         return 0;
     }
 
@@ -370,6 +451,7 @@ public class HomeCommands {
                 return 0;
             }
             pendingDeleteConfirmations.put(player.getUUID(), homeName);
+            // Confirm/deny buttons run top-level commands — home name is held server-side.
             player.sendSystemMessage(MessageUtil.homeConfirmComponent(
                 homeName,
                 MessageUtil.localize("commands.neoessentials.home.confirm.action_delete"),
@@ -387,7 +469,7 @@ public class HomeCommands {
     }
 
     /**
-     * Execute /delhome <name> confirm
+     * Execute /delhome confirm  (home name read from the server-side pending map)
      */
     private static int executeDelHomeConfirm(CommandContext<CommandSourceStack> context) {
         ServerPlayer player = (ServerPlayer) context.getSource().getEntity();
@@ -395,23 +477,18 @@ public class HomeCommands {
             context.getSource().sendFailure(MessageUtil.error("commands.neoessentials.command.player_only"));
             return 0;
         }
-        String homeName = StringArgumentType.getString(context, "name");
         HomeManager homeManager = HomeManager.getInstance();
         ConfigManager config = ConfigManager.getInstance();
-        // Guard: Only allow a single confirm, do not allow repeated confirm arguments
-        String pending = pendingDeleteConfirmations.get(player.getUUID());
         if (!config.isRequireConfirmationForDeleteEnabled()) {
             player.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.home.delete_no_confirm_required"));
             return 0;
         }
-        if (pending == null || !pending.equals(homeName)) {
-            player.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.home.no_pending_delete", homeName));
-            // Always clear any accidental stacking
-            pendingDeleteConfirmations.remove(player.getUUID());
+        // Read the home name from the pending map — it is NOT passed through the command string.
+        String homeName = pendingDeleteConfirmations.remove(player.getUUID());
+        if (homeName == null) {
+            player.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.home.no_pending_delete_generic"));
             return 0;
         }
-        // Remove pending confirmation before attempting deletion to prevent stacking
-        pendingDeleteConfirmations.remove(player.getUUID());
         boolean success = homeManager.deleteHome(player, homeName);
         if (success) {
             player.sendSystemMessage(MessageUtil.success("commands.neoessentials.teleport.home.delete_success", homeName));
@@ -438,21 +515,19 @@ public class HomeCommands {
         return 1;
     }
 
-    // Add handler for /delhome <name> deny
+    // Add handler for /delhome deny  (home name read from the server-side pending map)
     private static int executeDelHomeDeny(CommandContext<CommandSourceStack> context) {
         ServerPlayer player = (ServerPlayer) context.getSource().getEntity();
         if (player == null) {
             context.getSource().sendFailure(MessageUtil.error("commands.neoessentials.command.player_only"));
             return 0;
         }
-        String homeName = StringArgumentType.getString(context, "name");
-        String pending = pendingDeleteConfirmations.get(player.getUUID());
-        if (pending != null && pending.equals(homeName)) {
-            pendingDeleteConfirmations.remove(player.getUUID());
+        String homeName = pendingDeleteConfirmations.remove(player.getUUID());
+        if (homeName != null) {
             player.sendSystemMessage(MessageUtil.info("commands.neoessentials.teleport.home.delete_cancelled", homeName));
             return 1;
         }
-        player.sendSystemMessage(MessageUtil.warning("commands.neoessentials.teleport.home.no_pending_delete", homeName));
+        player.sendSystemMessage(MessageUtil.warning("commands.neoessentials.teleport.home.no_pending_delete_generic"));
         return 0;
     }
 
@@ -464,7 +539,7 @@ public class HomeCommands {
             .requires(src -> src.getPlayer() == null
                 || PermissionAPI.hasPermission(src.getPlayer().getUUID(), PERMISSION_RENAMEHOME))
             // /renamehome <old> <new>
-            .then(Commands.argument("oldname", StringArgumentType.word())
+            .then(Commands.argument("oldname", StringArgumentType.word()).suggests(HOME_SUGGESTIONS)
                 .then(Commands.argument("newname", StringArgumentType.word())
                     .executes(ctx -> executeRenameHome(ctx,
                         StringArgumentType.getString(ctx, "oldname"),
