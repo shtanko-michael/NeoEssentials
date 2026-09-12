@@ -126,7 +126,7 @@ public class ItemCustomisationCommands {
         boolean cur = tpToggleState.getOrDefault(target.getUUID(), true);
         boolean newState = enable != null ? enable : !cur;
         tpToggleState.put(target.getUUID(), newState);
-        String label = newState ? "§aenabled" : "§cdisabled";
+        String label = MessageUtil.enabledState(newState);
         boolean isOther = src.getPlayer() == null || !src.getPlayer().getUUID().equals(target.getUUID());
         if (isOther) {
             src.sendSuccess(() -> MessageUtil.success("commands.neoessentials.tptoggle.other",

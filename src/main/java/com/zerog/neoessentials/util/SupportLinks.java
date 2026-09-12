@@ -48,9 +48,7 @@ public final class SupportLinks {
     /** Clickable in-game chat message for {@link #queueGeneralHelpNotice()} — same three links
      *  as {@link #chatMessage()}, worded for "just checking in" rather than "something broke". */
     private static Component generalHelpChatMessage() {
-        MutableComponent msg = Component.literal("[NE] ")
-            .withStyle(ChatFormatting.GOLD)
-            .append(Component.literal("Found a bug, or have a question? ")
+        MutableComponent msg = withModPrefix(Component.literal("Found a bug, or have a question? ")
                 .withStyle(ChatFormatting.YELLOW));
         msg.append(link("[Support]", SUPPORT_URL));
         msg.append(Component.literal(" "));
@@ -82,9 +80,7 @@ public final class SupportLinks {
 
     /** Clickable in-game chat message shown to the first admin joining after a detected problem. */
     public static Component chatMessage() {
-        MutableComponent msg = Component.literal("[NE] ")
-            .withStyle(ChatFormatting.GOLD)
-            .append(Component.literal("NeoEssentials ran into a problem on startup — need help? ")
+        MutableComponent msg = withModPrefix(Component.literal("NeoEssentials ran into a problem on startup — need help? ")
                 .withStyle(ChatFormatting.YELLOW));
         msg.append(link("[Support]", SUPPORT_URL));
         msg.append(Component.literal(" "));
@@ -92,6 +88,14 @@ public final class SupportLinks {
         msg.append(Component.literal(" "));
         msg.append(link("[GitHub]", GITHUB_URL));
         return msg;
+    }
+
+    private static MutableComponent withModPrefix(MutableComponent body) {
+        String prefix = MessageUtil.tagPrefix();
+        if (prefix.isEmpty()) {
+            return body;
+        }
+        return ChatComponentUtil.parseColorCodes(prefix).copy().append(body);
     }
 
     private static Component link(String label, String url) {

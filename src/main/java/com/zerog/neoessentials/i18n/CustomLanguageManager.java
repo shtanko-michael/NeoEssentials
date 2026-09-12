@@ -483,9 +483,20 @@ public class CustomLanguageManager {
                             diskLang = gson.fromJson(reader, type);
                         }
                         if (jarLang != null && diskLang != null) {
+                            Map<String, String> enUs = loadBaseTranslations();
                             boolean updated = false;
                             for (Map.Entry<String, String> entry : jarLang.entrySet()) {
                                 if (!diskLang.containsKey(entry.getKey())) {
+                                    diskLang.put(entry.getKey(), entry.getValue());
+                                    updated = true;
+                                } else if (MessageUtil.FORCE_REFRESH_KEYS.contains(entry.getKey())
+                                        && !entry.getValue().equals(diskLang.get(entry.getKey()))) {
+                                    diskLang.put(entry.getKey(), entry.getValue());
+                                    updated = true;
+                                } else if (MessageUtil.shouldReplaceEnglishFallback(
+                                        diskLang.get(entry.getKey()),
+                                        enUs != null ? enUs.get(entry.getKey()) : null,
+                                        entry.getValue())) {
                                     diskLang.put(entry.getKey(), entry.getValue());
                                     updated = true;
                                 }
@@ -722,6 +733,7 @@ public class CustomLanguageManager {
         // same broken value back, forever, since a "regenerate" always finds the key already
         // present and defers to it.
         Map<String, String> merged = new LinkedHashMap<>(jarVersion);
+        Map<String, String> enUs = "en_us".equals(languageCode) ? jarVersion : loadBaseTranslations();
         int newKeys = 0;
         int forceRefreshed = 0;
         for (Map.Entry<String, String> e : jarVersion.entrySet()) {
@@ -732,6 +744,12 @@ public class CustomLanguageManager {
                     forceRefreshed++;
                 }
                 // merged already holds the JAR value from the initial copy above — leave it.
+            } else if (MessageUtil.shouldReplaceEnglishFallback(
+                    existing.get(e.getKey()),
+                    enUs != null ? enUs.get(e.getKey()) : null,
+                    e.getValue())) {
+                forceRefreshed++;
+                // keep JAR translation; disk still had the English fallback.
             } else {
                 merged.put(e.getKey(), existing.get(e.getKey())); // keep user value
             }

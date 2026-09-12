@@ -48,7 +48,7 @@ public class MessageUtil {
     
     // Language version tracking - increment when translations change
     private static final String LANG_VERSION_KEY = "_langVersion";
-    private static final int CURRENT_LANG_VERSION = 25; // v25 — admin_notice.header (combined admin-notices block)
+    private static final int CURRENT_LANG_VERSION = 26; // v26 — replace English fallbacks with real translations
 
     /**
      * Keys with a confirmed VALUE bug (wrong/missing {n} argument, argument-order swap, etc.)
@@ -100,8 +100,30 @@ public class MessageUtil {
         "commands.neoessentials.teleport.request.already_sent",
         "commands.neoessentials.realname.partial_matches_header",
         "commands.neoessentials.whois.session_time",
-        "commands.neoessentials.seen.current_location"
+        "commands.neoessentials.seen.current_location",
+        "commands.neoessentials.util.home_action_confirm_hover",
+        "commands.neoessentials.util.home_action_deny_hover",
+        "commands.neoessentials.util.home_action_confirm_prefix",
+        "commands.neoessentials.util.home_action_confirm_suffix"
     );
+
+    /**
+     * True when the on-disk value is still the English JAR fallback and {@code translated}
+     * is a real translation of that key. Safe to overwrite: the operator never customized
+     * this string, it was copied from en_us because the language file had no entry yet.
+     */
+    public static boolean shouldReplaceEnglishFallback(String onDisk, String english, String translated) {
+        if (onDisk == null || english == null || translated == null) return false;
+        if (translated.equals(english)) return false;
+        return onDisk.equals(english);
+    }
+
+    /** Localized on/off label for interpolation into other messages. */
+    public static String enabledState(boolean enabled) {
+        return localize(enabled
+            ? "commands.neoessentials.general.enabled"
+            : "commands.neoessentials.general.disabled");
+    }
 
     /**
      * Returns the configured server language code, e.g. "fr_fr".
@@ -202,6 +224,8 @@ public class MessageUtil {
                     }
                     // Build merge source: configured language + en_us fallback for missing keys
                     Map<String, String> mergeSource = buildJarTranslationsWithFallback(langCode);
+                    Map<String, String> enUs = loadJarTranslations("en_us");
+                    Map<String, String> langJar = "en_us".equals(langCode) ? null : loadJarTranslations(langCode);
                     if (mergeSource != null) {
                         int added = 0;
                         int updated = 0;
@@ -219,6 +243,15 @@ public class MessageUtil {
                                         && legacyNamedPattern.matcher(serverVal).find()
                                         && e.getValue().contains("{0}")) {
                                     finalTranslations.put(e.getKey(), e.getValue());
+                                    updated++;
+                                } else if (langJar != null && enUs != null
+                                        && shouldReplaceEnglishFallback(
+                                            serverVal,
+                                            enUs.get(e.getKey()),
+                                            langJar.get(e.getKey()))) {
+                                    // Disk still holds the English fallback copied on an earlier boot
+                                    // when this key was missing from the language JAR.
+                                    finalTranslations.put(e.getKey(), langJar.get(e.getKey()));
                                     updated++;
                                 }
                             }
@@ -255,6 +288,7 @@ public class MessageUtil {
                 // deployed file is in.
                 if (!preserveCustom) {
                     Map<String, String> jarTranslations = loadJarTranslations(langCode);
+                    Map<String, String> enUs = "en_us".equals(langCode) ? null : loadJarTranslations("en_us");
                     if (jarTranslations != null) {
                         boolean forceChanged = false;
                         for (String key : FORCE_REFRESH_KEYS) {
@@ -262,6 +296,24 @@ public class MessageUtil {
                             if (jarVal != null && !jarVal.equals(finalTranslations.get(key))) {
                                 finalTranslations.put(key, jarVal);
                                 forceChanged = true;
+                            }
+                        }
+                        if (enUs != null) {
+                            int fallbackReplaced = 0;
+                            for (Map.Entry<String, String> e : jarTranslations.entrySet()) {
+                                if (shouldReplaceEnglishFallback(
+                                        finalTranslations.get(e.getKey()),
+                                        enUs.get(e.getKey()),
+                                        e.getValue())) {
+                                    finalTranslations.put(e.getKey(), e.getValue());
+                                    forceChanged = true;
+                                    fallbackReplaced++;
+                                }
+                            }
+                            if (fallbackReplaced > 0) {
+                                NeoLog.info(LOGGER, LogCategory.GENERAL,
+                                    "NeoEssentials: replaced {} English-fallback values in '{}' with '{}' translations.",
+                                    fallbackReplaced, serverLangFile.getName(), langCode);
                             }
                         }
                         if (forceChanged) {
@@ -736,13 +788,25 @@ public class MessageUtil {
     }
 
     /**
-     * Short branded tag prefixed onto every success/error/warning/info command-feedback
-     * message so players can tell at a glance which mod a message came from, especially on
-     * servers running several plugins/mods with similarly-colored chat output. Plain "§"
-     * codes (not routed through coloredText()) — same convention as every localized template,
-     * which the client's text renderer already honors for raw literal Component text.
+     * Prefix for command-feedback (success/error/warning/info) and admin notices.
+     * Reads {@code chat.modMessagePrefix} live so {@code /neoe reload} applies immediately.
+     * Empty string (shipped default) hides the tag.
      */
-    private static final String TAG_PREFIX = "§8[§bNE§8] §r";
+    public static String tagPrefix() {
+        try {
+            String prefix = com.zerog.neoessentials.config.ConfigManager.getModMessagePrefix();
+            return prefix != null ? prefix : "";
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    /**
+     * Parse a raw {@code &}/{@code §}-coded string with {@link #tagPrefix()} prepended.
+     */
+    public static Component prefixedLiteral(String text) {
+        return com.zerog.neoessentials.util.ChatComponentUtil.parseColorCodes(tagPrefix() + text);
+    }
 
     /**
      * Create a Component from a localized message (standard approach)
@@ -766,7 +830,7 @@ public class MessageUtil {
      */
     public static Component success(String key, Object... args) {
         return com.zerog.neoessentials.util.ChatComponentUtil.parseColorCodes(
-            TAG_PREFIX + com.zerog.neoessentials.chat.RichTextFormatter.resolveDynamicTags(localize(key, args)),
+            tagPrefix() + com.zerog.neoessentials.chat.RichTextFormatter.resolveDynamicTags(localize(key, args)),
             Style.EMPTY.withColor(TextColor.fromRgb(0x55FF55)));
     }
 
@@ -775,7 +839,7 @@ public class MessageUtil {
      */
     public static Component error(String key, Object... args) {
         return com.zerog.neoessentials.util.ChatComponentUtil.parseColorCodes(
-            TAG_PREFIX + com.zerog.neoessentials.chat.RichTextFormatter.resolveDynamicTags(localize(key, args)),
+            tagPrefix() + com.zerog.neoessentials.chat.RichTextFormatter.resolveDynamicTags(localize(key, args)),
             Style.EMPTY.withColor(TextColor.fromRgb(0xFF5555)));
     }
 
@@ -784,7 +848,7 @@ public class MessageUtil {
      */
     public static Component warning(String key, Object... args) {
         return com.zerog.neoessentials.util.ChatComponentUtil.parseColorCodes(
-            TAG_PREFIX + com.zerog.neoessentials.chat.RichTextFormatter.resolveDynamicTags(localize(key, args)),
+            tagPrefix() + com.zerog.neoessentials.chat.RichTextFormatter.resolveDynamicTags(localize(key, args)),
             Style.EMPTY.withColor(TextColor.fromRgb(0xFFFF55)));
     }
 
@@ -793,7 +857,7 @@ public class MessageUtil {
      */
     public static Component info(String key, Object... args) {
         return com.zerog.neoessentials.util.ChatComponentUtil.parseColorCodes(
-            TAG_PREFIX + com.zerog.neoessentials.chat.RichTextFormatter.resolveDynamicTags(localize(key, args)),
+            tagPrefix() + com.zerog.neoessentials.chat.RichTextFormatter.resolveDynamicTags(localize(key, args)),
             Style.EMPTY.withColor(TextColor.fromRgb(0x55FFFF)));
     }
 
@@ -1030,18 +1094,18 @@ public class MessageUtil {
      * Create a clickable confirmation message for home actions
      */
     public static MutableComponent homeConfirmComponent(String homeName, String action, String commandConfirm, String commandDeny) {
-        MutableComponent confirm = Component.literal(localize("commands.neoessentials.util.confirm_button"))
+        MutableComponent confirm = Component.literal(localize("commands.neoessentials.home.confirm.button_confirm"))
             .withStyle(style -> style.withColor(TextColor.fromRgb(0x4CAF50)))
             .withStyle(style -> style.withClickEvent(com.zerog.neoessentials.util.ClickEventCompat.create(ClickEvent.Action.RUN_COMMAND, commandConfirm)))
-            .withStyle(style -> style.withHoverEvent(com.zerog.neoessentials.util.HoverEventCompat.create(HoverEvent.Action.SHOW_TEXT, Component.literal(localize("commands.neoessentials.util.home_action_confirm_hover", action, homeName)))));
-        MutableComponent deny = Component.literal(localize("commands.neoessentials.util.deny_button"))
+            .withStyle(style -> style.withHoverEvent(com.zerog.neoessentials.util.HoverEventCompat.create(HoverEvent.Action.SHOW_TEXT, Component.literal(localize("commands.neoessentials.home.confirm.hover_confirm", action, homeName)))));
+        MutableComponent deny = Component.literal(localize("commands.neoessentials.home.confirm.button_deny"))
             .withStyle(style -> style.withColor(TextColor.fromRgb(0xF44336)))
             .withStyle(style -> style.withClickEvent(com.zerog.neoessentials.util.ClickEventCompat.create(ClickEvent.Action.RUN_COMMAND, commandDeny)))
-            .withStyle(style -> style.withHoverEvent(com.zerog.neoessentials.util.HoverEventCompat.create(HoverEvent.Action.SHOW_TEXT, Component.literal(localize("commands.neoessentials.util.home_action_deny_hover", action, homeName)))));
+            .withStyle(style -> style.withHoverEvent(com.zerog.neoessentials.util.HoverEventCompat.create(HoverEvent.Action.SHOW_TEXT, Component.literal(localize("commands.neoessentials.home.confirm.hover_cancel", action, homeName)))));
         return Component.literal("")
-            .append(Component.literal(localize("commands.neoessentials.util.home_action_confirm_prefix", action)).withStyle(style -> style.withColor(TextColor.fromRgb(0xFFD600))))
+            .append(Component.literal(localize("commands.neoessentials.home.confirm.question_prefix", action)).withStyle(style -> style.withColor(TextColor.fromRgb(0xFFD600))))
             .append(Component.literal(homeName).withStyle(style -> style.withColor(TextColor.fromRgb(0xFF9800))))
-            .append(Component.literal(localize("commands.neoessentials.util.home_action_confirm_suffix")))
+            .append(Component.literal(localize("commands.neoessentials.home.confirm.question_suffix")))
             .append(confirm)
             .append(Component.literal(" "))
             .append(deny);

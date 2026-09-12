@@ -51,7 +51,7 @@
     },
     "delhome": {
       "syntax": "/delhome <name> | /delhome confirm | /delhome deny",
-      "notes": "При homeSettings.requireConfirmationForDelete (по умолчанию true) удаление идёт только через /delhome confirm. Клики в чате шлют не ту строку — см. knownIssues. Алиасы removehome и rhome пропускаются при конфликте с FTB/Essentials."
+      "notes": "При homeSettings.requireConfirmationForDelete (по умолчанию true) удаление идёт только через /delhome confirm. Кнопки в чате шлют /delhome confirm и /delhome deny — имя читается из pending-map. Алиасы removehome и rhome пропускаются при конфликте с FTB/Essentials."
     },
     "deletehome": {
       "syntax": "/deletehome <name> | /deletehome confirm | /deletehome deny",
@@ -239,7 +239,7 @@
     {
       "title": "Лимит домов: config, meta, ноды, подтверждение",
       "body": "`getMaxHomesForPlayer`: если задана meta `neoessentials.homes` (LuckPerms `meta set neoessentials.homes N`) — берётся она (в т.ч. ниже config, 0 = домов нельзя). Иначе max(config `maxHomes`=5, высшая выданная `neoessentials.home.1`…`neoessentials.home.100`). Перезапись существующего имени лимит не ест, но всегда идёт через pending + `/sethome confirm`. Удаление — только если `requireConfirmationForDelete`, через `/delhome confirm`. Кулдаун set/delete не тратится на отклонённую попытку. `allowCrossDimensionHomes: false` запрещает sethome вне overworld (проверка `worldName.contains(\"overworld\")`).",
-      "fix": "Поднять лимит группе — meta или neoessentials.home.10, не правьте maxHomes, если часть игроков должна остаться на пяти. Подтверждение с клика в чате сломано: пишите `/sethome confirm` / `/delhome confirm` руками."
+      "fix": "Поднять лимит группе — meta или neoessentials.home.10, не правьте maxHomes, если часть игроков должна остаться на пяти. Перезапись: клик [Подтвердить] шлёт /sethome confirm; удаление — /delhome confirm."
     },
     {
       "title": "Player warps — отдельные хранилище и лимит, общий телепорт",
@@ -272,11 +272,6 @@
       "title": "/pwarp не телепортирует на player warp",
       "body": "Issues_Discovered.md: «Player Warps having issues». В `PwarpCommands.executePwarp` после успешного `getPlayerWarp` вызывается `warpManager.teleportToWarp(player, warpName)` — поиск в карте **серверных** варпов. Комментарий в коде: «Reuse teleport logic (may need adjustment)». Метод `teleportToPlayerWarp` существует и помечен admin-only (OP 4), но ни /pwarp, ни /warp его не вызывают. Симптом: /setpwarp shop + /pwarps показывают shop, /pwarp shop отвечает not_found либо уносит на серверный /warp shop, если имя совпало.",
       "fix": "Не используйте pwarp как публичные точки игроков. Нужен рабочий телепорт — /home или /warp. Починить: в executePwarp вызывать телепорт по TeleportLocation из getPlayerWarp, не teleportToWarp."
-    },
-    {
-      "title": "Кнопки confirm/deny у домов шлют команду, которой нет в дереве",
-      "body": "`/sethome` и `/delhome` регистрируют литералы confirm и deny на корне, имя читают из pending-map. Сообщение с кнопками собирается как `/sethome <name> confirm` и `/delhome <name> confirm` (RUN_COMMAND). У узла `<name>` нет ребёнка confirm: Brigadier не принимает третий токен. Клик «подтвердить» не выполняет overwrite/delete. Вручную `/sethome confirm` и `/delhome confirm` работают.",
-      "fix": "Пишите в чат `/sethome confirm` или `/delhome confirm` без имени. Клики в жёлтой строке игнорируйте, пока не поправят homeConfirmComponent."
     },
     {
       "title": "Два разных /tpo в одном литерале",

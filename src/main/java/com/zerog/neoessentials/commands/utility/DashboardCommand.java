@@ -132,7 +132,7 @@ public class DashboardCommand {
             ConfigManager.setExternalDashboardToken(dashboardToken);
             ConfigManager.setExternalDashboardKeyId(keyId != null ? keyId : "");
 
-            source.sendSuccess(() -> Component.literal("§8[§bNE§8] §r§aPaired with dashboard at " + normalizedUrl + "."), false);
+            source.sendSuccess(() -> MessageUtil.prefixedLiteral("§aPaired with dashboard at " + normalizedUrl + "."), false);
             source.sendSuccess(() -> Component.literal("§7Both directions are now connected — the dashboard can control this server, and this server can push account-sync events to it."), false);
             NeoLog.debug(LOGGER, LogCategory.COMMANDS, "Dashboard pairing completed with {}", normalizedUrl);
             return 1;
@@ -159,7 +159,7 @@ public class DashboardCommand {
         }
         ConfigManager.clearExternalDashboard();
 
-        source.sendSuccess(() -> Component.literal("§8[§bNE§8] §r§aUnpaired from " + url + " and revoked its API key."), false);
+        source.sendSuccess(() -> MessageUtil.prefixedLiteral("§aUnpaired from " + url + " and revoked its API key."), false);
         return 1;
     }
 

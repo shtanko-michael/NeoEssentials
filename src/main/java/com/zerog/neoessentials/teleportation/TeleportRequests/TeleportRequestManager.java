@@ -228,7 +228,9 @@ private final ScheduledExecutorService scheduler = Executors.newScheduledThreadP
         }, requestTimeoutSeconds, TimeUnit.SECONDS);
 
         // Send messages
-        String typeText = type == TeleportRequestType.TPA ? "to teleport to you" : "you to teleport to them";
+        String typeText = type == TeleportRequestType.TPA
+            ? MessageUtil.localize("commands.neoessentials.teleport.request.type_to_you")
+            : MessageUtil.localize("commands.neoessentials.teleport.request.type_you_to_them");
         requester.sendSystemMessage(MessageUtil.success("commands.neoessentials.teleport.request.sent",
                                                         target.getName().getString(), requestTimeoutSeconds));
 

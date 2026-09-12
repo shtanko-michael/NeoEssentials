@@ -1,7 +1,7 @@
 {
   // DO NOT MODIFY: Used by NeoEssentials for automatic config updates.
   // Changing this may cause config corruption.
-  "_configVersion": 49,
+  "_configVersion": 54,
 
   /* ================================================================
      NeoEssentials — Main Configuration  (config.json)
@@ -971,6 +971,11 @@
      Chat  —  formatting, filters, channels, private messaging
   ---------------------------------------------------------------- */
   "chat": {
+
+    // Prefix prepended to NeoEssentials command-feedback (success/error/warning/info)
+    // and in-game admin support notices. Accepts & and § color codes. Empty string hides
+    // the tag. Restore the old branded tag with "&8[&bNE&8] &r". Not the player chat-format.
+    "modMessagePrefix": "",
 
     /* Chat format template.
      * Use a single string for a global format, or an object for per-group/world formats.

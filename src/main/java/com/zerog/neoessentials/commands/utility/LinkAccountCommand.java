@@ -5,6 +5,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.zerog.neoessentials.logging.LogCategory;
 import com.zerog.neoessentials.logging.NeoLog;
+import com.zerog.neoessentials.util.MessageUtil;
 import com.zerog.neoessentials.webdashboard.security.MinecraftAccountLinkManager;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -48,7 +49,7 @@ public class LinkAccountCommand {
             .completeLink(code.toUpperCase(), player.getUUID(), player.getName().getString());
 
         if (result.success) {
-            source.sendSuccess(() -> Component.literal("§8[§bNE§8] §r§aYour dashboard account is now linked to this Minecraft account."), false);
+            source.sendSuccess(() -> MessageUtil.prefixedLiteral("§aYour dashboard account is now linked to this Minecraft account."), false);
             NeoLog.debug(LOGGER, LogCategory.COMMANDS, "/linkaccount succeeded for {}", player.getName().getString());
             return 1;
         } else {

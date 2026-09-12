@@ -50,7 +50,8 @@ public class MsgCommand {
                         try {
                             target = EntityArgument.getPlayer(ctx, "target");
                         } catch (com.mojang.brigadier.exceptions.CommandSyntaxException e) {
-                            source.sendFailure(MessageUtil.error("commands.neoessentials.msg.not_found", "Unknown"));
+                            source.sendFailure(MessageUtil.error("commands.neoessentials.msg.not_found",
+                                MessageUtil.localize("commands.neoessentials.general.unknown")));
                             return 0;
                         }
                         String message = StringArgumentType.getString(ctx, "message");

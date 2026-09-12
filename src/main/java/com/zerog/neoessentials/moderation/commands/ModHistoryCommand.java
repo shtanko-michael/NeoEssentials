@@ -73,7 +73,7 @@ public class ModHistoryCommand {
         List<WarnEntry> warns = WarnManager.getInstance().getWarnings(playerId);
 
         int total = bans.size() + mutes.size() + kicks.size() + warns.size();
-        source.sendSuccess(() -> Component.literal("§8[§bNE§8] §r§fModeration history for §e" + playerName
+        source.sendSuccess(() -> MessageUtil.prefixedLiteral("§fModeration history for §e" + playerName
             + "§f (§7" + total + " total record" + (total == 1 ? "" : "s") + "§f):"), false);
 
         if (total == 0) {

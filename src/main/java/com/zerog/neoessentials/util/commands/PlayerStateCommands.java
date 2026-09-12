@@ -103,7 +103,7 @@ public class PlayerStateCommands {
         if (!newState) target.getAbilities().flying = false;
         target.onUpdateAbilities();
         target.fallDistance = 0f;
-        String state = newState ? "§aenabled" : "§cdisabled";
+        String state = MessageUtil.enabledState(newState);
         if (isOtherTarget(src, target)) {
             src.sendSuccess(() -> MessageUtil.success("commands.neoessentials.fly.other", target.getName().getString(), state), true);
             target.sendSystemMessage(MessageUtil.info("commands.neoessentials.fly.self", state));
@@ -146,7 +146,7 @@ public class PlayerStateCommands {
             target.setHealth(target.getMaxHealth());
             target.getFoodData().setFoodLevel(20);
         }
-        String state = newState ? "§aenabled" : "§cdisabled";
+        String state = MessageUtil.enabledState(newState);
         if (isOtherTarget(src, target)) {
             src.sendSuccess(() -> MessageUtil.success("commands.neoessentials.god.other", target.getName().getString(), state), true);
             target.sendSystemMessage(MessageUtil.info("commands.neoessentials.god.self", state));

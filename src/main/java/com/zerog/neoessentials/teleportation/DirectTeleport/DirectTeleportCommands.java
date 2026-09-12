@@ -260,7 +260,7 @@ public class DirectTeleportCommands {
             ServerPlayer player = ctx.getSource().getPlayerOrException();
             net.minecraft.server.MinecraftServer server = player.getServer();
             if (server == null) {
-                ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.teleport.admin.failed", "Server not available"));
+                ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.teleport.admin.server_unavailable"));
                 return 0;
             }
             Collection<ServerPlayer> players = server.getPlayerList().getPlayers();
@@ -330,7 +330,7 @@ public class DirectTeleportCommands {
             }
             BlockPos teleportPos = hit.getBlockPos().above();
             if (!level.getBlockState(teleportPos).isAir() || !level.getBlockState(teleportPos.above()).isAir()) {
-                ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.teleport.misc.jumpto_failed", "Target location unsafe"));
+                ctx.getSource().sendFailure(MessageUtil.error("commands.neoessentials.teleport.misc.jumpto_unsafe"));
                 return 0;
             }
             // Save back location BEFORE teleporting so /back works

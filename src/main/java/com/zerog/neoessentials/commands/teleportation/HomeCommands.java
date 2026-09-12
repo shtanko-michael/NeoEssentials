@@ -127,6 +127,11 @@ public class HomeCommands {
         return false;
     }
 
+    /** Literal name of the command the player typed (`sethome`, `delhome`, an alias). */
+    private static String commandRoot(CommandContext<CommandSourceStack> context) {
+        return context.getNodes().get(0).getNode().getName();
+    }
+
     /** Right-pad a string to exactly {@code width} characters for log alignment. */
     private static String padRight(String s, int width) {
         if (s == null) s = "";
@@ -368,12 +373,13 @@ public class HomeCommands {
                 return 0;
             }
             pendingSetHomeConfirmations.put(player.getUUID(), homeName);
-            // Confirm/deny buttons run top-level commands — home name is held server-side.
+            // Confirm/deny are root literals; the home name stays in the pending map.
+            String root = commandRoot(context);
             player.sendSystemMessage(MessageUtil.homeConfirmComponent(
                 homeName,
                 MessageUtil.localize("commands.neoessentials.home.confirm.action_overwrite"),
-                "/sethome " + homeName + " confirm",
-                "/sethome " + homeName + " deny"
+                "/" + root + " confirm",
+                "/" + root + " deny"
             ));
             return 0;
         }
@@ -451,12 +457,13 @@ public class HomeCommands {
                 return 0;
             }
             pendingDeleteConfirmations.put(player.getUUID(), homeName);
-            // Confirm/deny buttons run top-level commands — home name is held server-side.
+            // Confirm/deny are root literals; the home name stays in the pending map.
+            String root = commandRoot(context);
             player.sendSystemMessage(MessageUtil.homeConfirmComponent(
                 homeName,
                 MessageUtil.localize("commands.neoessentials.home.confirm.action_delete"),
-                "/delhome " + homeName + " confirm",
-                "/delhome " + homeName + " deny"
+                "/" + root + " confirm",
+                "/" + root + " deny"
             ));
             return 0;
         }

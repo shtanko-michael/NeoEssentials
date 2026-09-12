@@ -143,6 +143,14 @@
         "/ac То же самое другим алиасом"
       ],
       "result": "/nick требует neoessentials.nick; с & нужен nick.color, иначе no_color_permission. Ник пишется в nickname_data.json и уходит в tab-list пакетом. В шаблоне чата {neoessentials_displayname} — это ник без префикса группы; префикс только через {prefix}. /helpop (и /ac, /amsg) шлёт блок стаффу с neoessentials.helpop.receive: время, ник, мир+координаты, текст, кнопки ответа. Это не ChannelCommands: в staff-канал уходит только /staff или префикс @ из chat.channels.staff. Если стаффа онлайн нет — helpop.no_staff, запрос всё равно логируется в консоль только когда staffCount > 0."
+    },
+    {
+      "title": "Префикс ответов команд (chat.modMessagePrefix)",
+      "goal": "Убрать или вернуть тег [NE] у success/error/warning/info мода, не трогая формат игроковского чата.",
+      "commands": [
+        "/neoe reload"
+      ],
+      "result": "Ключ `chat.modMessagePrefix` в `config.json`; при сплите — `config/neoessentials/chat.json`. Пустая строка в поставке — префикса нет. Вернуть старый тег: `\"&8[&bNE&8] &r\"` (нужен пробел в конце, иначе текст прилипнет). `MessageUtil.success/error/warning/info`, `SupportLinks` и несколько команд с `prefixedLiteral` читают ключ с диска на каждое сообщение, `/neoe reload` достаточно. `MessageUtil.component()` и шаблон `chat-format` этот ключ не читают."
     }
   ],
   "edgeCases": [

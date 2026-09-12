@@ -6,6 +6,7 @@ import com.mojang.brigadier.context.CommandContext;
 import com.zerog.neoessentials.logging.LogCategory;
 import com.zerog.neoessentials.logging.NeoLog;
 import com.zerog.neoessentials.util.ChatComponentUtil;
+import com.zerog.neoessentials.util.MessageUtil;
 import com.zerog.neoessentials.util.PermissionValidator;
 import com.zerog.neoessentials.webdashboard.security.ApiKeyManager;
 import com.zerog.neoessentials.webdashboard.security.User;
@@ -70,7 +71,7 @@ public class ApiKeyCommand {
             label, role, source.getTextName());
         String token = ApiKeyManager.getInstance().createKey(label, role);
 
-        source.sendSuccess(() -> Component.literal("§8[§bNE§8] §r§aAPI key '" + label + "' created (role: " + role + ")."), false);
+        source.sendSuccess(() -> MessageUtil.prefixedLiteral("§aAPI key '" + label + "' created (role: " + role + ")."), false);
         source.sendSuccess(() -> Component.literal("§7Token (copy this now — it will §cnever be shown again§7):"), false);
         source.sendSuccess(() -> ChatComponentUtil.createCopyableSecret("API key '" + label + "'", token), false);
         source.sendSuccess(() -> Component.literal("§7Give this to the external dashboard's server config, never to a browser/frontend."), false);
@@ -87,7 +88,7 @@ public class ApiKeyCommand {
             return 1;
         }
 
-        source.sendSuccess(() -> Component.literal("§8[§bNE§8] §r§f" + keys.size() + " API key(s):"), false);
+        source.sendSuccess(() -> MessageUtil.prefixedLiteral("§f" + keys.size() + " API key(s):"), false);
         for (var k : keys) {
             String lastUsed = k.lastUsedAt == 0 ? "never" : TIME_FORMAT.format(Instant.ofEpochMilli(k.lastUsedAt));
             source.sendSuccess(() -> Component.literal(String.format("§7  [%s] §f%s §7— role: %s, %s, last used: %s",
@@ -102,7 +103,7 @@ public class ApiKeyCommand {
 
         if (removed) {
             NeoLog.debug(LOGGER, LogCategory.WEB_DASHBOARD, "API key '{}' revoked (requested by {})", id, source.getTextName());
-            source.sendSuccess(() -> Component.literal("§8[§bNE§8] §r§aAPI key '" + id + "' revoked."), false);
+            source.sendSuccess(() -> MessageUtil.prefixedLiteral("§aAPI key '" + id + "' revoked."), false);
             return 1;
         } else {
             source.sendFailure(Component.literal("§cNo API key found with id '" + id + "'. Use /apikey list to see valid ids."));

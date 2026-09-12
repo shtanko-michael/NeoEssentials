@@ -125,7 +125,8 @@ public class ConfigSplitter {
                                         //       per-subsystem toggles (see
                                         //       ConfigManager.migrateLoggingCategories)
         put("commands.json",      1);
-        put("chat.json",          3);  // v3 — added "webhookUrl" alongside "channelId" in every
+        put("chat.json",          4);  // v4 — added chat.modMessagePrefix (empty = no [NE] tag)
+        // v3 — added "webhookUrl" alongside "channelId" in every
                                         //       chat.channels.*.discord block — read by the new
                                         //       no-bot-required generic webhook relay adapter.
         // v2 — chat-format/formatTemplates defaults patched to use
@@ -162,7 +163,7 @@ public class ConfigSplitter {
      * Current monolithic config version — must stay in sync with the JAR's config.json
      * {@code _configVersion} field and {@code ConfigManager.EXPECTED_CONFIG_VERSIONS}.
      */
-    private static final int CURRENT_MAIN_VERSION = 49;
+    private static final int CURRENT_MAIN_VERSION = 54;
 
     // ── Marker ────────────────────────────────────────────────────────────────
 

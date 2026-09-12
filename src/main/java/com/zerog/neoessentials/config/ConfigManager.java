@@ -1501,7 +1501,9 @@ public class ConfigManager {
 
     // Expected versions for each config file (must match the version in JAR resources)
     private static final java.util.Map<String, Integer> EXPECTED_CONFIG_VERSIONS = new java.util.HashMap<>() {{
-        put(MAIN_CONFIG, 53);          // v53 — added per-event-type nested objects
+        put(MAIN_CONFIG, 54);          // v54 — added chat.modMessagePrefix (empty = no [NE] tag
+                                        //       on command-feedback / admin notices)
+        // v53 — added per-event-type nested objects
                                         //       (join/leave/mute/afk/advancement) under
                                         //       discordEmbedTemplate, each with its own
                                         //       enabled/description/color/showTimestamp — SDLink's
@@ -2724,6 +2726,27 @@ public class ConfigManager {
             }
         }
         return true; // Default to enabled for security
+    }
+
+    /**
+     * Prefix prepended to command-feedback and in-game admin notices ({@code chat.modMessagePrefix}).
+     * Empty string (the shipped default) hides the tag. Color codes with {@code &} or {@code §}.
+     * Read live so {@code /neoe reload} applies without a restart.
+     */
+    public static String getModMessagePrefix() {
+        try {
+            JsonObject config = getInstance().getConfig(MAIN_CONFIG);
+            if (config.has("chat")) {
+                JsonObject chat = config.getAsJsonObject("chat");
+                if (chat.has("modMessagePrefix") && !chat.get("modMessagePrefix").isJsonNull()) {
+                    String val = chat.get("modMessagePrefix").getAsString();
+                    return val != null ? val : "";
+                }
+            }
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.CONFIG, "Invalid value for chat.modMessagePrefix, using empty prefix", e);
+        }
+        return "";
     }
 
     /**
