@@ -1,8 +1,9 @@
-# NeoEssentials
+# Farmstead NeoEssentials
 
 [![Documentation](https://img.shields.io/badge/%D0%94%D0%BE%D0%BA%D1%83%D0%BC%D0%B5%D0%BD%D1%82%D0%B0%D1%86%D0%B8%D1%8F-shtanko--michael.github.io-0f7b5f?style=for-the-badge&logo=readthedocs&logoColor=white)](https://shtanko-michael.github.io/NeoEssentials/)
 
-> **📖 [Полный справочник: команды, права, конфигурация и разбор проблем](https://shtanko-michael.github.io/NeoEssentials/)**  
+> **📖 [Справочник Farmstead NeoEssentials: команды, права, конфигурация и разбор проблем](https://shtanko-michael.github.io/NeoEssentials/)**  
+> Форк для сервера [Farmstead Minecraft](https://farmsteadminecraft.online), не апстрим ZeroG.
 > Таблицы команд, узлов прав и ключей конфигурации генерируются из исходников при каждой
 > сборке, поэтому не расходятся с кодом. Поиск по всему справочнику — клавиша `/`.
 

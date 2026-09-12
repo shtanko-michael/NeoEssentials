@@ -29,6 +29,7 @@ import io
 import json
 import os
 import re
+import shutil
 import sys
 from urllib.parse import quote
 
@@ -444,13 +445,22 @@ def page(rel, title, subtitle, body, toc=None, active='', wide=False, extra_head
             toc_html = ('<aside class="toc"><p class="toc-title">На этой странице</p>'
                         '<ul>%s</ul></aside>' % items)
 
+    site_name = 'Farmstead NeoEssentials'
+    doc_title = title if title == site_name else '%s · %s' % (title, site_name)
+
     return """<!doctype html>
 <html lang="ru" data-base="{up}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{title} · NeoEssentials</title>
+<title>{doc_title}</title>
 <meta name="description" content="{subtitle}">
+<meta name="theme-color" content="#16352c">
+<meta property="og:title" content="{doc_title}">
+<meta property="og:description" content="{subtitle}">
+<meta property="og:image" content="https://shtanko-michael.github.io/NeoEssentials/assets/farmstead.png">
+<link rel="icon" type="image/png" href="{up}assets/farmstead.png">
+<link rel="apple-touch-icon" href="{up}assets/farmstead.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap">
@@ -460,7 +470,13 @@ def page(rel, title, subtitle, body, toc=None, active='', wide=False, extra_head
 <body{bodycls}>
 <a class="skip" href="#main">К содержимому</a>
 <header class="topbar">
-  <a class="brand" href="{up}index.html"><span class="brand-mark"></span>NeoEssentials</a>
+  <a class="brand" href="{up}index.html" aria-label="Farmstead NeoEssentials">
+    <img class="brand-logo" src="{up}assets/farmstead.png" alt="" width="36" height="36">
+    <span class="brand-text">
+      <span class="brand-kicker">Farmstead</span>
+      <span class="brand-name">NeoEssentials</span>
+    </span>
+  </a>
   <div class="search-wrap">
     <input id="q" type="search" placeholder="Поиск по командам, правам и конфигу…" autocomplete="off" spellcheck="false">
     <div id="results" hidden></div>
@@ -478,10 +494,17 @@ def page(rel, title, subtitle, body, toc=None, active='', wide=False, extra_head
     <div class="prose">{body}</div>
   </main>
 </div>
+<footer class="site-foot">
+  <p><strong>Farmstead NeoEssentials</strong> — форк мода для сервера
+  <a href="https://farmsteadminecraft.online">Farmstead Minecraft</a>.
+  Не путать с апстримом
+  <a href="https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials">ZeroG NeoEssentials</a>.</p>
+</footer>
 <script src="{up}assets/site.js" defer></script>
 </body>
 </html>
-""".format(up=up, title=e(title), subtitle=e(subtitle), body=body, nav=''.join(nav_html),
+""".format(up=up, title=e(title), doc_title=e(doc_title), subtitle=e(subtitle),
+           body=body, nav=''.join(nav_html),
            toc=toc_html, extra_head=extra_head,
            bodycls=' class="wide"' if wide else '')
 
@@ -602,11 +625,11 @@ def examples_block(items):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Build
+# Catalog (shared by the HTML site and the GitHub wiki)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def build(out_dir, base):
-    global NAV
+def load_catalog():
+    """Extract commands, permissions, config and attach curated system membership."""
     WARNINGS.clear()
     print('Extracting from source…')
     commands = extract_commands()
@@ -625,15 +648,10 @@ def build(out_dir, base):
     curated_cmds = read_json(os.path.join(CONTENT_DIR, 'commands.json'), {}) or {}
     systems = meta.get('systems', [])
     wiki_pages = wiki_page_map(systems)
-    # Per-command syntax/notes are authored next to the system they belong to; fold them into
-    # one lookup so every renderer sees the same curated detail.
     for sysdef in systems:
         for name, detail in (read_content_json(sysdef['slug']).get('commandDetails') or {}).items():
             curated_cmds.setdefault(name.lstrip('/').lower(), detail)
 
-    # Assign every command and node to a system. Membership comes from the curated content
-    # file first (authored per system), then from permission prefixes, so a command whose node
-    # does not follow its system's naming still lands on the right page.
     assigned = set()
     for sysdef in systems:
         sysdef['_commands'] = []
@@ -660,10 +678,47 @@ def build(out_dir, base):
         sysdef['_nodes'] = [n for n in sorted(nodes.values(), key=lambda x: x['node'])
                             if prefixes and n['node'].startswith(prefixes)]
         sysdef['_commands'].sort(key=lambda c: c['name'])
+        sysdef['_wiki'] = wiki_page_name(sysdef)
 
     orphans = sorted(set(commands) - assigned)
     if orphans:
         print('  %d commands not claimed by any system (listed under «Прочее»)' % len(orphans))
+
+    return {
+        'commands': commands,
+        'nodes': nodes,
+        'lang_stats': lang_stats,
+        'configs': configs,
+        'systems': systems,
+        'curated_cmds': curated_cmds,
+        'orphans': orphans,
+        'wiki_pages': wiki_pages,
+    }
+
+
+def wiki_page_name(sysdef):
+    """GitHub wiki page title. Prefer the upstream wiki filename so URLs match ZeroG."""
+    doc = sysdef.get('upstreamDoc')
+    if doc:
+        return os.path.splitext(doc)[0]
+    return ''.join(part.capitalize() for part in sysdef['slug'].split('-'))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Build
+# ─────────────────────────────────────────────────────────────────────────────
+
+def build(out_dir, base):
+    global NAV
+    cat = load_catalog()
+    commands = cat['commands']
+    nodes = cat['nodes']
+    lang_stats = cat['lang_stats']
+    configs = cat['configs']
+    systems = cat['systems']
+    curated_cmds = cat['curated_cmds']
+    orphans = cat['orphans']
+    wiki_pages = cat['wiki_pages']
 
     NAV = [
         {'title': 'Начало', 'items': [
@@ -701,8 +756,8 @@ def build(out_dir, base):
 
     intro = read_md_content('index.md')
     body = ('<section class="tiles">%s</section>' % tiles) + intro
-    write(out_dir, 'index.html', page(0, 'NeoEssentials',
-                                      'Документация мода: команды, права, конфигурация и разбор частых проблем.',
+    write(out_dir, 'index.html', page(0, 'Farmstead NeoEssentials',
+                                      'Справочник форка для сервера Farmstead Minecraft: команды, права, конфигурация и разбор проблем.',
                                       body, active='index'))
 
     # ---- quick start -------------------------------------------------------
@@ -879,12 +934,16 @@ def build(out_dir, base):
                b, toc, active='troubleshooting'))
 
     # ---- assets & search ---------------------------------------------------
-    for name in ('site.css', 'site.js'):
+    os.makedirs(os.path.join(out_dir, 'assets'), exist_ok=True)
+    for name in os.listdir(ASSETS_DIR):
         src = os.path.join(ASSETS_DIR, name)
-        if os.path.exists(src):
-            write(out_dir, 'assets/' + name, read(src))
+        if not os.path.isfile(src) or name.startswith('.'):
+            continue
+        dest = os.path.join(out_dir, 'assets', name)
+        if name.lower().endswith(('.png', '.ico', '.jpg', '.jpeg', '.webp', '.svg', '.gif')):
+            shutil.copy2(src, dest)
         else:
-            warn('missing asset ' + name)
+            write(out_dir, 'assets/' + name, read(src))
     write(out_dir, 'search.json', json.dumps(search, ensure_ascii=False))
     write(out_dir, '.nojekyll', '')
 
