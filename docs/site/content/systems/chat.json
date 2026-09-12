@@ -1,0 +1,212 @@
+{
+  "commands": [
+    "ac",
+    "amsg",
+    "chatformat",
+    "helpop",
+    "ignore",
+    "mail",
+    "message",
+    "msg",
+    "msgtoggle",
+    "nick",
+    "nickname",
+    "r",
+    "reply",
+    "socialspy",
+    "tell",
+    "unignore",
+    "w",
+    "whisper"
+  ],
+  "commandDetails": {
+    "msg": {
+      "syntax": "/msg <target> <message>",
+      "notes": "Brigadier регистрирует то же дерево ещё как /tell, /w, /message и /pm (последнего нет в реестре команд мода). <target> — EntityArgument.player(), только онлайн. Право проверяется в executes: neoessentials.chat.msg (в реестре у команды пустой node). Консоль и выключенный modules.chatEnabled / commands.msg отвечают ошибкой, дерево при этом всё равно висит. Себе писать нельзя. Если цель игнорирует отправителя — отказ, SocialSpy не срабатывает. Если у цели включён /msgtoggle — отказ, кроме OP 4 и neoessentials.chat.msgtoggle.bypass. Заглушённый отправитель тоже режется. LastMessageManager записывает пару только у получателя. Форматы: chat.messaging.msgFormatTo / msgFormatFrom, иначе lang."
+    },
+    "message": {
+      "syntax": "/message <target> <message>",
+      "notes": "Полная копия /msg: тот же registerCommand в MsgCommand.java, те же проверки neoessentials.chat.msg."
+    },
+    "tell": {
+      "syntax": "/tell <target> <message>",
+      "notes": "Полная копия /msg (ванила перекрывается тем же деревом)."
+    },
+    "w": {
+      "syntax": "/w <target> <message>",
+      "notes": "Полная копия /msg (ванила перекрывается тем же деревом)."
+    },
+    "whisper": {
+      "syntax": "/whisper <target> <message>",
+      "notes": "В NeoEssentials.java команда объявлена в реестре, но MsgCommand.register её не вызывает — литерала Commands.literal(\"whisper\") в исходниках нет. В автодополнении Brigadier её не будет, пока её не начнут регистрировать рядом с msg/tell/w/message/pm."
+    },
+    "reply": {
+      "syntax": "/reply <message>",
+      "notes": "То же дерево вешается на /r. Цель берётся из LastMessageManager: туда попадает только тот, кому написали, не отправитель исходящего /msg. Цель должна быть онлайн; выход обоих сторон чистит карту. Право neoessentials.chat.reply, плюс те же mute / ignore / msgtoggle, что у /msg. Форматы: chat.messaging.replyFormatTo / replyFormatFrom."
+    },
+    "r": {
+      "syntax": "/r <message>",
+      "notes": "Алиас /reply, тот же ReplyCommand."
+    },
+    "msgtoggle": {
+      "syntax": "/msgtoggle",
+      "notes": "Аргументов on|off нет — только переключатель. То же дерево: /togglemsg и /mt (их нет в реестре). Регистрируется только при chatEnabled и commands.msgtoggle. Право neoessentials.chat.msgtoggle, OP 4 обходит. Состояние в памяти MsgToggleManager, на диск не пишется."
+    },
+    "ignore": {
+      "syntax": "/ignore <target>",
+      "notes": "То же дерево: /block (в реестре нет). <target> только онлайн. Нельзя игнорировать себя. Право neoessentials.chat.ignore. Цель с neoessentials.chat.ignore.exempt не игнорируется (узел в PermissionRegistry не объявлен, проверка в коде есть). Повторный ignore того же ника — ошибка. Список — коллекция DataStore ignore_lists, ключ = ник в нижнем регистре, не UUID. Публичный чат IgnoreManager не фильтрует."
+    },
+    "unignore": {
+      "syntax": "/unignore <target>",
+      "notes": "То же дерево: /unblock. Право всё равно neoessentials.chat.ignore, не neoessentials.chat.unignore (тот узел в реестре есть, команда его не читает). Цель должна быть онлайн. Если ника нет в списке — ошибка."
+    },
+    "socialspy": {
+      "syntax": "/socialspy",
+      "notes": "Без on|off. То же дерево: /ss и /spy (в реестре нет). Право neoessentials.chat.socialspy. Состояние — ConcurrentHashMap в памяти, рестарт сбрасывает. Рассылка идёт только после успешного /msg|/reply; отправитель с neoessentials.chat.socialspy.exempt не мониторится. Формат: chat.messaging.socialspyFormat."
+    },
+    "chatformat": {
+      "syntax": "/chatformat set <player> <format> | clear <player> | check <player> | list | reload",
+      "notes": "Все ветки требуют neoessentials.chat.format.set (узла нет в PermissionRegistry). <player> — только онлайн. set/clear/check/reload пишут в коллекцию DataStore chat_formats; list печатает только тех онлайн-игроков, у кого override есть, хотя getCount() считает всех. Сообщения веток зашиты английским Component.literal, не lang. Дерево не регистрируется, если выключены chatEnabled или commands.chatformat."
+    },
+    "mail": {
+      "syntax": "/mail | /mail read [page] | /mail send <player> <message> | /mail sendtemp <player> <duration> <message> | /mail sendall <message> | /mail sendtempall <duration> <message> | /mail delete <id> | /mail clear [index|player [index]] | /mail clearall",
+      "notes": "Корневой /mail и read/delete — neoessentials.mail; send — neoessentials.mail.send; sendtemp — sendtemp; sendall/sendtempall — соответствующие admin-узлы; clear своё — neoessentials.mail.clear, чужое — clear.others; clearall — clearall. <player> в send — StringArgumentType.word() плюс profile cache, офлайн с известным UUID проходит. sendall рассылает только онлайн-списку. Ящик — config/neoessentials/mail_data.json, не DataStore. Лимит 100 писем, 1000 символов, 9 на страницу, глобальный rate limit 10/мин (mailsPerMinute в поставке нет)."
+    },
+    "nick": {
+      "syntax": "/nick | /nick <nickname> | /nick reset | /nick off",
+      "notes": "Право neoessentials.nick. Ник 3–16 символов без цветовых кодов, шаблон ^[a-zA-Z0-9_&§#]{1,32}$ — кириллица и пробелы не проходят. Цвета требуют neoessentials.nick.color. off/reset как литералы и как greedy-строка снимают ник. Хранение: config/neoessentials/nickname_data.json, не DataStore. Чужой ник — отдельная /setnick (neoessentials.nick.others), эта страница её не забирает."
+    },
+    "nickname": {
+      "syntax": "/nickname …",
+      "notes": "redirect на /nick, только если включены и commands.nick, и commands.nickname. Право то же: neoessentials.nick (в реестре у алиаса написано neoessentials.nickname — это выведенный node, Brigadier его не проверяет)."
+    },
+    "helpop": {
+      "syntax": "/helpop <message>",
+      "notes": "Без аргумента — usage. Право отправителя neoessentials.helpop; получают только онлайн с neoessentials.helpop.receive. Заглушённый игрок режется. Кнопки [Reply] подставляют /msg <ник> ; телепорт на координаты / к игроку — если есть neoessentials.teleport.admin.tp / tphere. Это не staff-канал: /ac и /amsg — алиасы helpop, а не ChannelCommands."
+    },
+    "ac": {
+      "syntax": "/ac <message>",
+      "notes": "Алиас /helpop (HelpopCommand), не переключатель канала. Канал staff в поставке — /staff."
+    },
+    "amsg": {
+      "syntax": "/amsg <message>",
+      "notes": "Алиас /helpop, не приватное сообщение и не канал."
+    }
+  },
+  "examples": [
+    {
+      "title": "Переписка /msg и ответ /r",
+      "goal": "Проверить, что личка доходит только двум игрокам и что /r отвечает именно тому, кто написал вам, а не тому, кому написали вы.",
+      "commands": [
+        "/msg Alex Привет, это проверка лички",
+        "/r Принял, пишу в ответ"
+      ],
+      "result": "У отправителя строка из chat.messaging.msgFormatTo (пустая строка в конфиге = lang commands.neoessentials.msg.format.to), у Alex — msgFormatFrom. LastMessageManager.setLastMessager вызывается только для цели: после первого /msg ответить /r может Alex, но не отправитель. Когда Alex выполняет /r, пара переворачивается — тогда /r заработает и у первого. Цель офлайн в момент /r даёт reply.target_offline и запись чистится."
+    },
+    {
+      "title": "Игнор лички и что видит SocialSpy",
+      "goal": "Убедиться, что ignore режет /msg до рассылки шпионам, но не прячет публичный чат и не фильтрует чужие ЛС у шпиона.",
+      "commands": [
+        "/ignore Steve",
+        "/socialspy",
+        "/msg Steve это не должно дойти"
+      ],
+      "result": "Steve игнорирует вас — /msg отвечает target_ignoring, broadcastSocialSpy не вызывается, шпионы пустую попытку не видят. Обратный /msg от Steve к вам тоже режется (isIgnoring(target, sender)). Публичный чат Steve по-прежнему виден: ChatHandler IgnoreManager не вызывает. Если третий игрок пишет не-игнорируемому, шпион с включённым /socialspy увидит строку socialspyFormat, даже если сам кого-то из пары игнорирует — рассылка шпионам ignore-списки не читает. Отправитель с neoessentials.chat.socialspy.exempt из мониторинга выпадает целиком."
+    },
+    {
+      "title": "Личный формат чата с градиентом",
+      "goal": "Выдать игроку формат выше group/world/default и понять, когда <gradient> реально красится, а когда теги вырезаются.",
+      "commands": [
+        "/chatformat set Steve <gradient:FFD700-FF8C00>[VIP]</gradient> &f{neoessentials_displayname}&7: &f{MESSAGE}",
+        "/chatformat check Steve",
+        "/chatformat list"
+      ],
+      "result": "set отвечает английской строкой «Set custom chat format for Steve.» и пишет коллекцию chat_formats. Приоритет: per-player → group:мир → group → world → default. Теги <gradient>/<rainbow>/<red>/<hover> в шаблоне проходят RichTextFormatter.preprocessTags только при chat.richText.enabled: true (по умолчанию false — теги снимаются, &-коды шаблона остаются). Кадры {animation:NAME} красятся раньше, через processAnimationFrameGradients, и переживают выключенный richText. /chatformat list печатает только онлайн-игроков с override; офлайн в count есть, в списке нет. Снять: /chatformat clear Steve."
+    },
+    {
+      "title": "Письмо офлайн-игроку и чтение",
+      "goal": "Почта должна дойти человеку, которого нет на сервере, и не потеряться после рестарта — она не в DataStore.",
+      "commands": [
+        "/mail send Steve Зайди, кит обновили",
+        "/mail",
+        "/mail read",
+        "/mail delete a1b2c3d4"
+      ],
+      "result": "send резолвит UUID через онлайн-список, иначе profile cache — «player not found» только если ника никогда не было. Steve офлайн: письма нет в чате, оно лежит в config/neoessentials/mail_data.json; при входе — login_notification с числом непрочитанных. /mail без аргументов — status (всего / непрочитанных). read помечает страницу прочитанной (9 писем) и сразу сохраняет файл. Клик по строке предлагает /mail delete <id> (короткие 8 hex). Если Steve вас игнорирует и он онлайн — send врёт «отправлено», в ящик ничего не кладётся; офлайн-игнор эту проверку пропускает."
+    },
+    {
+      "title": "Ник в чате и вызов стаффа через /helpop",
+      "goal": "Ник должен подставиться в {neoessentials_displayname}, а /ac не должен уводить сообщение в канал staff.",
+      "commands": [
+        "/nick &6Steve",
+        "/helpop Не могу зайти на варп spawn",
+        "/ac То же самое другим алиасом"
+      ],
+      "result": "/nick требует neoessentials.nick; с & нужен nick.color, иначе no_color_permission. Ник пишется в nickname_data.json и уходит в tab-list пакетом. В шаблоне чата {neoessentials_displayname} — это ник без префикса группы; префикс только через {prefix}. /helpop (и /ac, /amsg) шлёт блок стаффу с neoessentials.helpop.receive: время, ник, мир+координаты, текст, кнопки ответа. Это не ChannelCommands: в staff-канал уходит только /staff или префикс @ из chat.channels.staff. Если стаффа онлайн нет — helpop.no_staff, запрос всё равно логируется в консоль только когда staffCount > 0."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "Вентиль chat.richText.enabled (баг «игнора конфига» закрыт)",
+      "body": "Раньше preprocessTags красил `<red>`/`<bold>` даже при выключенном rich text, а путь без enableChatEnhancements вызывал processRichText по сырой строке. Сейчас при `chat.richText.enabled: false` (дефолт) `RichTextFormatter.preprocessTags` вызывает `stripAllRichTags`: снимаются gradient/rainbow/named-color/format/`<color:#>`/`<hover>`/`<click>`, `&`-коды шаблона остаются. При `true` теги конвертируются; `allowGradients`/`allowRainbow` (дефолт true) действуют только внутри этой ветки. Английская вики, что hover/click «не закрыты флагом», устарела.\n\nИсключение: `{animation:NAME}` прогоняется через `processAnimationFrameGradients` **до** вентиля — кадр из `animations.json` с `<gradient>` в чате красится даже при выключенном richText. Сообщение игрока дополнительно режется `restrictPlayerMessageColors`: без `neoessentials.chat.namedcolors` `<tag>` из текста игрока вырезаются ещё до вставки в `{MESSAGE}`. Узлы `neoessentials.chat.richtext` / `gradient` / `rainbow` нигде в пайплайне не читаются.",
+      "fix": "Градиенты в `chat-format` и `/chatformat set` включают `chat.richText.enabled: true`. Для анимаций в шаблоне этот флаг не обязателен. Игрокам для тегов в своём тексте выдавайте `neoessentials.chat.namedcolors`, не richtext."
+    },
+    {
+      "title": "Ignore против SocialSpy",
+      "body": "`/msg` и `/reply` вызывают `IgnoreManager.isIgnoring(target, sender)` и выходят с ошибкой **до** `ChatAPI.broadcastSocialSpy`. Попытка написать игнорирующему в SocialSpy не попадает. Обратно: `SocialSpyManager.broadcast` ignore-списки шпиона не смотрит — включённый `/socialspy` видит чужие успешные ЛС, даже если шпион игнорирует отправителя или получателя (себя и участников пары рассылка пропускает). Публичный чат ignore не фильтрует совсем: `ChatHandler.onServerChat` до `IgnoreManager` не доходит. Почта: игнор срабатывает только если цель **онлайн**; офлайн-письмо кладётся в ящик. `socialspy.exempt` на отправителе глушит мониторинг независимо от ignore.",
+      "fix": "Не обещайте игрокам, что `/ignore` скроет человека из обычного чата — только личка (и онлайн-почта). Шпионам для «не видеть игнорируемых» отдельного вентиля нет."
+    },
+    {
+      "title": "Почта живёт в mail_data.json, не в DataStore",
+      "body": "`MailCommand` пишет `config/neoessentials/mail_data.json` (atomic rename). `storage.type` (JSON/SQLite/MySQL) этот файл не переезжает — в отличие от `ignore_lists` и `chat_formats`. `/neoe reload` ящик не перечитывает: `loadMailData()` вызывается при регистрации команды. Глобальный счётчик `mailsThisMinute` общий на весь сервер, не per-player; ключа `mail.mailsPerMinute` в поставке нет, код смотрит несуществующий корневой объект `mail` и падает в дефолт 10. `sendall`/`sendtempall` итерируют только `getPlayers()` — офлайн-ящики не пополняются.",
+      "fix": "Бэкапьте `config/neoessentials/mail_data.json` отдельно от `neoessentials/store/`. Общей почты на сети через MySQL нет. Рассылку всем, включая офлайн, эта команда не умеет."
+    },
+    {
+      "title": "/r отвечает только на входящее",
+      "body": "`LastMessageManager.setLastMessager(recipient, sender)` пишется у цели /msg, не у отправителя. Карта в памяти, по никам в нижнем регистре; выход любого из пары чистит записи. Поэтому сразу после своего `/msg` `/r` у отправителя даёт `reply.no_target`, пока цель не ответит.",
+      "fix": "Нужен второй `/msg`, либо дождитесь ответа. Двустороннего «последний собеседник» нет."
+    },
+    {
+      "title": "Права, которые код проверяет, а PermissionRegistry не объявляет",
+      "body": "`neoessentials.chat.namedcolors`, `neoessentials.chat.format.set`, `neoessentials.chat.ignore.exempt`, `neoessentials.chat.socialspy.exempt` используются в ChatFormatter / ChatFormatCommand / IgnoreCommand / SocialSpyManager, но `PermissionRegistry.register(...)` для них нет — в таблице прав сайта и в `/permissions search` их не будет. Выдача через LuckPerms/FTB всё равно работает: `PermissionAPI.hasPermission` смотрит строку. Без внешней выдачи сработает OP-bypass (уровень 2), дефолтной группе узлы не раздаются. Наоборот, `neoessentials.chat.unignore` в реестре есть, а `/unignore` проверяет `neoessentials.chat.ignore`.",
+      "fix": "Выдавайте namedcolors/format.set/ignore.exempt/socialspy.exempt явно строкой. Для снятия игнора достаточно `neoessentials.chat.ignore`."
+    },
+    {
+      "title": "/msgtoggle и /socialspy без on|off, состояние не на диске",
+      "body": "Английская вики обещает `/msgtoggle [on|off]` и `/socialspy [on|off]`. В дереве только `.executes` без аргументов — каждый вызов инвертирует флаг. `MsgToggleManager` и `SocialSpyManager` держат имена в ConcurrentHashMap; рестарт сбрасывает оба. `/msgtoggle` не регистрируется, если выключены модуль чата или `commands.msgtoggle`; `/socialspy` и `/msg` регистрируются всегда и отказывают уже в executes.",
+      "fix": "Не документируйте аргументы on|off. После рестарта модераторы включают `/socialspy` снова. Обойти чужой toggle: OP 4 или `neoessentials.chat.msgtoggle.bypass`."
+    },
+    {
+      "title": "/chatformat list врёт составом, set не умеет офлайн",
+      "body": "`<player>` везде `EntityArgument.player()` — офлайн «not found». `list` после заголовка с `getCount()` (все UUID в store) печатает только онлайн. Сообщения веток — английский `Component.literal`, ключей lang нет. После ручной правки store нужен `/chatformat reload`, не `/neoe reload` (reload команды как раз вызывает `PlayerChatFormatManager.load()`).",
+      "fix": "Override офлайн-игроку — правка коллекции `chat_formats` + `/chatformat reload`. Не ориентируйтесь на list, пока люди офлайн."
+    },
+    {
+      "title": "Ник: латиница, длина, отдельный файл",
+      "body": "`VALID_NICK_PATTERN` пускает только `a-zA-Z0-9_&§#`. Кириллический ник — `invalid_format`. Длина без кодов 3–16, с кодами строка до 32. Занятость сравнивается по нижнему регистру без цветовых кодов. Файл `config/neoessentials/nickname_data.json` не едет в DataStore. `/nickname` — `redirect` на `nick`, без собственного дерева.",
+      "fix": "Цветной ник: сначала `neoessentials.nick.color`. Сменить чужой — `/setnick` (другая команда, `commands.setnick`)."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "/whisper есть в реестре и нет в Brigadier",
+      "body": "`registry.registerCommandWithPermission(\"whisper\", …)` попадает в инвентарь и в таблицу команд сайта, но `MsgCommand.register` вешает деревья только на `msg`, `tell`, `w`, `message`, `pm`. Литерала `whisper` нет — команда не выполняется и не автодополняется. `/pm` наоборот работает, но в реестре мода его нет.",
+      "fix": "Используйте `/msg` / `/tell` / `/w` / `/message`. Не обещайте `/whisper`, пока его не зарегистрируют в `MsgCommand`."
+    },
+    {
+      "title": "/ignore не скрывает публичный чат",
+      "body": "`IgnoreManager` вызывается из `/msg`, `/reply` и онлайн-ветки `/mail send`. `ChatHandler` при `ServerChatEvent` список игнора не читает — сообщения каналов (local/global/staff/team) игрок продолжает видеть. Команды `/ignorelist` нет: `getIgnoreList()` никуда не выведен.",
+      "fix": "Для «не видеть человека в чате» ignore не подходит. Снимать игнор можно только `/unignore` по онлайн-нику; забытый ник из DataStore руками."
+    },
+    {
+      "title": "/ac — это helpop, не admin-чат",
+      "body": "В комментарии HelpopCommand алиас назван «admin chat», в инвентаре — «Request help from staff». Реальная регистрация: те же `helpop`/`ac`/`amsg` → `sendHelpRequest`. Канал `staff` из `chat.channels` регистрирует `ChannelCommands` как `/staff` (алиасы `mod`, `admin`, `s`) и требует `neoessentials.chat.staff`.",
+      "fix": "Стафф-канал: `/staff` или префикс `@`. Вызов помощи: `/helpop`/`/ac`/`/amsg` и право `neoessentials.helpop.receive` у модераторов."
+    },
+    {
+      "title": "sendall почты не пишет офлайн-ящики",
+      "body": "Комментарий обещает broadcast «to all players», цикл идёт по `server.getPlayerList().getPlayers()`. Кто не в сети в эту секунду, письма не получит и при входе его не увидит. `clearall` наоборот чистит весь загруженный MAIL_BOX (файл целиком).",
+      "fix": "Массовую рассылку офлайн делайте внешним скриптом по `mail_data.json` на остановленном сервере или пишите каждому `/mail send`."
+    }
+  ]
+}

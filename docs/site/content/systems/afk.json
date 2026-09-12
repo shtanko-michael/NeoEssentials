@@ -1,0 +1,66 @@
+{
+  "commands": ["afk", "away"],
+  "commandDetails": {
+    "afk": {
+      "syntax": "/afk [<message>]",
+      "notes": "Только игрок. Право neoessentials.afk проверяется внутри executes, не в requires. <message> — greedyString, уходит в рассылку как причина. Без аргумента причина null. Команда молча отказывается, если выключен чат-модуль (isChatEnabled), commands.afk или устаревший ChatManager.isAfkEnabled(). В excludedCommands по умолчанию есть afk — сам /afk таймер бездействия не сбрасывает."
+    },
+    "away": {
+      "syntax": "/away [<message>]",
+      "notes": "Тот же registerAfkCommand, что /afk: отдельный литерал, не redirect. Флаг commands.away не читается — оба литерала смотрят на commands.afk. В дефолтном excludedCommands строки away нет."
+    }
+  },
+  "examples": [
+    {
+      "title": "Вручную уйти в АФК с причиной",
+      "goal": "Нужно пометить себя отошедшим и показать причину в рассылке, не ждать timeout.",
+      "commands": [
+        "/afk отошёл на 10 минут"
+      ],
+      "result": "Лично вам — now_afk. Если afk.broadcastOnAfk (или enableafkBroadcasts) включён, всем уходит afkMessage с `{player}` и указанной причиной. Повторный `/afk` снимает статус (no_longer_afk + returnMessage). Команда `/afk` есть в excludedCommands, поэтому обработчик команд не сбрасывает таймер и не снимает АФК до toggle."
+    },
+    {
+      "title": "Вернуться движением, а не командой",
+      "goal": "Проверить, что детектор движения снимает АФК сам.",
+      "commands": [
+        "/afk",
+        "/afk"
+      ],
+      "result": "Первый вызов ставит АФК. Дальше достаточно пройтись: `AfkMovementDetector` раз в 5 с сравнивает позицию/yaw/pitch с порогами `movementThreshold` (0.1) и `rotationThreshold` (5.0). Если `enableActivityTracking` и `trackMovement` включены, `updateActivity` снимает АФК и шлёт return-рассылку. Второй `/afk` в примере — ручной возврат, если двигаться не хотите. Покачивание головой на месте срабатывает, мелкий дрейф ниже порога — нет."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "Индикатор в таблисте берётся из tablist.json, не из afk",
+      "body": "`AfkTablistHandler` считает prefix/suffix из полей `AfkManager` (`enableTablistIndicator`, `tablistAfkPrefix`, `tablistAfkSuffix`), но `setTabListDisplayName` закомментирован — имя в списке он не меняет. Реальный суффикс рисует `TablistManager`: `tablist.json` → `showAfkIndicator` (по умолчанию true) и `afkSuffix` (по умолчанию ` &7[AFK]`). Ключей enableTablistIndicator / tablistAfkPrefix в секции `afk` конфига нет.",
+      "fix": "Индикатор настраивайте в `tablist.json`. Секция `afk` отвечает за timeout, kick, рассылки и детекторы, не за текст в списке игроков."
+    },
+    {
+      "title": "Кик: kickTimeout, exempt и предупреждение",
+      "body": "Проверка раз в 30 с. Кик включён, если `kickTimeout > 0` (секунды; есть совместимый `kickTimeoutMinutes`), либо явно `kickAfkPlayers: true`. Явный `kickAfkPlayers: false` глушит кик даже при timeout > 0. Если кик включили при timeout 0, код принудительно ставит 30 минут и пишет error в лог. `neoessentials.afk.exempt` пропускает только кик, не авто-АФК. За минуту до кика уходит kick_warning; из-за шага 30 с сообщение может повториться. Текст кика — `afkkickMessage`, иначе локализованный шаблон.",
+      "fix": "Для кика достаточно `kickTimeout: 900` (15 минут после ухода в АФК). Персоналу выдайте `neoessentials.afk.exempt`."
+    },
+    {
+      "title": "Детектор движения и анти-ферма кликов",
+      "body": "`AfkMovementDetector` — отдельный поток, раз в 5 с `server.execute` читает координаты. Учитывается только если `enableActivityTracking` и `trackMovement`. Чат (`trackChat`), команды (`trackCommands`) и взаимодействия (`trackInteractions`) — отдельные рубильники; мастер `enableActivityTracking: false` глушит все четыре. `AfkActivityHandler` по кликам/дропу: больше 30 одинаковых действий за 60 с копит score; после 300 это действие перестаёт сбрасывать таймер. `excludedCommands` по умолчанию: afk, list, who, tps, ping, help, ?.",
+      "fix": "Макросы на клик по блоку АФК не отобьют, когда score превышен. Если `/list` не должен снимать АФК — он уже в списке; `/away` туда не входит (см. knownIssues)."
+    },
+    {
+      "title": "/afk требует включённый чат-модуль",
+      "body": "Несмотря на отдельную систему АФК, команда выходит с `commands.neoessentials.afk.disabled`, если `isChatEnabled()` ложь или `ChatManager.isAfkEnabled()` ложь. Авто-пометка по timeout при этом живёт в `AfkManager` и от чат-команды не зависит, но ручной toggle недоступен.",
+      "fix": "Держите чат-модуль включённым, если нужен `/afk`. Выключить только ручную команду можно `commands.afk: false` (это погасит и `/away`)."
+    },
+    {
+      "title": "Сон, неуязвимость и хранение",
+      "body": "`ignoreAfkInSleep: true` (по умолчанию) исключает АФК-игроков из процента сна. `invulnerableWhenAfk` по умолчанию false. Состояние пишется в коллекцию `afk_data` (легаси-файл `afk_data.json` мигрирует), `autoSave` / `saveInterval` — периодический сброс. Проверка авто-АФК идёт раз в 30 с, поэтому фактический timeout 300 с может сработать между 300 и 330 с.",
+      "fix": "Не ждите точной секунды. Для PvP-арен `invulnerableWhenAfk` лучше не включать."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "/away не снимает АФК, пока trackCommands включён",
+      "body": "`CommandEvent` срабатывает до executes. Для `/away` (его нет в дефолтном `excludedCommands`) `AfkCommandHandler` вызывает `updateActivity`: если игрок уже АФК, статус снимается. Затем `toggleAfk` ставит АФК снова — в чат могут уйти и return, и «is now AFK», а игрок остаётся АФК. `/afk` в списке исключений, поэтому туда-обратно работает.",
+      "fix": "Возвращайтесь командой `/afk` или движением. Либо добавьте `away` в `afk.excludedCommands`."
+    }
+  ]
+}

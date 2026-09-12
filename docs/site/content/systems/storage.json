@@ -1,0 +1,32 @@
+{
+  "commands": [],
+  "commandDetails": {},
+  "examples": [
+    {
+      "title": "Переехать с JSON на MySQL для сети серверов",
+      "goal": "Баны, экономика и права должны быть общими, без копирования файлов.",
+      "commands": [
+        "/neoe reload"
+      ],
+      "result": "Пропишите `storage.type: mysql` и блок `storage.mysql.*`, затем рестарт (не reload): бэкенд выбирается на старте. Если коллекция в MySQL пустая и `autoMigrate: true`, мод один раз импортирует данные из текущего JSON/legacy. Старые файлы не удаляются. Если MySQL на старте недоступен, мод молча падает обратно на JSON и сервер всё равно поднимается."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "Почта не в DataStore",
+      "body": "`/mail` по-прежнему живёт в `config/neoessentials/mail_data.json` независимо от `storage.type`. Смена бэкенда почту не переедет.",
+      "fix": "На сети серверов не ждите общей почты через MySQL — её там нет. Остальные коллекции (включая auction_listings) — да."
+    },
+    {
+      "title": "runServer в Gradle не видит sqlite/mysql/yaml драйверы",
+      "body": "Драйверы сидят в JarJar внутри собранного jar. Dev-классloader `runServer` их не видит → ClassNotFoundException при type ≠ json. На установленном jar всё штатно.",
+      "fix": "Локально оставляйте `storage.type: json`. Проверять MySQL — на собранном моде, не на `gradlew runServer`."
+    },
+    {
+      "title": "Права пишутся целиком, не по записи",
+      "body": "Большинство коллекций обновляют один документ. `permission_groups` / `permission_users` при save() заменяют всё состояние: иначе удаление группы оставило бы призрак в бэкенде.",
+      "fix": "Не редактируйте одну строку в `permission_users.json`, пока сервер запущен — следующий save затрёт правку полным дампом."
+    }
+  ],
+  "knownIssues": []
+}

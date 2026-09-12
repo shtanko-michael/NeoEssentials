@@ -1,0 +1,56 @@
+name: Wiki
+
+# The site's command, permission and config tables are generated from the source tree at build
+# time, so they are only as fresh as the last build — rebuild on every push to the branch rather
+# than on a path filter that could miss a rename or a new subsystem.
+on:
+  push:
+    branches: [farmstead-monorepo-build]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys race; a superseded build has nothing worth finishing.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Generate site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install renderer
+        run: python -m pip install --quiet markdown
+
+      - name: Generate
+        run: python docs/site/generate.py --out _site
+
+      - name: Check nothing drifted
+        # generate.py warns when curated content points at a command or a doc that no longer
+        # exists. That is exactly the drift this site exists to prevent, so fail the build.
+        run: python docs/site/generate.py --out _site --strict
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    name: Deploy to Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

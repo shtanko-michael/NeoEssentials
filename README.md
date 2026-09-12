@@ -1,5 +1,11 @@
 # NeoEssentials
 
+[![Documentation](https://img.shields.io/badge/%D0%94%D0%BE%D0%BA%D1%83%D0%BC%D0%B5%D0%BD%D1%82%D0%B0%D1%86%D0%B8%D1%8F-shtanko--michael.github.io-0f7b5f?style=for-the-badge&logo=readthedocs&logoColor=white)](https://shtanko-michael.github.io/NeoEssentials/)
+
+> **📖 [Полный справочник: команды, права, конфигурация и разбор проблем](https://shtanko-michael.github.io/NeoEssentials/)**  
+> Таблицы команд, узлов прав и ключей конфигурации генерируются из исходников при каждой
+> сборке, поэтому не расходятся с кодом. Поиск по всему справочнику — клавиша `/`.
+
 [![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-brightgreen.svg)](https://www.minecraft.net/) [![NeoForge](https://img.shields.io/badge/NeoForge-orange.svg)](https://neoforged.net/) [![License](https://img.shields.io/badge/License-MIT-lightgrey.svg)](https://opensource.org/licenses/MIT) [![Version](https://img.shields.io/github/v/release/ZeroG-Network-PTY-LTD/NeoEssentials?label=Version)](https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials/releases) [![Discord](https://img.shields.io/discord/709351422088708196?color=7289da&label=Discord&logo=discord&logoColor=white)](https://discord.gg/dUGAQF2Mga)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20Me-F16061?logo=ko-fi&logoColor=white)](https://ko-fi.com/mrwhiteflamesyt)
 
@@ -32,26 +38,26 @@ NeoEssentials brings essential server management, player utilities, and advanced
 
 ## 📖 Documentation
 
-Start at [Home](https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials/wiki/Home) for the full documentation hub.
+**Canonical reference for this fork:** [shtanko-michael.github.io/NeoEssentials](https://shtanko-michael.github.io/NeoEssentials/)
 
-| Wiki Page | Description |
+Command, permission and config tables are generated from the source on every push to `farmstead-monorepo-build`, so they cannot drift from the code. Worked examples, edge cases and known issues are curated in Russian. Press `/` anywhere on the site to search.
+
+| Page | What it covers |
 |---|---|
-| [EconomySystem](https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials/wiki/EconomySystem) | Balances, pay, baltop, Vault API |
-| [ChatSystem](https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials/wiki/ChatSystem) | Formatting, channels, rich text |
-| [ModerationSystem](https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials/wiki/ModerationSystem) | Ban, mute, jail, freeze, vanish |
-| [TeleportationSystem](https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials/wiki/TeleportationSystem) | Homes, warps, TPA, RTP, spawn |
-| [KitManagement](https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials/wiki/KitManagement) | Kits, cooldowns, preview |
-| [WebDashboard](https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials/wiki/WebDashboard) | Setup, login, REST API |
-| [PermissionSystem](https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials/wiki/PermissionSystem) | Nodes, groups, wildcards, LuckPerms |
-| [ItemManagement](https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials/wiki/ItemManagement) | Repair, enchant, powertool |
-| [UtilitySystems](https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials/wiki/UtilitySystems) | Ptime, effects, spawnmob, MOTD |
-| [APISystem](https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials/wiki/APISystem) | PlaceholderAPI, stat tokens, REST API |
-| [AFKSystem](https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials/wiki/AFKSystem) | Auto-AFK, broadcasts, kick timeout |
-| [TablistSystem](https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials/wiki/TablistSystem) | Animated tablist, hex/gradient colors, PlaceholderAPI |
-| [ScoreboardSystem](https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials/wiki/ScoreboardSystem) | Config-driven sidebar boards, conditions, per-viewer rendering |
-| [LeaderboardSystem](https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials/wiki/LeaderboardSystem) | Ranked boards, vanilla stats, custom boards, LeaderboardAPI |
-| [LocalizationSystem](https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials/wiki/LocalizationSystem) | Server language, custom translations, overrides |
-| [SplitConfigs](https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials/wiki/SplitConfigs) | Split config files, repair, migration |
+| [Quick start](https://shtanko-michael.github.io/NeoEssentials/quickstart/) | Install, first permissions, reload vs restart |
+| [All commands](https://shtanko-michael.github.io/NeoEssentials/commands/) | Syntax, aliases, real permission node |
+| [Permissions](https://shtanko-michael.github.io/NeoEssentials/permissions/) | Every node from the registry |
+| [Configuration](https://shtanko-michael.github.io/NeoEssentials/config/) | Every shipped key and its default |
+| [Economy](https://shtanko-michael.github.io/NeoEssentials/systems/economy/) | Balances, pay, baltop, ChestShop, Vault |
+| [Teleportation](https://shtanko-michael.github.io/NeoEssentials/systems/teleportation/) | Homes, warps, TPA, RTP, spawn |
+| [Moderation](https://shtanko-michael.github.io/NeoEssentials/systems/moderation/) | Ban, mute, jail, freeze, vanish |
+| [Chat](https://shtanko-michael.github.io/NeoEssentials/systems/chat/) | Formatting, channels, mail, rich text |
+| [Kits](https://shtanko-michael.github.io/NeoEssentials/systems/kits/) | Kits, cooldowns, preview |
+| [Web dashboard](https://shtanko-michael.github.io/NeoEssentials/systems/dashboard/) | Setup, login, REST API |
+| [Permissions system](https://shtanko-michael.github.io/NeoEssentials/systems/permissions/) | Groups, wildcards, LuckPerms, FTB Ranks |
+| [Known issues](https://shtanko-michael.github.io/NeoEssentials/troubleshooting/) | Symptom, cause, what to do |
+
+The original English upstream pages are embedded at the bottom of each system page so they keep merging without conflicts. The upstream GitHub wiki itself is **not** kept in sync and may be stale (its own CommandsReference banner says so).
 
 ## 🚀 Quick Start
 

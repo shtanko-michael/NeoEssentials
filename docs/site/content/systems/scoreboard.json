@@ -1,0 +1,130 @@
+{
+  "commands": ["scoreboard"],
+  "commandDetails": {
+    "scoreboard": {
+      "syntax": "/scoreboard [toggle | reload | enable | disable | info | preview | board list | set title <board> <text> | set line <board> <index> <text> | player <target> title <text> | player <target> line <index> <text> | player <target> reset | group <group> title <text> | group <group> line <index> <text> | group <group> reset]",
+      "notes": "Корень без .requires — голый `/scoreboard` печатает справку кому угодно; `toggle` закрыт отдельно neoessentials.scoreboard.toggle и только игроку; остальные ветки — neoessentials.scoreboard.admin (консоль проходит всегда); `<target>` — EntityArgument.player, только онлайн; `<board>`/`<group>` — word; `<text>` greedy; `<index>` Integer 0–14. `set`/`player`/`group` и `enable`/`disable` живут в памяти: `/scoreboard reload` и `/neoe reload` возвращают всё из scoreboard.json."
+    }
+  },
+  "examples": [
+    {
+      "title": "Первая настройка: подобрать заголовок вживую и закрепить его",
+      "goal": "Увидеть, как выглядит боковая панель, не перезапуская сервер, и понять, что правки из команды временные.",
+      "commands": [
+        "/scoreboard info",
+        "/scoreboard set title default &6&l{server_name}",
+        "/scoreboard preview",
+        "/scoreboard reload"
+      ],
+      "result": "`info` печатает Enabled/Disabled, число досок, `refreshInterval` в тиках и имена досок. `set title` сразу меняет заголовок у всех, кому сейчас показана доска `default`, и схлопывает анимацию заголовка до одного кадра. `preview` пересобирает панель лично вам. `reload` перечитывает scoreboard.json (и заодно animations.json) — временный заголовок исчезает, на экране снова то, что в файле."
+    },
+    {
+      "title": "Свой заголовок и строка для группы vip",
+      "goal": "Проверить текст для группы до того, как вписывать его в scoreboard.json → scoreboard.groups.",
+      "commands": [
+        "/scoreboard group vip title <gradient:FFD700-FF8C00>&lVIP",
+        "/scoreboard group vip line 2 &6Баланс: &f${balance} &6[VIP]",
+        "/scoreboard info",
+        "/scoreboard group vip reset"
+      ],
+      "result": "Игроки, у которых первичная группа `vip`, сразу видят новый заголовок и заменённую строку с индексом 2 (0-based, это третья строка массива `lines` выбранной доски). Остальные не затронуты. `group vip reset` снимает и заголовок, и все line-переопределения этой группы разом. Чтобы текст пережил reload, его нужно перенести в `scoreboard.json → scoreboard.groups.vip` (`titleOverride` / `lineOverrides`)."
+    },
+    {
+      "title": "Отдельная доска в Незере",
+      "goal": "Показать другой набор строк в `the_nether`, не трогая оверворлд. Условия — неявное AND, побеждает первая доска с наибольшим `priority`, у которой все `conditions` прошли.",
+      "commands": [
+        "/scoreboard reload",
+        "/scoreboard board list",
+        "/scoreboard preview"
+      ],
+      "result": "В `scoreboard.json → scoreboard.boards` добавьте доску с `priority` больше, чем у `default` (у поставки `default` имеет `0`), и `conditions: [\"world:the_nether\"]`. Пустой `conditions` у `default` всегда совпадает — держите его последним по приоритету как запасной вариант. После reload `board list` перечислит имена; в Незере `preview` покажет новую доску, в оверворлде — `default`. Имя измерения — path (`overworld`, `the_nether`, `the_end`), не `minecraft:the_nether`."
+    },
+    {
+      "title": "Игрок прячет панель у себя",
+      "goal": "Дать игрокам выключатель, который переживает рестарт, не выключая систему целиком.",
+      "commands": [
+        "/scoreboard toggle",
+        "/scoreboard toggle"
+      ],
+      "result": "Первый вызов прячет сайдбар и пишет состояние в коллекцию DataStore `scoreboard_toggles` (ключ — UUID). Второй возвращает панель. По умолчанию у игрока, который ни разу не жал toggle, панель включена. Нужен узел `neoessentials.scoreboard.toggle` (в реестре он выдан всем по умолчанию). Из консоли ветка не выполняется: `.requires` требует игрока."
+    },
+    {
+      "title": "Заголовок из нескольких кадров и замедление одной доски",
+      "goal": "Сделать анимированный title и не дёргать дорогой плейсхолдер каждый глобальный цикл.",
+      "commands": [
+        "/scoreboard reload",
+        "/scoreboard preview"
+      ],
+      "result": "В `title` доски поставьте JSON-массив строк — это и есть кадры (отдельного ключа `titleFrames` загрузчик не читает). Кадры крутятся по `ownAnimFrame` этой доски. `refreshMultiplier` (целое ≥ 1, по умолчанию 1) продвигает кадры этой доски раз в N глобальных циклов `refreshInterval`, не меняя сам тик рассылки пакетов. После reload `preview` показывает первый кадр; дальше анимация идёт сама."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "Дерево сливается с ванильным `/scoreboard`",
+      "body": "NeoEssentials регистрирует тот же литерал `scoreboard`, и Brigadier **добавляет** дочерние узлы к ванильной команде, а не заменяет её. Ванильные `objectives` / `players` / `teams` остаются. Коллизии имён нет: ваниль — `players` (мн. ч.), здесь — `player`; ванильный `enable` живёт под `players`, здесь — на корне. Голый `/scoreboard` без аргументов выполняет `.executes` NeoEssentials и печатает справку мода, а не ванильную.",
+      "fix": "Ванильные цели по-прежнему: `/scoreboard objectives add …`. Справка мода — голый `/scoreboard`. Чтобы совсем убрать команду мода, выключите `commands.scoreboard` в `config.json` и перезапустите — ванильное дерево останется."
+    },
+    {
+      "title": "Какую доску видит игрок",
+      "body": "Доски сортируются по убыванию `priority`. Для каждого зрителя берётся **первая**, у которой все строки `conditions` истинны (неявное AND). Пустой список условий всегда проходит — такая доска обязана иметь наименьший приоритет, иначе перекроет остальные. Если ни одна доска не подошла, сайдбар этому игроку скрывается. Отдельного OR нет — два соседних приоритета с разными условиями дают тот же эффект.",
+      "fix": "Запасную доску держите с `priority: 0` и `conditions: []` последней. Проверяйте, какую доску вы сейчас видите, через `/scoreboard preview` в нужном мире и с нужными правами."
+    },
+    {
+      "title": "Грамматика `conditions` и короткий `{balance}` в условии",
+      "body": "Разбор в `ConditionEvaluator`, по порядку: `perm:<node>` (PermissionAPI), `world:<path>` (path измерения, без namespace), `{placeholder} == value` / `!= value` (сравнение без учёта регистра), иначе строка прогоняется через PlaceholderAPI и считается истинной, если результат непустой и не `false`.\n\nУсловия **не** идут через shorthand-замены сайдбара. В строках доски `{balance}`, `{online}`, `{player}` подставляет сам `ScoreboardManager`. В условии `{balance}` PlaceholderAPI ищет идентификатор `balance` и не находит его (дефолтный expansion — `{neoessentials_balance}`). Нерешённый токен остаётся текстом `{balance}`: для `==` сравнение провалится, а одиночный нерешённый `{token}` как boolean истинен, потому что строка непустая.",
+      "fix": "Мир и права проверяйте формами `world:` / `perm:`. Для плейсхолдеров в условии пишите `{neoessentials_balance}`, `{neoessentials_group}`, `{neoessentials_world}` и т. п. Не ставьте одиночный неизвестный `{token}` как условие — оно молча пройдёт."
+    },
+    {
+      "title": "`lineOverrides` бьют в индекс массива, скрытые строки сжимаются",
+      "body": "У строки может быть своё `condition`. Непрошедшие строки **выбрасываются**, оставшиеся сдвигаются вверх в слоты 0…14 — пустого зазора нет. Переопределение (`lineOverrides` в файле или `/scoreboard group|player … line`) меняет только текст и **не** отменяет `condition` исходной строки: скрытая строка останется скрытой. Ключ переопределения — 0-based индекс в массиве `lines` выбранной доски, а не номер видимого слота после сжатия.",
+      "fix": "Считайте индексы по JSON-массиву, включая строки с условием. Если строка 2 скрыта условием, `lineOverrides[\"2\"]` всё равно относится к ней, а не к тому, что игрок видит третьим."
+    },
+    {
+      "title": "Приоритет переопределений и что сгорает при reload",
+      "body": "Цепочка текста: **игрок (UUID) → группа (первичная PermissionAPI) → значение доски**. `/scoreboard set title|line` правит саму доску в памяти (для title — весь список кадров заменяется одним кадром). `/scoreboard player` / `group` пишут карты переопределений в памяти. `loadConfig()` при reload **полностью** перечитывает `boards`/`groups`/`players` из файла и очищает эти карты — временные правки пропадают. `enable`/`disable` тоже только в памяти: reload вернёт `scoreboard.enabled` из файла.",
+      "fix": "Постоянное — только в `scoreboard.json`. Dashboard-запись (`saveConfig`) умеет сбросить текущую память на диск; команды сами файл не пишут."
+    },
+    {
+      "title": "`{online}` и `{displayname}` на сайдбаре",
+      "body": "`{online}` — это `server.getPlayerList().getPlayers().size()`, без фильтра ваниша (в отличие от таблиста). `{displayname}` подставляется как `player.getName()`, то есть настоящий IGN, а не `/nick`. `{max}` — слоты сервера. `{time}` — `HH:mm` системных часов, не игровое время мира.",
+      "fix": "Скрытых в ванише всё равно считают в `{online}`. Для ника в строке используйте плейсхолдер ника из PlaceholderAPI, если он зарегистрирован, а не `{displayname}`."
+    },
+    {
+      "title": "Два независимых выключателя",
+      "body": "`modules.scoreboardEnabled: false` в `config.json` (рестарт): обработчик тика/join/quit сразу выходит, пакеты не отправляются, `/scoreboard` не регистрируется.\n\n`commands.scoreboard: false` (рестарт): команда не регистрируется, но тик сайдбара идёт как раньше — панель остаётся, просто её нельзя перезагрузить из игры.\n\n`scoreboard.enabled: false` + `/scoreboard reload` (или `/scoreboard disable`): живое выключение, команда на месте, у всех вызывается `hideAll` (слот SIDEBAR, команды строк `ne_sb*`, objective `ne_sidebar`).",
+      "fix": "Убрать систему целиком — `modules.scoreboardEnabled`. Временно спрятать панель, оставив команду, — `enabled` в scoreboard.json либо `/scoreboard disable`."
+    },
+    {
+      "title": "Задержка после входа и анти-мигание",
+      "body": "`joinDelayTicks` считается в **серверных тиках** (`globalTick`), не в циклах refresh. Пока задержка не истекла, `updatePlayer` вызывает `hidePlayer`. Пакеты уходят, только если заголовок или набор видимых строк изменились с прошлой отправки этому зрителю. Счёт очков слота фиксирован (`15 − index`) с `BlankFormat`, чтобы клиент не переставлял строки по числу.",
+      "fix": "Если панель «вспыхивает» на входе — увеличьте `joinDelayTicks` (поставка 40). Если строка не обновляется — плейсхолдер, скорее всего, вернул то же самое значение: dirty-check намеренно молчит."
+    },
+    {
+      "title": "Права на команду",
+      "body": "Голый `/scoreboard` не проверяет узлы. `toggle` требует игрока и `neoessentials.scoreboard.toggle`. Админ-ветки: `p == null || neoessentials.scoreboard.admin`. Плюс общие `opsBypassPermissions` и ванильный OP-fallback PermissionAPI.",
+      "fix": "Если `/scoreboard` «не существует» даже у оператора — смотрите `modules.scoreboardEnabled` и `commands.scoreboard`, не права. Если есть справка, но нет `reload` в автодополнении — нет `neoessentials.scoreboard.admin`."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "Ключ `titleFrames` из оригинальной вики не читается",
+      "body": "`ScoreboardManager.loadConfig()` берёт кадры заголовка только из `title` (строка или массив). Поля `titleFrames` в JSON нет в загрузчике. Анимация заголовка задаётся массивом в `title`. Комментарий в поставке и страница ScoreboardSystem.md расходятся с кодом.",
+      "fix": "Пишите кадры так: `\"title\": [\"кадр1\", \"кадр2\"]`. Не заводите отдельный `titleFrames` — он будет проигнорирован."
+    },
+    {
+      "title": "`toggleCommandEnabled` ни на что не влияет",
+      "body": "Оригинальная вики описывает ключ `toggleCommandEnabled`. Загрузчик его не читает, ветка `/scoreboard toggle` регистрируется вместе с остальной командой, пока включены модуль и `commands.scoreboard`.",
+      "fix": "Чтобы отнять toggle у игроков, заберите узел `neoessentials.scoreboard.toggle`. Чтобы убрать всю команду — `commands.scoreboard: false` и рестарт."
+    },
+    {
+      "title": "Запись доски через веб-панель выбрасывает `refreshMultiplier`",
+      "body": "`toConfigJson()` / `boardToJson()` сериализуют name, priority, conditions, title, lines — и не пишут `refreshMultiplier`. Следующий save с панели перезапишет scoreboard.json без этого поля; после reload множитель снова станет 1.",
+      "fix": "Задавайте `refreshMultiplier` вручную в файле и не сохраняйте эту доску кнопкой панели, либо верните поле в файл после save."
+    },
+    {
+      "title": "`{displayname}` на сайдбаре — это IGN, не ник",
+      "body": "`resolveText` подставляет и `{player}`, и `{displayname}` через `player.getName()`. `/nick` на эту строку не действует. Имя плейсхолдера обещает display name, код отдаёт реестровое имя.",
+      "fix": "Не ждите ника в `{displayname}` на сайдбаре. Для строк, где нужен ник, используйте тот плейсхолдер ника, который реально резолвит PlaceholderAPI, и проверьте его `/scoreboard preview`."
+    }
+  ]
+}

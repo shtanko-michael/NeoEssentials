@@ -1,0 +1,116 @@
+{
+  "commands": ["leaderboard"],
+  "commandDetails": {
+    "leaderboard": {
+      "syntax": "/leaderboard [<board> [page | gui] | reload | admin set <board> <player> <value> | admin add <board> <player> <delta> | admin reset <board> <player> | admin create <id> <displayName> | admin delete <board> | hologram create <board> <id> [lines]]",
+      "notes": "Алиас `/lb` регистрируется тем же деревом. Корень — neoessentials.leaderboard.view (консоль проходит); `reload` / `admin` / `hologram` — neoessentials.leaderboard.admin. `<board>`/`<id>`/`<player>` — word; `<displayName>` greedy; `<value>`/`<delta>` — long; `<page>` ≥ 1; в чате страница по 10 строк, GUI — 45. `gui` и `hologram create` только от игрока. set/add/reset/delete работают лишь на type `custom`. Отдельного `modules.leaderboardEnabled` и ключа `commands.leaderboard` в поставке нет — команда регистрируется всегда. `/baltop` эту систему не вызывает."
+    }
+  },
+  "examples": [
+    {
+      "title": "Посмотреть топ баланса в чате и в сундуке",
+      "goal": "Проверить, что доска `money` из поставки жива и что GUI — тот же рейтинг, просто другой вид.",
+      "commands": [
+        "/leaderboard",
+        "/leaderboard money",
+        "/leaderboard money 2",
+        "/leaderboard money gui"
+      ],
+      "result": "Голый `/leaderboard` печатает id зарегистрированных досок (у поставки как минимум `money`, `kills`, `mob_kills`, `playtime`, `shop_sales`; выключенные в JSON не регистрируются). `/leaderboard money` — первая страница по 10 строк, заголовок с номером страницы и возрастом кеша в секундах. Если кеш ещё строится, вместо «пусто» придёт сообщение building — подождите и повторите. `gui` открывает сундук 6×9: головы игроков, навигация на слотах 48–50. Из консоли `gui` не открывается."
+    },
+    {
+      "title": "Включить доску «алмазная руда» из поставки",
+      "goal": "В leaderboard.json уже есть `diamonds_mined` с `enabled: false`. Включить её без правки Java.",
+      "commands": [
+        "/leaderboard reload",
+        "/leaderboard",
+        "/leaderboard diamonds_mined"
+      ],
+      "result": "Поставьте `enabled: true` у записи `diamonds_mined` и выполните reload (или `/neoe reload` — он тоже вызывает `LeaderboardConfigLoader.load()`). Доска появится в списке. `stat` — ванильная criteria-строка `minecraft.mined:minecraft.diamond_ore`: считается только обычная алмазная руда, не deepslate. Офлайн-игроки читаются из `<world>/stats/<uuid>.json`; у кого файл есть, тот попадает в таблицу даже с нулём."
+    },
+    {
+      "title": "Свои очки события",
+      "goal": "Завести доску, которой нет в ванильной статистике, и начислить очки офлайн-игроку.",
+      "commands": [
+        "/leaderboard admin create event_points Event Points",
+        "/leaderboard admin set event_points Steve 50",
+        "/leaderboard admin add event_points Steve 10",
+        "/leaderboard event_points",
+        "/leaderboard admin reset event_points Steve"
+      ],
+      "result": "Если id уже занят — ошибка board_exists. `create` дописывает объект `type: custom` в leaderboard.json и регистрирует доску сразу. `set`/`add`/`reset` резолвят UUID сначала среди онлайн, затем через profile cache — офлайн-ник с известным профилем проходит; подсказки автодополнения показывают только онлайн. Значения пишутся в коллекцию DataStore `leaderboard_custom` (ключ `<boardId>:<uuid>`) и сразу инвалидируют кеш этой доски. `reset` — это `set … 0`. Экономическую или vanilla_stat доску эти ветки отвергнут: not_custom_board."
+    },
+    {
+      "title": "Голограмма топа баланса",
+      "goal": "Не набивать 10 строк `/hologram addline` руками — генератор ставит title + N плейсхолдеров `{leaderboard_<board>:<rank>:name|value}`.",
+      "commands": [
+        "/leaderboard hologram create money top_balances 5",
+        "/hologram setrefresh top_balances 30"
+      ],
+      "result": "Нужны модуль голограмм, игрок (не консоль) и свободный id. Голограмма спавнится у ваших ног +1.5 по Y, `id` приводится к нижнему регистру, `refreshInterval` генератора — 5 секунд. `lines` по умолчанию 10, максимум 15 (Brigadier 1–15). Это обычная голограмма: дальше ею управляет `/hologram`. Если модуль голограмм выключен — holograms_disabled. Если id занят — hologram_exists."
+    },
+    {
+      "title": "Топ магазинов, не игроков",
+      "goal": "Доска `shop_sales` ранжирует сундучные и NPC-магазины по `totalRevenueCents`, а не UUID игроков.",
+      "commands": [
+        "/leaderboard shop_sales",
+        "/leaderboard shop_sales gui"
+      ],
+      "result": "В чате строки идут через `entryFormat` поставки (`{rankColor}{medal} #{rank} …`). Магазины с нулевой выручкой пропускаются. `exemptPermission` на эту доску не действует — в кеше нет игрока, которого проверять. В GUI у таких записей нет головы: берётся `icon` доски (`minecraft:emerald`) или бумага. Имя сундучного магазина в рейтинге — `ownerName` (ник владельца), у NPC — `shopName`."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "`/baltop` и `/leaderboard money` — два разных кеша",
+      "body": "`/baltop` (и алиасы) не ходят в LeaderboardManager. Инвалидация после `/pay` / `/eco` вызывает и кеш baltop, и `getBoard(\"money\").invalidate()` — id зашит строкой `money`. Если переименовать экономическую доску, `{leaderboard_money:…}` и инвалидация разъедутся: `/baltop` обновится сразу, сайдбар с `{leaderboard_<новоеid>:1:name}` будет ждать `refreshInterval` этой доски (по умолчанию 60 с).",
+      "fix": "Не меняйте id `money`, если на него ссылаются плейсхолдеры. Для новой экономической доски с другим id после выдачи денег подождите интервал или дерните `/leaderboard reload` (он перерегистрирует доски и сбросит кеш)."
+    },
+    {
+      "title": "Первый запрос и сообщение building",
+      "body": "`getTop()` при пустом или протухшем кеше запускает async-пересчёт и сразу возвращает текущий снимок. Пустая выдача при `isBuilding()==true` печатает «building», а не «empty». Пока пересчёт идёт, внизу страницы может появиться «refreshing». vanilla_stat на офлайн сканирует весь каталог stats — на большом мире первая сборка заметна.",
+      "fix": "Повторите команду через секунду. Для тяжёлых досок поднимите `refreshInterval` (у `playtime` в поставке 300 с, у `shop_sales` 120)."
+    },
+    {
+      "title": "`format` почти ни на что не влияет",
+      "body": "Поле читается в лоадере, но в `LeaderboardDefinition` не попадает. Оно используется один раз: для `vanilla_stat` при `format: \"time\"` включается перевод тиков в `Xh Ym` (playtime). `economy` и `shop_sales` всегда печатают валюту через EconomyManager. `custom` через `CustomStatProvider.forBoard` всегда `String.valueOf(long)` — даже если в JSON написано `currency`.",
+      "fix": "Не ждите символа валюты на custom-доске. Время — только `vanilla_stat` + `format: \"time\"`."
+    },
+    {
+      "title": "vanilla_stat тащит в рейтинг всех, у кого есть stats-файл",
+      "body": "Онлайн берутся из `ServerPlayer.getStats()`. Офлайн — каждый `*.json` в `<world>/stats/`. Значение 0 всё равно кладётся в карту, в отличие от `shop_sales`, где нулевая выручка отбрасывается. `exemptPermission` исключает игрока целиком (проверка PermissionAPI по UUID). Неверный `stat` логирует WARN и пропускает только эту доску, сервер не падает.",
+      "fix": "Выдавайте `exemptPermission` служебным аккаунтам. Помните: `minecraft.mined:minecraft.diamond_ore` не считает deepslate; для обоих типов нужны две доски или отдельный custom-счётчик."
+    },
+    {
+      "title": "`entryFormat` меняет чат, GUI рисует своё",
+      "body": "Чат (`/leaderboard <board>`) подставляет `{rank}` `{name}` `{value}` `{medal}` `{rankColor}` и прогоняет строку через `RichTextFormatter`. GUI всегда ставит имя предмета `#<rank> <name>` и lore со значением — `entryFormat` туда не передаётся. Иконка GUI: голова, если у записи есть UUID; иначе `icon` доски или `minecraft:paper`. Медали в плейсхолдерах `{leaderboard_<board>:<rank>:medal|rankcolor}` работают где угодно резолвятся плейсхолдеры, без `entryFormat`.",
+      "fix": "Оформляйте чат через `entryFormat`/`headerFormat`. В GUI другого шаблона нет."
+    },
+    {
+      "title": "Плейсхолдер без зрителя даёт пустой токен",
+      "body": "`LeaderboardPlaceholderExpansion` при `player == null` возвращает `null` — PlaceholderAPI оставляет `{leaderboard_…}` как есть. Голограмма резолвит плейсхолдеры от ближайшего игрока; если в измерении никого нет, на тике refresh токен не раскроется. Ранг вне списка — пустая строка, не ошибка. Неизвестный field (`:foo`) — null, токен остаётся.",
+      "fix": "Ставьте голограмму там, где бывают игроки, или поднимите `refreshInterval` голограммы, когда кто-то рядом (`/hologram setrefresh`)."
+    },
+    {
+      "title": "`/leaderboard reload` не трогает доски других модов",
+      "body": "`clearConfigManagedBoards()` снимает только id, пришедшие из leaderboard.json. Доски `LeaderboardAPI.registerBoard` без флага configManaged переживают reload. Но они сами не перерегистрируются из файла: если другой мод регистрирует доску только на старте, reload её оставит; если он ждал повторного вызова — его нет. Выключенная (`enabled: false`) запись из JSON просто не регистрируется.",
+      "fix": "Внешние доски документируйте у автора того мода. Свои — только leaderboard.json + reload."
+    },
+    {
+      "title": "`admin delete` стирает очки",
+      "body": "`deleteCustomBoard` убирает запись из JSON, снимает регистрацию и вызывает `CUSTOM_STATS.clearBoard` — все ключи `<id>:<uuid>` в `leaderboard_custom` удаляются. Экономическую/ванильную доску удалить командой нельзя: правится файл. `admin create` с тем же id, что уже есть в памяти, отказывается; если в файле была выключенная одноимённая запись, create перезапишет её custom-определением.",
+      "fix": "Перед delete скопируйте JSON коллекции, если очки события ещё нужны. Ванильные доски выключайте `enabled: false`, не delete."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "GUI не использует `entryFormat`, хотя комментарий в leaderboard.json обещает это",
+      "body": "Комментарий поставки и LeaderboardSystem.md пишут, что `entryFormat` задаёт и чат, и имена предметов в GUI. `LeaderboardMenu.buildEntryStack` всегда делает `Component.literal(\"#\" + rank + \" \" + name)` и не читает `definition.entryFormat()`. На доске `shop_sales` в чате медали и цвета есть, в сундуке — нет.",
+      "fix": "Ориентируйтесь на чат `/leaderboard <board>` как на единственное место, где шаблон работает. GUI — только ранг, имя и значение в lore."
+    },
+    {
+      "title": "Инвалидация экономики привязана к id `money`",
+      "body": "`BaltopCommand.invalidateCache()` после `/pay` и `/eco` инвалидирует `LeaderboardManager.getBoard(\"money\")`. Другое id экономической доски этот вызов не найдёт. Сам `/baltop` при этом обновится.",
+      "fix": "Оставляйте id `money` или смиритесь с задержкой до `refreshInterval` / ручным `/leaderboard reload`."
+    }
+  ]
+}

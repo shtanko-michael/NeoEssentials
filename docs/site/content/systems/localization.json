@@ -1,0 +1,60 @@
+{
+  "commands": ["language"],
+  "commandDetails": {
+    "language": {
+      "syntax": "/language <code> | /language set <code> | /language list | /language reload | /language stats | /language info | /language template <code> | /language exportmissing | /language clearmissing | /language validate <code> | /language regenerate <code> | /language override set <key> <value> | /language override get <key> | /language override remove <key> | /language override list | /language override clear | /language override reload",
+      "notes": "Корень требует ванильный OP 4 (`source.hasPermission(4)`), не узел neoessentials.language. В реестре прав у команды записано vanilla:op-level-4. Bare `/language <code>` — сокращение для set. <value> у override set — greedyString (остаток строки). Консоль проходит проверку OP."
+    }
+  },
+  "examples": [
+    {
+      "title": "Переключить сервер на русский",
+      "goal": "Язык задаётся одним кодом; игрокам ничего ставить не нужно.",
+      "commands": [
+        "/language list",
+        "/language ru_ru",
+        "/language stats"
+      ],
+      "result": "`list` печатает коды из джарника. `/language ru_ru` то же, что `/language set ru_ru`, и пишет `localization.language` в конфиг. `stats` показывает, сколько ключей закрыто относительно en_us. Неизвестный код не ломает чат: недостающие строки берутся из en_us."
+    },
+    {
+      "title": "Поправить одну строку, не трогая jar",
+      "goal": "Своя формулировка кита или бана, которая переживёт обновление мода.",
+      "commands": [
+        "/language override set commands.neoessentials.kits.claimed Вы получили кит {0}",
+        "/language override get commands.neoessentials.kits.claimed",
+        "/language override list"
+      ],
+      "result": "Override кладётся в DataStore (`language_overrides`), не в файл языка. `get` печатает текущий оверрайд или что ключа нет. Кавычку `'` в значении с `{0}` удваивайте, иначе MessageFormat съест подстановку."
+    },
+    {
+      "title": "Свой полный перевод",
+      "goal": "Начать файл в languages/custom/, а не копировать джарник руками.",
+      "commands": [
+        "/language template ru_ru",
+        "/language validate ru_ru",
+        "/language reload"
+      ],
+      "result": "`template` пишет каркас в `languages/custom/`. Это наложение: ключей, которых в файле нет, мод по-прежнему берёт из jar. `validate` проверяет плейсхолдеры и §-коды. После ручной правки файла — `reload`, не рестарт."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "OP 4 и neoessentials.language — разные вещи",
+      "body": "Brigadier проверяет `hasPermission(4)`. Узел из PermissionRegistry на эту команду не вешается. Игрок с `neoessentials.language` в LuckPerms, но без OP 4, команду не увидит.",
+      "fix": "Либо выдайте OP 4 / консоль, либо поймите, что внешний провайдер эту команду по узлу не откроет."
+    },
+    {
+      "title": "reload команд не перерегистрирует",
+      "body": "`/language reload` перечитывает каталоги и оверрайды. Секция `commands.language` читается при старте: выключенная команда после reload не появится.",
+      "fix": "Включение самой `/language` — рестарт сервера."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "Одиночная кавычка в строке с {0} печатает литерал {0}",
+      "body": "Это MessageFormat: `'` начинает экранированный кусок и глотает плейсхолдер. В en_us/ru_ru это уже учтено удвоением; свой override легко сломать.",
+      "fix": "Пишите `''` вместо `'`. После правки — `/language override reload` или `/language reload`."
+    }
+  ]
+}

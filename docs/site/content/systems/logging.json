@@ -1,0 +1,35 @@
+{
+  "commands": [],
+  "commandDetails": {},
+  "examples": [
+    {
+      "title": "Включить подробный след только для телепортации",
+      "goal": "Сломанный варп, но не хотите заливать latest.log всем модом.",
+      "commands": [
+        "/neoe reload"
+      ],
+      "result": "В `config.json` (или `main.json` в split-режиме) поставьте `logging.categories.teleportation.debug` в true, затем reload. Рутина категории по-прежнему идёт в консоль/`latest.log` при `normal: true`; debug — только в `logs/debug.log`. Предупреждения и ошибки не глушатся ни одним из двух ключей."
+    },
+    {
+      "title": "Убрать строку «Player issued command» из консоли",
+      "goal": "На оживлённом сервере категория commands.normal печатает каждую команду игрока.",
+      "commands": [
+        "/neoe reload"
+      ],
+      "result": "`logging.categories.commands.normal: false` после reload перестаёт писать эти строки. Сами команды работают как раньше. Ошибки регистрации команд по-прежнему видны."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "Нет отдельного файла логов мода",
+      "body": "Debug уходит в стандартный `logs/debug.log` платформы (Log4j2), не в `logs/neoessentials/`. Категория `auctionHouse` в конфиге — camelCase, в коде enum может выглядеть иначе; ключ в JSON именно `auctionHouse`.",
+      "fix": "Ищите след в `logs/debug.log`. Не создавайте пустой `logs/neoessentials/debug.log` вручную — мод туда debug не пишет (туда идут, например, transactions.log экономики)."
+    },
+    {
+      "title": "12 категорий, не одна галка",
+      "body": "Ключи: chat, economy, permissions, teleportation, moderation, auctionHouse, kits, webDashboard, discord, config, commands, general. `general` — всё, чему не досталось своей категории (хранилище, голограммы, шоп, локализация, vault).",
+      "fix": "Если «ничего не пишется» после включения debug — вы включили не ту категорию. Для варпа это teleportation, для /pay — economy."
+    }
+  ],
+  "knownIssues": []
+}

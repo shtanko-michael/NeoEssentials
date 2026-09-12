@@ -74,3 +74,10 @@ Issues_Discovered.md
 # Gradle builds it fresh into build/generated/dashboardUiResources/ every time.
 webdashboard-ui/node_modules/
 webdashboard-ui/dist/
+
+# Generated documentation site (built in CI, see .github/workflows/wiki.yml)
+docs/site/_site/
+docs/wiki/_site/
+docs/site/_inventory.json
+__pycache__/
+*.pyc

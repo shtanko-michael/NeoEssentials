@@ -1,0 +1,635 @@
+{
+  "commands": [
+    "?",
+    "announce",
+    "antioch",
+    "anvil",
+    "backup",
+    "bc",
+    "bcastworld",
+    "beezooka",
+    "bigtree",
+    "bottom",
+    "break",
+    "broadcast",
+    "broadcastworld",
+    "burn",
+    "compass",
+    "coords",
+    "craft",
+    "crafting",
+    "day",
+    "depth",
+    "direction",
+    "ec",
+    "ecedit",
+    "effect",
+    "enderchest",
+    "enderchestedit",
+    "exp",
+    "ext",
+    "extinguish",
+    "feed",
+    "fireball",
+    "firework",
+    "fly",
+    "fw",
+    "gamemode",
+    "gc",
+    "getpos",
+    "give",
+    "gma",
+    "gmc",
+    "gms",
+    "gmsp",
+    "god",
+    "grindstone",
+    "hat",
+    "heal",
+    "help",
+    "ice",
+    "info",
+    "inv",
+    "invsee",
+    "invseeedit",
+    "kill",
+    "killme",
+    "kittycannon",
+    "lightning",
+    "list",
+    "me",
+    "mem",
+    "mob",
+    "more",
+    "motd",
+    "near",
+    "nearby",
+    "night",
+    "nuke",
+    "online",
+    "ping",
+    "playtime",
+    "pong",
+    "potion",
+    "ptime",
+    "pweather",
+    "realname",
+    "recipe",
+    "remove",
+    "rest",
+    "rg",
+    "rtoggle",
+    "rules",
+    "seen",
+    "smite",
+    "spawner",
+    "spawnmob",
+    "speed",
+    "stonecutter",
+    "stonecutting",
+    "storm",
+    "sudo",
+    "suicide",
+    "sun",
+    "thunder",
+    "time",
+    "tree",
+    "unlimited",
+    "weather",
+    "whereami",
+    "who",
+    "whois",
+    "workbench",
+    "world",
+    "xp"
+  ],
+  "commandDetails": {
+    "help": {
+      "syntax": "/help | /help <page_or_command> | /help <command> <page>",
+      "notes": "Перед регистрацией рефлексией снимает ванильные узлы help и ?. Один word-аргумент: чистое число ≥ 1 — номер страницы (по 10 команд), иначе поиск по имени/описанию в каталоге CommandRegistry. Вторая страница только у /help <command> <page>, у /? её нет. Список фильтруется по реальному узлу из CommandPermissionRegistry; консоль и держатели neoessentials.admin / neoessentials.* видят всё. Узел — neoessentials.help (не neoessentials.?)."
+    },
+    "?": {
+      "syntax": "/? | /? <page_or_command>",
+      "notes": "Алиас /help: тот же requires (neoessentials.help, консоль проходит), тот же executeHelp. Нет ветки <command> <page>. В каталоге узел выведен как neoessentials.? — это соглашение реестра, проверка идёт по neoessentials.help."
+    },
+    "anvil": {
+      "syntax": "/anvil",
+      "notes": "Только игрок (консоль — player_only). Виртуальное меню stillValid=true, физического блока нет. Корневой .requires — instanceof ServerPlayer. Право neoessentials.anvil проверяется PermissionValidator (консоль с OP 2 сюда всё равно не попадёт из-за requires). XP за ремонт списывается как у обычной наковальни."
+    },
+    "crafting": {
+      "syntax": "/crafting",
+      "notes": "Только игрок (консоль — player_only). Виртуальное меню stillValid=true, физического блока нет. Право neoessentials.crafting через PermissionValidator. Алиасы craft и workbench регистрируются тем же методом, если commands.crafting включён."
+    },
+    "craft": {
+      "syntax": "/craft",
+      "notes": "Алиас /crafting. Право neoessentials.crafting, не neoessentials.craft. Выключается ключом commands.crafting, отдельного commands.craft нет."
+    },
+    "workbench": {
+      "syntax": "/workbench",
+      "notes": "Алиас /crafting. Право neoessentials.crafting. В каталоге объявлен с этим узлом явно."
+    },
+    "grindstone": {
+      "syntax": "/grindstone",
+      "notes": "Только игрок (консоль — player_only). Виртуальное меню stillValid=true, физического блока нет. Право neoessentials.grindstone."
+    },
+    "stonecutting": {
+      "syntax": "/stonecutting",
+      "notes": "Только игрок (консоль — player_only). Виртуальное меню stillValid=true, физического блока нет. Право neoessentials.stonecutting. Дополнительно регистрируется литерал stonecut (в каталоге /help его нет — не отдельная claimed-команда)."
+    },
+    "stonecutter": {
+      "syntax": "/stonecutter",
+      "notes": "Алиас /stonecutting. Право neoessentials.stonecutting."
+    },
+    "seen": {
+      "syntax": "/seen <player>",
+      "notes": "Без аргумента корневой .executes отвечает usage и возвращает 0. Ищет онлайн по точному нику, иначе case-insensitive по seen_data.json (UUID → активность). Консоль: PermissionValidator, нужен source.hasPermission(2). Файл config/neoessentials/seen_data.json."
+    },
+    "near": {
+      "syntax": "/near [radius]",
+      "notes": "Только игрок. Радиус Integer 1–500, по умолчанию 100. Та же размерность, ваниш — попарно canViewerSeeVanishedPlayer. Клик /tp в подсказке только при neoessentials.teleport.tp. Консоль не работает."
+    },
+    "nearby": {
+      "syntax": "/nearby [radius]",
+      "notes": "Отдельное дерево, те же 1–500 / 100. Проверка — neoessentials.near, не neoessentials.nearby. Включается ключом commands.nearby независимо от commands.near."
+    },
+    "ping": {
+      "syntax": "/ping [player]",
+      "notes": "Без аргумента — свой ping (консоль получит player=null из PermissionValidator.success() и уйдёт в latency() — не вызывайте без цели). Чужой: EntityArgument.player() (только онлайн) и neoessentials.ping.others (по умолчанию true). Качество — английские строки Excellent…Terrible, не из lang."
+    },
+    "pong": {
+      "syntax": "/pong",
+      "notes": "Только запись каталога /help (registerCommand в NeoEssentials.java). Commands.literal(\"pong\") в исходниках нет — в автодополнении Brigadier команды не будет, /pong ничего не выполнит. Смотрите /ping."
+    },
+    "playtime": {
+      "syntax": "/playtime [target]",
+      "notes": "Цель — word + онлайн-ник (getPlayerByName). Счётчик: Stats.PLAY_TIME плюс миллисекунды текущей сессии из sessionStart (кладётся в onPlayerJoin). Консоль без цели — player_only. Чужой — neoessentials.playtime.others."
+    },
+    "whois": {
+      "syntax": "/whois <player>",
+      "notes": "Корневого .executes нет. Две ветки: EntityArgument.player() (онлайн) и word playername. Offline-ветка вызывает getOfflinePlayerSeenInfo, который всегда Optional.empty() — офлайн-ник даст player_not_found. UUID/координаты/IP только при neoessentials.whois.detailed. Узел whois по умолчанию false. Не путать с /info."
+    },
+    "realname": {
+      "syntax": "/realname <player>",
+      "notes": "Без аргумента — usage. Ищет онлайн: точный ник, затем никнейм без &-кодов, затем contains. Несколько совпадений печатает список (до 10). Офлайн не ищет. Право neoessentials.realname."
+    },
+    "list": {
+      "syntax": "/list",
+      "notes": "Нет аргументов. С ванишем без neoessentials.vanish.see скрытые не показываются. При загруженном LuckPerms — строки по primary group (вес убывает, default всегда снизу); иначе одна серая «Players:». Консоль проходит PermissionValidator при OP 2."
+    },
+    "who": {
+      "syntax": "/who",
+      "notes": "Алиас /list, право neoessentials.list."
+    },
+    "online": {
+      "syntax": "/online",
+      "notes": "Алиас /list, право neoessentials.list."
+    },
+    "motd": {
+      "syntax": "/motd | /motd set <message> | /motd clear | /motd reload | /motd broadcast | /motd profile list | /motd profile create <name> <message> | /motd profile delete <name> | /motd profile switch <name> | /motd profile info [name] | /motd rotation enable <intervalMinutes> | /motd rotation disable | /motd rotation next",
+      "notes": "Корневой узел без .requires — дерево видно всем; /motd проверяет neoessentials.motd внутри. set/clear — motd.set; reload — motd.reload; broadcast — motd.broadcast (шлёт только игрокам с motd); ветка profile — motd.profile; rotation — motd.rotation (интервал Integer 1–10080). set и create: greedyString, & → §, плейсхолдеры {player}/{online}/{max}/{time} и PlaceholderAPI. В каталоге permission пустой."
+    },
+    "compass": {
+      "syntax": "/compass [player]",
+      "notes": "Без цели — только игрок, neoessentials.compass. С целью EntityArgument.player() и compass.others; консоль может смотреть чужой. Показывает стороны света, координаты, биом, дистанцию до спавна. Дополнительный литерал bearing регистрируется, но в каталоге /help его нет."
+    },
+    "direction": {
+      "syntax": "/direction [player]",
+      "notes": "Алиас /compass, право neoessentials.compass / compass.others."
+    },
+    "getpos": {
+      "syntax": "/getpos [player]",
+      "notes": "Без цели — игрок, neoessentials.getpos. С целью — getpos.others. Точные и блочные координаты, свет, блок под ногами, эквивалент Незер/Обычный мир. Дополнительный литерал pos в дереве есть, в каталоге нет."
+    },
+    "coords": {
+      "syntax": "/coords [player]",
+      "notes": "Алиас /getpos, право neoessentials.getpos."
+    },
+    "whereami": {
+      "syntax": "/whereami [player]",
+      "notes": "Алиас /getpos, право neoessentials.getpos."
+    },
+    "depth": {
+      "syntax": "/depth [player]",
+      "notes": "Корневой .requires — instanceof ServerPlayer: консоль не выполнит даже /depth <player>. Своё — neoessentials.depth; чужое EntityArgument.player() — depth.others. Море Y=63, бедрок Y=−64. Описания слоёв зашиты по-английски (Deepslate Level, Nether Floor…)."
+    },
+    "info": {
+      "syntax": "/info",
+      "notes": "Не алиас /whois, несмотря на описание в каталоге. Печатает header + активный MOTD (только {player}/{name}) + footer со ссылкой на /rules. Право neoessentials.info (default true). Консоль проходит (p == null)."
+    },
+    "fly": {
+      "syntax": "/fly | /fly on | /fly off | /fly <target> | /fly <target> on | /fly <target> off",
+      "notes": "requires: p == null || узел — консоль и командный блок проходят без OP. Цель — word, только онлайн getPlayerByName. Порядок не [on|off] [player], а сначала цель, либо голые on/off на себя. Чужой — neoessentials.fly.others на ветке target. Без on/off — invert mayfly, при выключении сбрасывает flying и fallDistance."
+    },
+    "god": {
+      "syntax": "/god | /god on | /god off | /god <target> | /god <target> on | /god <target> off",
+      "notes": "requires: p == null || узел — консоль и командный блок проходят без OP. Цель — word, только онлайн getPlayerByName. Состояние в HashMap, при quit снимается, на диск не пишется. Включение дополнительно фулл-хилит и ставит голод 20. Чужой — god.others."
+    },
+    "heal": {
+      "syntax": "/heal [target]",
+      "notes": "requires: p == null || узел — консоль и командный блок проходят без OP. Цель — word, только онлайн getPlayerByName. Полное HP, голод 20, saturation 20, removeAllEffects. Мёртвого не лечит (heal.dead). Чужой — heal.others."
+    },
+    "feed": {
+      "syntax": "/feed [target]",
+      "notes": "requires: p == null || узел — консоль и командный блок проходят без OP. Цель — word, только онлайн getPlayerByName. Только голод и saturation 20, эффекты не трогает. Чужой — feed.others."
+    },
+    "speed": {
+      "syntax": "/speed <speed> [target] | /speed walk <speed> [target] | /speed fly <speed> [target]",
+      "notes": "requires: p == null || узел — консоль и командный блок проходят без OP. Цель — word, только онлайн getPlayerByName. Float 0–10 → Minecraft 0.0–1.0 (cap 1.0). Голый /speed <n> смотрит, летит ли цель сейчас (abilities.flying), а не mayfly. Walk — MOVEMENT_SPEED; fly — Abilities.flyingSpeed + onUpdateAbilities. Чужой — speed.others."
+    },
+    "ext": {
+      "syntax": "/ext [target]",
+      "notes": "requires: p == null || узел — консоль и командный блок проходят без OP. Цель — word, только онлайн getPlayerByName. clearFire(). Чужой — ext.others."
+    },
+    "extinguish": {
+      "syntax": "/extinguish [target]",
+      "notes": "Алиас /ext, право neoessentials.ext / ext.others."
+    },
+    "burn": {
+      "syntax": "/burn <target> [seconds]",
+      "notes": "Цель обязательна. Seconds Integer 1–600, по умолчанию 10. Ставит remainingFireTicks = seconds×20. Отдельного burn.others нет — хватает neoessentials.burn. Консоль проходит."
+    },
+    "give": {
+      "syntax": "/give <target> <item> [amount]",
+      "notes": "Цель и предмет обязательны. item — word (без NBT/компонентов); резолв WorthManager.resolveItem: namespace:path, иначе minecraft:path, иначе exact path любого мода, иначе contains. amount Integer 1–3456, по умолчанию 1; стопки режутся по maxStack, лишнее drop. Перекрывает ванильный /give. С /crate key give не пересекается — это подкоманда /crate."
+    },
+    "more": {
+      "syntax": "/more [amount]",
+      "notes": "Только игрок, основная рука. Без amount — maxStackSize; иначе Integer 1–3456 (можно больше максимума стопки). Пустая рука — no_item. Консоль: дерево видно (p == null), execute — player_only."
+    },
+    "hat": {
+      "syntax": "/hat",
+      "notes": "Только игрок. Меняет основную руку и слот брони 3 (шлем), даже если предмет «не шлем». Пустая рука — no_item."
+    },
+    "exp": {
+      "syntax": "/exp | /exp show [target] | /exp set <amount> [target] | /exp give <amount> [target]",
+      "notes": "Порядок — amount затем target, не наоборот. Bare /exp и show — свои XP (консоль без цели — player_only). set: neoessentials.exp.set, amount ≥ 0 (сначала обнуляет уровни/очки, потом giveExperiencePoints). give: exp.give, amount ≥ 1. Чужие set/give — exp.set.others / exp.give.others. Цель только онлайн."
+    },
+    "xp": {
+      "syntax": "/xp | /xp set <amount> | /xp give <amount>",
+      "notes": "Урезанный алиас /exp: те же права neoessentials.exp / exp.set / exp.give, но нет show и нет [target] на set/give — чужой XP этой командой не выдать. Ванильный /xp перекрыт."
+    },
+    "sudo": {
+      "syntax": "/sudo <target> <command> | /sudo * <command> | /sudo ** <command>",
+      "notes": "Литералы * и ** отдельные (word() не ест «*»). * — все кроме отправителя; ** — все включая. command — greedyString; префикс c: шлёт чат через ServerChatEvent (форматтер/мут/антиспам), иначе performPrefixedCommand без ведущего /. Себя по имени нельзя (sudo.self); exempt молча пропускается в bulk и блокирует одиночную цель, если отправитель — игрок (консоль обходит exempt)."
+    },
+    "gamemode": {
+      "syntax": "/gamemode survival|creative|adventure|spectator [target] | /gamemode 0|1|2|3",
+      "notes": "Имена режимов — литералы, не word. Числа 0–3 = survival/creative/adventure/spectator и не принимают [target]. Чужой — gamemode.others. Консоль без цели — player_only. Перекрывает ванильный /gamemode. Цель — онлайн word."
+    },
+    "gms": {
+      "syntax": "/gms [player]",
+      "notes": "Ярлык Survival. Включается commands.gamemode. Своё — neoessentials.gamemode, чужой EntityArgument.player() — gamemode.others. Уже в этом режиме — already_in_mode. Консоль без цели — player_only."
+    },
+    "gmc": {
+      "syntax": "/gmc [player]",
+      "notes": "Ярлык Creative. Та же схема прав и цели, что /gms."
+    },
+    "gma": {
+      "syntax": "/gma [player]",
+      "notes": "Ярлык Adventure. Та же схема прав и цели, что /gms."
+    },
+    "gmsp": {
+      "syntax": "/gmsp [player]",
+      "notes": "Ярлык Spectator. Та же схема прав и цели, что /gms."
+    },
+    "suicide": {
+      "syntax": "/suicide | /suicide confirm",
+      "notes": "Только игрок. Первый вызов ставит окно 10 с; confirm убивает DamageTypes.GENERIC_KILL (не PvP). Кулдаун 30 с после успеха. Creative/Spectator — invalid_gamemode. Не алиас ванильного /kill."
+    },
+    "killme": {
+      "syntax": "/killme | /killme confirm",
+      "notes": "Алиас /suicide, право neoessentials.suicide. Включается commands.suicide."
+    },
+    "ptime": {
+      "syntax": "/ptime | /ptime reset [target] | /ptime <time> [target]",
+      "notes": "Клиентский ClientboundSetTimePacket, серверное время не меняет. Bare — показать. reset снимает; <time> — sunrise/day/morning/noon/afternoon/sunset/night/dusk/midnight или ticks; «reset» в word тоже даёт −1. Чужой — ptime.others. Карта в памяти, onPlayerQuit стирает."
+    },
+    "pweather": {
+      "syntax": "/pweather | /pweather reset [target] | /pweather sun [target] | /pweather clear | /pweather storm [target] | /pweather rain",
+      "notes": "Клиентские RAIN/THUNDER_LEVEL_CHANGE. clear и rain — синонимы sun/storm, но без ветки [target]. Чужой — pweather.others. Состояние в памяти, при выходе сбрасывается. Грома отдельно нет."
+    },
+    "time": {
+      "syntax": "/time | /time set <value> | /time add <value> | /time <value>",
+      "notes": "Bare — текущие тики мира источника. set/add и shorthand value требуют neoessentials.time.set. Имена: sunrise=23000, day/morning=1000, noon=6000, afternoon=9000, sunset=12000, night/dusk=13000, midnight=18000, либо Long. Пишет setDayTime во ВСЕ измерения. Перекрывает ванильный /time."
+    },
+    "day": {
+      "syntax": "/day",
+      "notes": "Ставит 1000 во все миры. Право neoessentials.time.set, не neoessentials.time."
+    },
+    "night": {
+      "syntax": "/night",
+      "notes": "Ставит 13000 во все миры. Право neoessentials.time.set."
+    },
+    "weather": {
+      "syntax": "/weather sun|clear|rain|storm|thunder [duration]",
+      "notes": "duration Integer 1–1000000 секунд; 0 в коде → 6000 тиков (5 мин). clear=sun, rain=storm. Только измерения с hasSkyLight (Незер/Энд пропускаются). Перекрывает ванильный /weather."
+    },
+    "sun": {
+      "syntax": "/sun",
+      "notes": "Ярлык /weather sun без длительности, право neoessentials.weather."
+    },
+    "storm": {
+      "syntax": "/storm",
+      "notes": "Ярлык /weather storm без длительности, право neoessentials.weather."
+    },
+    "thunder": {
+      "syntax": "/thunder",
+      "notes": "Ярлык /weather thunder без длительности, право neoessentials.weather."
+    },
+    "broadcast": {
+      "syntax": "/broadcast <message>",
+      "notes": "greedyString. Плейсхолдеры PlaceholderAPI от отправителя (консоль — без игрока). Префикс §6[Broadcast] §f, цветные коды. Шлётся всем игрокам и в системный чат сервера — отдельного «отправлено N» нет. Консоль проходит."
+    },
+    "bc": {
+      "syntax": "/bc <message>",
+      "notes": "Алиас /broadcast, право neoessentials.broadcast."
+    },
+    "announce": {
+      "syntax": "/announce <message>",
+      "notes": "Алиас /broadcast, право neoessentials.broadcast."
+    },
+    "broadcastworld": {
+      "syntax": "/broadcastworld <message>",
+      "notes": "Только игроки текущего src.getLevel() (у консоли это обычно overworld). Префикс §6[World] §e. Плейсхолдеры PlaceholderAPI."
+    },
+    "bcastworld": {
+      "syntax": "/bcastworld <message>",
+      "notes": "Алиас: performPrefixedCommand «broadcastworld …», право neoessentials.broadcastworld."
+    },
+    "gc": {
+      "syntax": "/gc",
+      "notes": "Аптайм JVM, TPS из getAverageTickTimeNanos (cap 20), used/total/max MB, сумма загруженных чанков. Консоль проходит."
+    },
+    "mem": {
+      "syntax": "/mem",
+      "notes": "Алиас /gc, право neoessentials.gc."
+    },
+    "kill": {
+      "syntax": "/kill <target>",
+      "notes": "Цель обязательна — себя без ника не убить (в отличие от ванильного /kill). Только онлайн-игрок. exempt + отсутствие kill.force у игрока-отправителя блокирует; консоль обходит exempt. genericKill. Перекрывает ванильный /kill (сущности/селекторы больше не работают)."
+    },
+    "world": {
+      "syntax": "/world | /world <dimension> [target]",
+      "notes": "Bare — список dimension().location(). Телепорт на shared spawn измерения; путь или полный id, case-insensitive. Чужой — world.others. Консоль без цели — player_only."
+    },
+    "spawner": {
+      "syntax": "/spawner <mob>",
+      "notes": "Только игрок, луч 6 блоков, блок должен быть SPAWNER. Кроме neoessentials.spawner нужен spawner.<mob> или spawner.*. id без «:» → minecraft:. Меняет setEntityId, дропов нет."
+    },
+    "recipe": {
+      "syntax": "/recipe [item]",
+      "notes": "Только игрок. Без item — предмет в основной руке. Иначе word → minecraft:path. awardRecipes всем рецептам с этим результатом. Перекрывает ванильный /recipe (ветки give/take больше нет)."
+    },
+    "backup": {
+      "syntax": "/backup",
+      "notes": "save(null, true, false) по всем уровням, затем ProcessBuilder от commands.backupCommand (пустая строка / «save-all» — только сейв). Команда режется по пробелам, inheritIO, не ждёт завершения. Право neoessentials.backup."
+    },
+    "unlimited": {
+      "syntax": "/unlimited | /unlimited list [target] | /unlimited clear [target] | /unlimited <item> [target]",
+      "notes": "Bare и list печатают набор id. clear снимает всё. <item> тоглит id (minecraft: префикс или hand — id из руки отправителя). Чужой — unlimited.others. Набор в памяти, onPlayerQuit стирает. Пополнение стопки делает обработчик использования предмета."
+    },
+    "effect": {
+      "syntax": "/effect <target> clear | /effect <target> <effect> [duration] [amplifier]",
+      "notes": "Цель обязательна (онлайн word). duration 1–1000000 с, по умолчанию 30; amplifier 0–255, по умолчанию 0. Эффект — path или namespace:path. Перекрывает ванильный /effect. Консоль проходит."
+    },
+    "spawnmob": {
+      "syntax": "/spawnmob <mob> [amount] [target]",
+      "notes": "amount Integer 1–100, по умолчанию 1. Без target — у ног отправителя (консоль — player_only). Чужой — spawnmob.others. finalizeSpawn COMMAND. id без «:» → minecraft:."
+    },
+    "mob": {
+      "syntax": "/mob <mob> [amount]",
+      "notes": "Алиас /spawnmob без ветки [target] — заспавнить у другого игрока этой командой нельзя. Право neoessentials.spawnmob."
+    },
+    "invsee": {
+      "syntax": "/invsee <target>",
+      "notes": "Цель EntityArgument.player() обязательна. Консоль проходит requires, но execute — getPlayerOrException (нужен игрок). Аудит — neoessentials/inventory_audit.log. Read-only слоты mayPickup/mayPlace=false. Свою инвентарь смотреть нельзя (invsee.self). Право neoessentials.invsee. Включается commands.invsee."
+    },
+    "inv": {
+      "syntax": "/inv <target>",
+      "notes": "Алиас /invsee, не redirect: своё requires. Право neoessentials.invsee."
+    },
+    "invseeedit": {
+      "syntax": "/invseeedit <target>",
+      "notes": "Редактирование: один редактор на цель (concurrent_edit). Право neoessentials.invsee.edit, ключ commands.invseeedit. Замок снимается на PlayerContainerEvent.Close."
+    },
+    "enderchest": {
+      "syntax": "/enderchest <target>",
+      "notes": "Только чужой/указанный EC, своего без цели нет. В отличие от invsee, себя не запрещает — /ec <свой ник> откроет. Право neoessentials.enderchest."
+    },
+    "ec": {
+      "syntax": "/ec <target>",
+      "notes": "Алиас /enderchest, право neoessentials.enderchest."
+    },
+    "enderchestedit": {
+      "syntax": "/enderchestedit <target>",
+      "notes": "Живой EC цели, замок один редактор. Право neoessentials.enderchest.edit, ключ commands.enderchestedit."
+    },
+    "ecedit": {
+      "syntax": "/ecedit <target>",
+      "notes": "Алиас /enderchestedit, право neoessentials.enderchest.edit."
+    },
+    "fireball": {
+      "syntax": "/fireball [type] [speed] [ride]",
+      "notes": "Только игрок. По умолчанию type=fireball, speed=2.0, без ride. Типы-подсказки: fireball, small, large, arrow, skull, egg, snowball, expbottle, dragon, trident, windcharge. speed Double 0–10. ride — литерал, право fireball.ride. После корневого fireball execute дополнительно требует fireball.<type> или fireball.* — для голого /fireball это fireball.fireball (узла в реестре нет) либо fireball.*."
+    },
+    "tree": {
+      "syntax": "/tree <type>",
+      "notes": "Только игрок, луч 20 блоков, сажает на блок выше попадания. Типы: oak, birch, spruce, jungle, acacia, darkoak, mangrove, cherry, azalea, bigoak, mega_spruce, mega_jungle. Право neoessentials.tree."
+    },
+    "bigtree": {
+      "syntax": "/bigtree",
+      "notes": "Зовёт тот же обработчик с type=bigoak (fancy_oak). Право neoessentials.tree."
+    },
+    "break": {
+      "syntax": "/break",
+      "notes": "Только игрок, луч 20 блоков, destroyBlock без дропа. Бедрок — только с neoessentials.break.bedrock. Консоль: дерево видно, execute — player_only."
+    },
+    "ice": {
+      "syntax": "/ice [target]",
+      "notes": "setTicksFrozen(getTicksRequiredToFreeze()+1) — механика порошкового снега, не ледяной блок. Своё — neoessentials.ice; чужой word онлайн — ice.others. Консоль без цели — player_only."
+    },
+    "bottom": {
+      "syntax": "/bottom",
+      "notes": "Только игрок. Ищет самый нижний твёрдый блок с двумя воздухом сверху между minBuildHeight и текущим Y, пишет back через MiscTeleportManager. Нет безопасного места — no_safe."
+    },
+    "lightning": {
+      "syntax": "/lightning [target]",
+      "notes": "Без цели — удар в точку луча 100 блоков (нужен игрок). С целью — в ноги онлайн-игрока, право lightning.others. Консоль без цели — player_only."
+    },
+    "smite": {
+      "syntax": "/smite [target]",
+      "notes": "Алиас /lightning, право neoessentials.lightning."
+    },
+    "remove": {
+      "syntax": "/remove <type> [radius]",
+      "notes": "Только игрок. type: all, items, drops, mobs, animals, monsters, arrows, xp, paintings, boats, minecarts, tnt. Радиус Integer 1–10000, по умолчанию 200. Игроков не трогает. Неизвестный type совпадёт с 0 удалений. Не путать с /rules remove."
+    },
+    "nuke": {
+      "syntax": "/nuke [target]",
+      "notes": "Не удаление сущностей. Без цели — все онлайн; с целью — один ник. Над каждым 5×5 сетка PrimedTnt (шаг 5, −10..10) на maxBuildHeight, fuse 80 тиков. Право neoessentials.nuke. Консоль без цели бомбит всех."
+    },
+    "me": {
+      "syntax": "/me <action>",
+      "notes": "Аргумент MessageArgument.message() — слияние с ванильным /me (StringArgumentType ломал разбор). Префикс §5* §d<имя> §f. Консоль шлёт от имени «Console»."
+    },
+    "firework": {
+      "syntax": "/firework clear | /firework power <level> | /firework fire [amount] | /firework color <options>",
+      "notes": "Корневого .executes нет — голый /firework не выполняется. Нужна ракета в основной руке. power Integer 0–127; fire 1–50 и отдельное neoessentials.firework.fire; color — greedyString: hex[,hex] и опционально fade:/shape (star, large, creeper, burst) / trail|twinkle|flicker. Только игрок."
+    },
+    "fw": {
+      "syntax": "/fw",
+      "notes": "Только запись каталога /help. Commands.literal(\"fw\") нет — алиас не работает. Используйте /firework."
+    },
+    "antioch": {
+      "syntax": "/antioch [flavour]",
+      "notes": "Только игрок. Луж 20 блоков, PrimedTnt fuse 80. Любой greedy-аргумент включает две строки Holy Hand Grenade на весь сервер, TNT всё равно спавнится. Право neoessentials.antioch."
+    },
+    "kittycannon": {
+      "syntax": "/kittycannon",
+      "notes": "Только игрок. Детёныш-кот (age −24000) с импульсом взгляда×2; через 20 тиков discard + explode power 0, ExplosionInteraction.NONE — блоков не ломает. Право neoessentials.kittycannon."
+    },
+    "beezooka": {
+      "syntax": "/beezooka [amount]",
+      "notes": "Только игрок. amount Integer 1–20, по умолчанию 1. Пчёлы с persistent anger 400–800 тиков. Право neoessentials.beezooka."
+    },
+    "rest": {
+      "syntax": "/rest [target]",
+      "notes": "Не голосование за пропуск ночи. resetStat(TIME_SINCE_REST) — сбрасывает таймер фантомов. Своё — neoessentials.rest (default true); чужой — rest.others. Консоль без цели — player_only."
+    },
+    "potion": {
+      "syntax": "/potion clear | /potion add <effect> [duration] [amplifier]",
+      "notes": "Не /effect: правит POTION_CONTENTS предмета в руке (potion / splash / lingering / tipped_arrow). duration 1–1000000 с default 30; amplifier 0–255 default 0. Корневого .executes нет. Только игрок. Право neoessentials.potion."
+    },
+    "rtoggle": {
+      "syntax": "/rtoggle | /rtoggle on | /rtoggle off | /rtoggle <target> | /rtoggle <target> on | /rtoggle <target> off",
+      "notes": "Куда отвечает /r: enabled (по умолчанию) — последнему, кому писали вы; disabled — последнему, кто писал вам. Чужой — rtoggle.others. Консоль без цели — player_only. Состояние в памяти процесса."
+    },
+    "rules": {
+      "syntax": "/rules | /rules <page> | /rules add <rule> | /rules remove <number> | /rules edit <number> <newText> | /rules insert <number> <rule> | /rules clear | /rules reload",
+      "notes": "Просмотр — neoessentials.rules (default true), по 10 строк, page Integer ≥ 1. Админ-ветки — rules.admin. add/edit/insert: greedyString, & → §. Нумерация с 1. Файл config/neoessentials/rules_data.json; устаревший rules.json мигрирует сам. PermissionValidator (консоль = OP 2)."
+    },
+    "rg": {
+      "syntax": "/rg define <id> | /rg claim <id> | /rg redefine <id> | /rg remove <id> | /rg delete <id> | /rg list | /rg tp <id> | /rg clearowners <id> | /rg clearmembers <id> | /rg info [id] | /rg addowner <id> <player> | /rg addmember <id> <player> | /rg delowner <id> <player> | /rg delmember <id> <player> | /rg flag <id> list | /rg flag <id> <flag> <value> | /rg flag <id> clear <flag> [value]",
+      "notes": "helpCatalogOnly: NeoEssentials не строит Brigadier для /rg. Дерево принадлежит моду «regionguard»; эти 17 строк попадают в /help только если ModList.isLoaded(\"regionguard\") на старте. Без мода /rg в каталоге нет и NE его не регистрирует. Права и поведение — у RegionGuard, не у узлов neoessentials.rg."
+    }
+  },
+  "examples": [
+    {
+      "title": "Переключить режим себе и другому ярлыками",
+      "goal": "Проверить, что /gms и /gmc ходят в то же дерево, что полный /gamemode, и что чужой режим закрыт отдельным узлом.",
+      "commands": [
+        "/gms",
+        "/gmc Steve",
+        "/gamemode spectator",
+        "/gamemode 1 Steve"
+      ],
+      "result": "/gms без цели ставит Survival отправителю (нужен neoessentials.gamemode; консоль получит player_only). /gmc Steve требует gamemode.others и онлайн-игрока EntityArgument — офлайн «player not found». /gamemode spectator — полный литерал, не число. /gamemode 1 Steve не разберётся: ветки 0–3 не принимают [target], единица — только себе. Уже находясь в этом режиме, ярлыки отвечают already_in_mode."
+    },
+    {
+      "title": "Портативные GUI без блока",
+      "goal": "Открыть верстак и наковальню в поле, убедиться, что консоль это не сделает.",
+      "commands": [
+        "/workbench",
+        "/craft",
+        "/anvil",
+        "/grindstone",
+        "/stonecutter"
+      ],
+      "result": "workbench и craft — один обработчик /crafting (право neoessentials.crafting, ключ commands.crafting). anvil / grindstone / stonecutter — отдельные команды и ключи. Меню виртуальные (stillValid всегда true), опыт на наковальне списывается как обычно. Из консоли все пять ответят player_only (у anvil ещё и корневой requires ServerPlayer)."
+    },
+    {
+      "title": "Объявление на весь сервер и только в своём мире",
+      "goal": "Отличить /broadcast от /broadcastworld и увидеть, что плейсхолдеры берутся от отправителя.",
+      "commands": [
+        "/broadcast &6Рестарт через {online} игроков",
+        "/bc Техокно",
+        "/broadcastworld Только этот мир"
+      ],
+      "result": "/broadcast и /bc шлют всем онлайн и в системный чат сервера строку §6[Broadcast] §f… — отдельного «отправлено N» нет, своё сообщение вы увидите как получатель. {online} режет PlaceholderAPI. /broadcastworld помечает §6[World] §e и фильтрует по src.getLevel(): игрок в Незере не увидит объявление из Обычного мира; консоль обычно вещает в overworld."
+    },
+    {
+      "title": "Шуточные снаряды",
+      "goal": "Проверить, что /antioch, /kittycannon и /beezooka требуют игрока и не работают из консоли.",
+      "commands": [
+        "/antioch",
+        "/antioch holy",
+        "/kittycannon",
+        "/beezooka 3"
+      ],
+      "result": "Смотрите в блок (луч 20). /antioch ставит TNT с запалом 80 тиков; любой хвост вроде holy дополнительно рассылает две строки Holy Hand Grenade. /kittycannon запускает котёнка, через секунду сущность пропадает и играет взрыв силы 0 (блоки целы). /beezooka 3 — три злые пчелы (лимит 20). Консоль на все три — player_only."
+    },
+    {
+      "title": "RegionGuard в справке, не в NeoEssentials",
+      "goal": "Понять, почему /rg то есть в /help, то нет, и кто на самом деле выполняет команду.",
+      "commands": [
+        "/help rg",
+        "/rg list"
+      ],
+      "result": "Если мод regionguard загружен, /help rg покажет 17 синтаксисов из каталога (define, claim, flag…). Сам /rg list выполняет RegionGuard: NeoEssentials только вызвал registerCommand(\"rg …\") при старте. Без regionguard этих строк в /help нет, а /rg list либо неизвестная команда, либо дерево другого мода — NeoEssentials его не создаёт."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "OP и узлы прав — три разных проверки",
+      "body": "Большинство деревьев в PlayerState/ServerAdmin/Fun/Utility пишут `.requires(p == null || PermissionAPI.hasPermission(...))`. Консоль, командный блок и функция проходят всегда. У игрока PermissionAPI при `opsBypassPermissions: true` (значение по умолчанию в config.json) отдаёт true любому OP, даже без узла.\n\nКоманды на PermissionValidator (seen, ping, depth, anvil, crafting, rules, motd-подкоманды, suicide, list, near, whois, compass, getpos, gamemode-ярлыки) для не-игрока требуют `source.hasPermission(2)` — командный блок без OP 2 получит отказ. Игроку узел всё равно нужен, если он не OP и обход выключен.\n\nЯрлыки /gms и полный /gamemode расходятся: ярлыки — PermissionValidator, /gamemode — PermissionAPI с `p == null`.",
+      "fix": "Не-OP выдавайте узлы явно. Чтобы OP не получал /give и /nuke «просто так», поставьте `opsBypassPermissions: false` и раздайте узлы группам. Командные блоки с /sudo и /nuke ограничивайте ванильным OP и доступом к блокам."
+    },
+    {
+      "title": "Консоль против игрока",
+      "body": "GUI (anvil, crafting, grindstone, stonecutting), /hat, /more, /break, /tree, /fireball, /spawner, /recipe, /remove, /bottom, /suicide и все fun-команды в execute требуют ServerPlayer. /depth и /anvil дополнительно ставят `.requires(instanceof ServerPlayer)` — консоль не дойдёт даже до цели.\n\nЧужой онлайн-ник принимают fly/god/heal/give/kill/effect: /give Steve diamond 64 из консоли работает. /ping и /compass без ника из консоли нельзя (свой ping/компас).\n\n/nuke без аргумента из консоли бомбит всех онлайн. /list и /gc из консоли работают при OP 2 (Validator) или сразу (PermissionAPI).",
+      "fix": "Из консоли всегда указывайте ник там, где есть [player]/[target]. Не оставляйте командный блок с голым /nuke."
+    },
+    {
+      "title": "/give не сталкивается с кейсами и ломает ванильный /give",
+      "body": "Ключи кейсов выдаёт `/crate key give <player> <crate> <amount>` — другой литерал, другой модуль. Совпадения с `/give` нет.\n\nNeoEssentials регистрирует собственный `/give <target> <item> [amount]`: item это word без компонентов/NBT, amount 1–3456. Ванильный `/give <targets> <item>` с селекторами `@a`, количеством через компонент и data-компонентами в квадратных скобках после регистрации мода больше не разбирается — Brigadier держит узел мода.\n\nРезолв предмета — WorthManager: `minecraft:diamond`, `diamond` или кусок пути (`copper` возьмёт первый id, где path содержит «copper»).",
+      "fix": "Ванильную выдачу с NBT делайте через `/minecraft:give`. Для кейсов — только `/crate key give`. Не полагайтесь на порядок «первый diamond_ore vs diamond» в fuzzy contains."
+    },
+    {
+      "title": "Состояние /god, /ptime, /pweather и /unlimited живёт до выхода",
+      "body": "`godMode`, `playerTimes`, `playerWeather` и `unlimitedItems` — карты в памяти. `onPlayerQuit` их чистит (для ptime/pweather комментарий в коде: persist nothing). После реконнекта бог, клиентское время/погода и безлимитные предметы сброшены. /fly пишет в Abilities и может пережить выход как часть игрока, это уже ваниль, не карта мода.",
+      "fix": "Не стройте на /god постоянный иммунитет. Нужен клиентский вечный день — ставьте его после входа (командный блок, скрипт, панель)."
+    },
+    {
+      "title": "/xp не равен /exp, /mob не равен /spawnmob",
+      "body": "`/exp` умеет show/set/give и [target] на set/give. `/xp` — только bare, set <amount> и give <amount> себе. `/spawnmob <mob> [amount] [target]` телепортирует спавн к другому игроку; `/mob` останавливается на amount. Оба алиаса в каталоге подписаны как полные, дерево короче.",
+      "fix": "Чужой XP и мобов у другого игрока вызывайте каноническими /exp и /spawnmob."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "/pong и /fw есть в /help, в Brigadier их нет",
+      "body": "NeoEssentials.java вызывает `registerCommand(\"pong\")` и `registerCommand(\"fw\")`, поэтому строки попадают в каталог HelpCommand. Ни PingCommand, ни FunCommands не делают `Commands.literal(\"pong\")` / `literal(\"fw\")`. Автодополнение и разбор команды идут по дереву: /pong и /fw — неизвестные команды (или ваниль/другой мод, если кто-то ещё их занял).",
+      "fix": "Пинг — /ping. Фейерверк — /firework clear|power|fire|color. Не обещайте игрокам алиасы из /help, пока литералы не появятся в исходнике."
+    },
+    {
+      "title": "/info в каталоге подписан как алиас whois, а выполняет другое",
+      "body": "`registerCommand(\"info\", \"Get player information (alias)\")` описывает whois, но WhoisCommand литерал info не регистрирует. FunCommands вешает /info на печать MOTD + footer про /rules. Право neoessentials.info, аргументов нет — /info Steve не сработает как whois.",
+      "fix": "Данные игрока — только /whois <player>. /info трактуйте как краткий MOTD."
+    },
+    {
+      "title": "/compass печатает карточку дважды",
+      "body": "В ветке без цели CompassCommand подряд дважды вызывает `showCompassInfo(...)`. Игрок видит дублирующийся блок «facing / coordinates / biome». Ветка с [player] вызывается один раз.",
+      "fix": "Пока не исправят — смотрите первую карточку. Чужой /compass <player> дубля не даёт."
+    },
+    {
+      "title": "/whois не показывает офлайн-игроков",
+      "body": "Ветка word вызывает `showOfflinePlayerInfo` → `getOfflinePlayerSeenInfo`, который всегда возвращает `Optional.empty()` (заглушка «integrate with SeenCommand»). Даже с neoessentials.whois.detailed офлайн-ник заканчивается player_not_found. Онлайн — EntityArgument.player() — работает.",
+      "fix": "Офлайн-статус смотрите /seen <player> (seen_data.json). /whois только для тех, кто сейчас в мире."
+    },
+    {
+      "title": "Голый /fireball требует несуществующий узел fireball.fireball",
+      "body": "Корневой requires проверяет neoessentials.fireball. executeFireball для типа по умолчанию `\"fireball\"` дополнительно требует `neoessentials.fireball.fireball` или `neoessentials.fireball.*`. Узла fireball.fireball в PermissionRegistry нет. Игрок с одним только fireball (и без OP-обхода) получит no_perm_type. Подсказка `trident` есть в PROJECTILE_TYPES, в switch его нет — спавнится large fireball.",
+      "fix": "Выдайте neoessentials.fireball.* (или OP при opsBypassPermissions). Для трезубца не рассчитывайте на отдельную сущность."
+    },
+    {
+      "title": "/recipe, /give, /kill, /xp, /effect перекрывают ваниль",
+      "body": "Мод регистрирует те же литералы позже ванили. Пропадают: `/recipe give`, `/give` с селекторами и компонентами, `/kill @e`, полный `/xp add/query`, ванильный `/effect`. /help мод снимает рефлексией и ставит свой. Это не сбой разбора — последнее дерево побеждает.",
+      "fix": "Ванильный разбор — с префиксом пространства имён: `/minecraft:give`, `/minecraft:kill`, `/minecraft:recipe`, `/minecraft:xp`, `/minecraft:effect`, `/minecraft:help`."
+    },
+    {
+      "title": "/rest не пропускает ночь",
+      "body": "Апстрим-wiki пишет «Skip the night (vote)». Реализация — `resetStat(TIME_SINCE_REST)`: обнуляет счётчик бессонницы, из-за которого появляются фантомы. Игровой день, погода и sleep-vote не меняются.",
+      "fix": "Ночь — /time night / /day или ванильный сон. /rest — только антифантомы."
+    }
+  ]
+}

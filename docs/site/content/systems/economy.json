@@ -1,0 +1,183 @@
+{
+  "commands": ["pay", "balance", "bal", "baltop", "balancetop", "eco", "paytoggle", "pt", "worth", "sell", "setworth", "payconfirmtoggle", "chestshop", "cshop", "npcshop"],
+  "commandDetails": {
+    "pay": {
+      "syntax": "/pay <player> <amount>",
+      "notes": "Право neoessentials.economy.pay (узел .requires плюс повторная проверка в execute). <amount> — DoubleArgumentType от 0.01, проценты вроде 10% Brigadier не примет. Подсказки имён — только онлайн, но с neoessentials.economy.pay.offline перевод уходит в профиль из кэша. Алиас /p регистрируется в том же PayCommand, отдельной команды в этом файле у него нет. Кулдаун в конфиге отсутствует: ConfigManager.getPayCooldownSeconds() всегда возвращает 0."
+    },
+    "balance": {
+      "syntax": "/balance [player]",
+      "notes": "Голый /balance смотрит свой счёт и в execute требует neoessentials.economy.balance; на корне .requires нет, поэтому команда видна всем, отказ приходит текстом. Ветка [player] закрыта neoessentials.economy.balance.others (или OP 2). Имя резолвится через EconomyPlayerUtil — офлайн тоже. Консоль не проходит: executeOther зовёт getPlayerOrException у отправителя. Алиас /money в том же файле — только свой баланс, как /bal."
+    },
+    "bal": {
+      "syntax": "/bal",
+      "notes": "Отдельная регистрация в BalanceCommand: только свой баланс, аргумента <player> нет. Чужой счёт — исключительно /balance <player>."
+    },
+    "baltop": {
+      "syntax": "/baltop [page]",
+      "notes": "neoessentials.economy.baltop; консоль проходит (player == null). Без [page] — страница 1, IntegerArgumentType от 1. Размер страницы 10 и TTL кэша 60 с зашиты в BaltopCommand, ключей в economy.json нет. Игроки с neoessentials.economy.baltop.exempt в таблицу не попадают. Алиас /btop регистрируется в том же цикле, отдельной карточки у него нет."
+    },
+    "balancetop": {
+      "syntax": "/balancetop [page]",
+      "notes": "Тот же узел, что /baltop: цикл {baltop, balancetop, btop} в BaltopCommand.register."
+    },
+    "eco": {
+      "syntax": "/eco give|take <player> <amount> | set <player> <amount> | reset <player> | history [player]",
+      "notes": "Корень — OP 2 или neoessentials.economy.eco; голого /eco нет. give/take — сумма от 0.01, set — от 0.0 (отрицательное отсекается в execute). Имена резолвятся офлайн через профиль; строка на @ — ванильный селектор, только онлайн (квесты: /eco give @p 100). history без аргумента — своя лента; [player] дополнительно требует именно source.hasPermission(2), одного eco-узла мало. Алиас /economy — то же дерево. Процентный синтаксис 10% не поддерживается."
+    },
+    "paytoggle": {
+      "syntax": "/paytoggle",
+      "notes": "neoessentials.economy.paytoggle (или OP 2). Только игрок: getPlayerOrException. Значение пишется сразу в коллекцию pay_toggles. Пока записи нет, действует economy.json → paytoggleDefault (в шаблоне true — платежи принимаются)."
+    },
+    "pt": {
+      "syntax": "/pt",
+      "notes": "Голый /pt — это paytoggle: PayToggleCommand регистрирует literal(\"pt\").executes раньше PowertoolCommand. После слияния Brigadier /pt list, /pt remove и /pt <command> принадлежат powertool (neoessentials.item.powertool), не экономике. Не считайте подкоманды частью paytoggle."
+    },
+    "worth": {
+      "syntax": "/worth [hand [amount] | <item> [amount]]",
+      "notes": "neoessentials.worth; без аргументов и /worth hand — предмет в основной руке (qty = размер стека, если amount не задан). Ветка <item> — greedyString: хвост-число читается как количество («diamond 64», «thermal:copper_ingot 16»), иначе qty = 1. Команда не регистрируется, если modules.economyEnabled выключен или commands.worth = false."
+    },
+    "sell": {
+      "syntax": "/sell [hand [amount] | inventory|all|invent | <item> [amount]]",
+      "notes": "Корень — neoessentials.sell. Голый /sell и ветка hand дополнительно требуют neoessentials.sell.hand; inventory/all/invent — neoessentials.sell.bulk. <item> — StringArgumentType.word() (пробелы нельзя, двоеточие можно). Множитель — config.json → economy.sellMultiplier плюс тиры neoessentials.economy.sellmultiplier.N. Переименованные предметы (CUSTOM_NAME) не продаются, пока economy.allowSellNamedItems не true."
+    },
+    "setworth": {
+      "syntax": "/setworth <item> <price|remove>",
+      "notes": "neoessentials.setworth. <item> — ResourceLocationArgument: diamond и minecraft:diamond оба валидны; литерала hand нет, строка hand нормализуется в minecraft:hand и тогда берётся основная рука. <price> — DoubleArgumentType от 0; 0 в WorthManager.setPrice удаляет цену так же, как литерал remove. Пишет в коллекцию item_worth сразу, /neoe reload для этого не нужен."
+    },
+    "payconfirmtoggle": {
+      "syntax": "/payconfirmtoggle",
+      "notes": "Регистрирует MiscItemCommands, не EconomyCommands. Право neoessentials.payconfirmtoggle. Только игрок. Флаг живёт в in-memory Set и с рестартом сбрасывается. /pay этот флаг не читает — см. knownIssues."
+    },
+    "chestshop": {
+      "syntax": "/chestshop [list [player] | info | convert | remove [<x> <y> <z>] | setprice <buy|sell|both> <price> | stats | limit | export | import [create] | reload | pricing | hologram enable|disable|enablepos <x> <y> <z>|move <x> <y> <z>]",
+      "notes": "Голый /chestshop печатает справку; на корне .requires нет. Прицел у info/convert/setprice/remove без координат/hologram — player.pick(5.0). list [player] — чужие только с neoessentials.shop.list.others или OP 3 и только онлайн. convert — neoessentials.shop.create. remove без координат — владелец или shop.admin.remove/OP 3; с координатами — только админ. setprice — shop.setprice или shop.admin.setprice, чужой знак — только admin.setprice. hologram enablepos вызывается кнопкой из чата после создания знака. reload — OP 3 или shop.admin.reload. Алиаса /shop в коде нет, несмотря на javadoc ShopCommand."
+    },
+    "cshop": {
+      "syntax": "/cshop [list [player] | info | convert | remove [<x> <y> <z>] | setprice <buy|sell|both> <price> | stats | limit | export | import [create] | reload | pricing | hologram enable|disable|enablepos <x> <y> <z>|move <x> <y> <z>]",
+      "notes": "redirect на узел chestshop и только если в commands включены оба ключа chestshop и cshop. Если включён один cshop — не регистрируется ничего."
+    },
+    "npcshop": {
+      "syntax": "/npcshop [create <name> | remove | additem <shopId> <item> <buyPrice> <sellPrice> <quantity> | removeitem <shopId> <index> | list | info <shopId> | reload | respawn <shopId> | entitytype <shopId> <entityType> <ai>]",
+      "notes": "Весь узел — OP 3 или neoessentials.shop.npc.manage; голый /npcshop — справка. <name> у create — greedyString (пробелы можно). <shopId> — UUID или однозначный префикс из /npcshop list. additem: <item> — word(), в листинг всегда пишется \"minecraft:\" + item без префикса minecraft:; buy/sell от −1 (−1 отключает сторону), quantity от 1. remove — ближайшая сущность-магазин в 5 блоках. Покупка в GUI требует neoessentials.shop.use (ПКМ — купить, ЛКМ — продать)."
+    }
+  },
+  "examples": [
+    {
+      "title": "Первые деньги на пустом сервере",
+      "goal": "Модуль уже включён (modules.economyEnabled), но у игроков только стартовый баланс, и нужно проверить переводы, налог и таблицу богачей до открытия вайпа.",
+      "commands": [
+        "/eco give Steve 1000",
+        "/pay Alex 200",
+        "/balance Alex",
+        "/baltop"
+      ],
+      "result": "В шаблонном economy.json ключа startingBalance нет — новым UUID начисляется 100.0 из кода. /eco give пишет в коллекцию economy_balances и шлёт онлайн-цели «received_give». /pay списывает с отправителя ровно 200: при taxPercentage 0 комиссия 0, получатель видит ту же сумму. Поставьте taxPercentage: 5 и повторите — отправитель всё равно теряет 200, получатель 190, 10 сгорают (не на счёт сервера). /balance Alex требует neoessentials.economy.balance.others; без узла сработает только /balance у самого Alex. Первый /baltop часто отвечает «building» — кэш собирается асинхронно, через секунду команда показывает топ и возраст кэша в секундах."
+    },
+    {
+      "title": "Прайс /sell с нуля, без worth.json руками",
+      "goal": "Игроки должны сдавать алмазы и всю руду командой, а не через сундук. Цены живут в хранилище item_worth, не в конфиге.",
+      "commands": [
+        "/setworth minecraft:diamond 25",
+        "/setworth hand 4",
+        "/worth diamond 64",
+        "/sell hand",
+        "/sell inventory"
+      ],
+      "result": "Первая команда ставит 25 за алмаз. Вторая берёт id из основной руки (держите iron_ingot) — это minecraft:hand, не отдельный литерал. /worth diamond 64 печатает 1600 при символе из economy.json только если вы смотрите /pay; /worth и /sell читают currencySymbol из секции economy в config.json, а не из economy.json — этого ключа в config.json больше нет, поэтому почти всегда увидите $. Голый /sell = /sell hand и не обходит neoessentials.sell.hand. inventory/all/invent требуют sell.bulk и пропускают предметы с CUSTOM_NAME, пока allowSellNamedItems false — в чат придёт named_items_skipped. Множитель 1.0 в config.json → economy.sellMultiplier; тир neoessentials.economy.sellmultiplier.150 даёт ×1.5 поверх, если он выше глобального."
+    },
+    {
+      "title": "Игровой сундук-магазин с предметом из руки и голограммой",
+      "goal": "Игрок продаёт зачарованный лук, а не «голый» minecraft:bow. Имя на 4-й строке знака NBT не несёт.",
+      "commands": [
+        "/chestshop convert",
+        "/chestshop hologram enable",
+        "/chestshop info",
+        "/chestshop limit"
+      ],
+      "result": "Поставьте сундук, на соседний блок — табличку. Строка 1 (индекс 0) пустая или [Shop], строка 2 — количество (1…3456), строка 3 — B 50:S 20 (или B FREE / S 1K), строка 4 — ?. На заполнение знака есть 30 с после установки, иначе pending сгорает. convert нужен, если табличку написали раньше, чем обработчик её увидел; обычная установка регистрируется сама, как только все 4 строки заполнены. ПКМ по знаку с луком в руке «впекает» DataComponents; без этого сундук с тем же луком будет «out of stock». После создания в чат приходит кликабельная кнопка — она шлёт /chestshop hologram enablepos <x> <y> <z>; то же делает enable, если смотрите на знак (не дальше 5 блоков). Голограмма id вида shop_<dim>_<x>_<y>_<z>, по умолчанию выкл. ПКМ по чужому знаку — покупка, ЛКМ — продажа, оба требуют neoessentials.shop.use; владелец вместо сделки видит info. Сломать знак: шифт+ЛКМ, иначе удар перехватывается как продажа. Двойной сундук делит 54 слота на оба знака."
+    },
+    {
+      "title": "Админ-магазин без сундука и лимита слотов",
+      "goal": "Спавн продаёт еду бесконечно. Игровой лимит maxShopsPerPlayer на админ-знаки не действует.",
+      "commands": [
+        "/chestshop list",
+        "/chestshop setprice buy 8",
+        "/chestshop stats"
+      ],
+      "result": "На строке 1 напишите точно Admin Shop — нужно neoessentials.shop.create.admin, иначе «no_permission_admin». Сундук не ищется, сток не кончается. В шаблонном config.json ключа shop.maxShopsPerPlayer нет, для обычных игроков лимит кода = 10; админ-знаки в этот счётчик не входят. list без аргумента — ваши знаки; чужие ники только онлайн и с shop.list.others. setprice меняет цену на знаке под прицелом и переписывает текст таблички; type не из {buy,sell,both} отвалится уже в execute. Голограмму админ-магазина включает только тот, у кого shop.create.admin: общий OP и shop.admin.remove для этого не считаются (isShopOwner)."
+    },
+    {
+      "title": "NPC-магазин: создать, наполнить, сменить сущность",
+      "goal": "Торговец без сундука и без знака, GUI как у админ-ChestShop: предметы чеканятся и топятся напрямую.",
+      "commands": [
+        "/npcshop create Оружейник спавна",
+        "/npcshop list",
+        "/npcshop additem ab12cd34 diamond 50 -1 1",
+        "/npcshop additem ab12cd34 emerald -1 20 16",
+        "/npcshop info ab12cd34",
+        "/npcshop entitytype ab12cd34 minecraft:villager true"
+      ],
+      "result": "create спавнит неуязвимый ArmorStand на ваших координатах и печатает полный UUID плюс 8-символьный префикс — его и подставляйте. additem с −1 на sell делает слот только на покупку; оба −1 команда отвергает. ПКМ по NPC открывает GUI (neoessentials.shop.use): ПКМ по слоту — купить, ЛКМ — продать, если sell-цена задана. entitytype пересоздаёт сущность на месте; true у моба включает ИИ, но его «привязывает» к точке спавна (радиус 6). Если сущность съел войд — /npcshop respawn <id>, листинги в npc_shops не пропадают. /npcshop reload перечитывает хранилище; /neoe reload это не делает."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "Голый /pt — paytoggle, /pt list — powertool",
+      "body": "PayToggleCommand.register ставит `literal(\"pt\").executes(paytoggle)` из EconomyCommands (раньше в NeoEssentials.java). Позже PowertoolCommand.registerPtAlias вешает на тот же литерал `list`, `remove` и greedy `<command>` без корневого `.executes()`. Brigadier сливает узлы: первое `.executes()` живёт, дети добавляются. Итог: `/pt` переключает приём платежей (`neoessentials.economy.paytoggle`), `/pt list` / `/pt remove` / `/pt <command>` — powertool (`neoessentials.item.powertool`). PayToggle регистрирует `/pt` всегда, без проверки `commands.pt`; powertool-дети появляются только если `commands.pt` включён. Если `commands.paytoggle` выключен, голый `/pt` остаётся без `.executes()` и считается незавершённой командой.",
+      "fix": "Игрокам для отказа от переводов выдавайте `/paytoggle`. Админам powertool объясняйте: список биндов — `/pt list` или `/powertool list`, не голый `/pt`."
+    },
+    {
+      "title": "/bal не смотрит чужие счета, офлайн у /pay и /balance.others — разные узлы",
+      "body": "`/bal` зарегистрирован без аргумента: только свой баланс. `/balance <player>` закрыт `neoessentials.economy.balance.others` и резолвит офлайн через профиль. Консоль не откроет чужой баланс — `executeOther` требует игрока-отправителя. `/pay` офлайн пускает только с `neoessentials.economy.pay.offline`; без узла — `offline_not_allowed`, даже если ник есть в кэше. Автодополнение `/pay` и `/eco` показывает лишь онлайн. Игнорирование (IgnoreManager) блокирует `/pay` только если получатель онлайн — офлайн-перевод ignore не видит. `/chestshop list <player>` офлайн не ищет вовсе: только `getPlayerByName`.",
+      "fix": "Для штаба: пара `balance` + `balance.others`. Казначеям офлайн-выплат — `pay.offline`. Смотреть чужие знаки — `shop.list.others`, и цель должна быть в игре."
+    },
+    {
+      "title": "Налог /pay жжёт разницу, не кладёт её на сервер",
+      "body": "`EconomyAPI.payPlayer` списывает с отправителя полный `<amount>`, получателю зачисляет `amount − fee`, fee никуда не капает. `taxPercentage` в economy.json — проценты (5 = 5%). Ставка берётся из `EconomyModifierManager.getEffectiveTaxRate`: `neoessentials.economy.taxexempt` обнуляет (через hasPermissionStrict, OP сам по себе льготу не даёт, пока `permissions.opsBypassEconomyModifierPermissions` false). При налоге ≥ 100% net ≤ 0 и перевод отклоняется. Потолок одного перевода — `maxTransferAmount` (шаблон 10000) или тир `neoessentials.economy.paylimit.N` / LuckPerms meta; обход — `neoessentials.economy.pay.bypass.limit`.",
+      "fix": "Пишите в правила, что комиссия сгорает. Льготникам — `neoessentials.economy.taxexempt`, не «просто OP»."
+    },
+    {
+      "title": "paytoggle по умолчанию включён и переживает рестарт",
+      "body": "`paytoggleDefault: true` значит «принимаю /pay». Пока игрок ни разу не вызвал `/paytoggle`, в кэше его нет и каждый `/pay` ему проходит. После переключения запись сразу попадает в коллекцию `pay_toggles` активного `storage.type` (легаси `paytoggles.json` импортируется один раз). Сообщение отказа то же, что при ignore (`pay.toggled_off`) — по чату не отличить «выключил приём» от «игнор».",
+      "fix": "Если новичкам нельзя кидать деньги до согласия — поставьте `paytoggleDefault: false`. Проверить свой статус можно только повторным `/paytoggle` (отдельного get нет)."
+    },
+    {
+      "title": "Голограмма над знаком — opt-in, не автосоздание",
+      "body": "`ShopData.hologramEnabled` по умолчанию false. После создания знака в чат даётся кнопка `/chestshop hologram enablepos x y z`. Включить/сдвинуть голограмму игрового магазина может только владелец: `isShopOwner` не смотрит OP и `shop.admin.remove`. У Admin Shop `ownerUUID == null`, поэтому нужен `neoessentials.shop.create.admin`. Смещение `move` зажато Brigadier на ±4.5. Id — префикс `shop_`. `ShopHologramManager` не проверяет `modules.hologramEnabled` и пишет напрямую в `HologramManager`. `/chestshop reload` после перечитывания коллекции `chest_shops` чистит осиротевшие `shop_*` голограммы.",
+      "fix": "Игрокам говорите жать кнопку в чате или смотреть на свой знак и `/chestshop hologram enable`. Модераторам чужие голограммы снимать через `/hologram remove <id>`, не через `/chestshop hologram disable`."
+    },
+    {
+      "title": "Что делает /neoe reload, а что нет",
+      "body": "`ConfigManager.loadAll()` сбрасывает кэш, поэтому следующий `/pay` уже видит новый `taxPercentage` / `currencySymbol` из economy.json. `EconomyManager.reinitialize()` срабатывает только если singleton так и не доинициализировался на старте (модуль показался выключенным в гонке загрузки) — живые балансы с диска заново не читаются. `WorthManager.reload()` перечитывает `item_worth`. Коллекции `chest_shops` и `npc_shops` `/neoe reload` не трогает: для знаков — `/chestshop reload` (ещё и `shop.pricing` в config.json), для NPC — `/npcshop reload`. `modules.economyEnabled` / `modules.shopEnabled` и флаги `commands.*` читаются при регистрации: включить `/pay` или магазины после смены ключа можно только рестартом.",
+      "fix": "Правка economy.json (налог, символ, потолок) — `/neoe reload`. Правка знаков в хранилище или динамических цен — `/chestshop reload`. Правка NPC — `/npcshop reload`. Смена modules.* — рестарт."
+    },
+    {
+      "title": "startingBalance нет в шаблонном economy.json",
+      "body": "Геттер смотрит ключ `startingBalance` в economy.json и, не найдя, возвращает 100.0. `/eco reset` ставит именно это значение, не «ноль». В config.json дубль ключа убрали в v32 — править нужно economy.json. `cleanupInactiveAccounts` + `inactiveAccountCleanupDays` (30) раз в час вычищают счета без активности; это не делает `/eco reset`.",
+      "fix": "Добавьте `startingBalance` в `config/neoessentials/economy.json` и `/neoe reload` — новые UUID и reset подхватят число. Уже существующие балансы сами не изменятся."
+    },
+    {
+      "title": "/npcshop additem всегда клеит namespace minecraft:",
+      "body": "`executeAddItem` сохраняет `\"minecraft:\" + itemId.replace(\"minecraft:\", \"\")`. `diamond` и `minecraft:diamond` становятся `minecraft:diamond`. `thermal:copper_ingot` превращается в `minecraft:thermal:copper_ingot` и в GUI не матчится с настоящим предметом. На знаке ChestShop модовый id на 4-й строке резолвится нормально (ShopParser не форсирует minecraft:), как и `/setworth thermal:copper_ingot`.",
+      "fix": "В NPC для ванили пишите короткий id. Модовый товар в NPC этой командой не задать корректно — только правкой коллекции `npc_shops` и `/npcshop reload`, либо торгуйте им через знак."
+    },
+    {
+      "title": "/eco history чужого игрока — ванильный OP 2, не eco-узел",
+      "body": "Корень `/eco` пускает OP 2 **или** `neoessentials.economy.eco`. Ветка `history <player>` дополнительно `.requires(src -> src.hasPermission(2))`. Игрок с одним eco-узлом без OP откроет `/eco give` и свою `/eco history`, но не `/eco history Steve`. Лимит ленты — `transactionHistoryLimit` (в шаблоне 50; если ключ вырезать, геттер даёт 20).",
+      "fix": "Аудиторам истории выдавайте OP 2 (или консоль). Для выдачи денег достаточно `neoessentials.economy.eco`."
+    },
+    {
+      "title": "Знак магазина: формат строк и таймаут 30 с",
+      "body": "Индексы 0…3, не «строка 1» из старой английской вики в человеческом смысле совпадает, но путают с ценой: строка 0 — имя / `Admin Shop` / `[Shop]` / пусто; 1 — целое 1…3456; 2 — `B 10`, `S 5`, `B 10:S 5`, суффиксы K/M, `FREE`; 3 — id или `?`. Игровому знаку нужна соседняя ChestBlockEntity (6 сторон + под табличкой). Пока игрок редактирует текст, обработчик ждёт до 30 с. После регистрации текст знака косметический: источник истины — коллекция `chest_shops`, не табличка.",
+      "fix": "Не меняйте цены правкой таблички в мире — `/chestshop setprice` или импорт CSV. Не успели заполнить за 30 с — сломайте и поставьте знак снова, либо `/chestshop convert`, смотря на него."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "/payconfirmtoggle ничего не делает с /pay",
+      "body": "Комментарий в MiscItemCommands обещает поведение Essentials Commandpayconfirmtoggle: «toggle whether /pay asks for confirmation». Команда пилит UUID в in-memory Set, геттер `isPayConfirmDisabled` больше нигде не вызывается. В PayCommand нет ни подтверждения, ни обращения к этому Set — перевод уходит сразу после проверок баланса, налога и paytoggle. Флаг ещё и не пишется на диск, рестарт его обнуляет.",
+      "fix": "Не обещайте игрокам «сначала подтверди перевод». Если нужны подтверждения — это не эта команда; сейчас она только меняет строку в чате о своём внутреннем флаге."
+    }
+  ]
+}

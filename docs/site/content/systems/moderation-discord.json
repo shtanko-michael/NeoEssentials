@@ -1,0 +1,97 @@
+{
+  "commands": [],
+  "commandDetails": {},
+  "examples": [
+    {
+      "title": "Чат в Discord без бота: webhook на канал global",
+      "goal": "Прокинуть глобальный чат в Discord, не ставя SDLink / Mc2Discord / DCIntegration.",
+      "commands": [
+        "/neoe reload"
+      ],
+      "result": "В `config.json → chat.channels.global.discord` поставьте `enabled: true` и `webhookUrl` (Server Settings → Integrations → Webhooks → Copy Webhook URL). `channelId` бота можно оставить пустым. `/neoe reload` достаточно: `WebhookAdapter` перечитывает URL на каждое событие и регистрируется при старте даже без URL. В Discord сообщение придёт от имени игрока с аватаром mc-heads.net. Обратного моста Discord → Minecraft у вебхука нет."
+    },
+    {
+      "title": "Заходы и выходы в отдельный канал-лог",
+      "goal": "Чат оставить в одном Discord-канале, join/leave отправить в другой — без привязки к каналу NeoEssentials.",
+      "commands": [
+        "/neoe reload"
+      ],
+      "result": "Секция `discordEventChannels` в `config.json`: у `join` и `leave` поставьте `enabled: true` и либо `channelId` (нужен мост-бот), либо `webhookUrl`, либо оба — тогда сработают независимо. Ключи событий: `join`, `leave`, `mute`, `afk`, `advancement`, `privateMessage`. Пустой `channelId` при `enabled: false` означает «пусть мост шлёт в свой родной канал». После reload вебхук подхватывается сразу; смена самого моста (поставили SDLink) требует рестарта — адаптеры создаются только в `ChatIntegrationManager.initialize()` на старте."
+    },
+    {
+      "title": "Роль Discord → группа permissions.json",
+      "goal": "Игрок с ролью Boosters на Discord должен попасть в группу `vip` внутреннего менеджера прав.",
+      "commands": [
+        "/neoe reload"
+      ],
+      "result": "В `discordrolesync.json → discordRoleSync` включите `enabled`, пропишите snowflake роли в `roleGroupMap` на имя группы из permissions.json. Нужны DCIntegration (только он отдаёт список ролей) и внутренний PermissionManager: при LuckPerms/FTB Ranks `PermissionAPI.isUsingExternal()` — синк молча выходит. Игрок должен быть связан с Discord командами DCIntegration, не NeoEssentials. На join синк идёт сразу; периодический обход (`intervalSeconds`, по умолчанию 300) стартует только если флаг был true в момент `ServerStartedEvent`. Если включили впервые уже на работающем сервере — перезайдите персонажем или перезапустите сервер, иначе таймер не поднимется."
+    },
+    {
+      "title": "Убрать удвоенный префикс и двойные join-сообщения",
+      "goal": "В Discord `[Owner] [Owner] Name` или два «joined» подряд: родной релей моста плюс NeoEssentials.",
+      "commands": [
+        "/neoe reload"
+      ],
+      "result": "На старте адаптер читает `config/simple-discord-link/simple-discord-link.toml` или `config/mc2discord.toml` и пишет WARN в лог (и в `GET /api/discord/status` → `nativeRelayWarnings`): какие события он сам слать не будет. Явный `channelId` в `chat.channels.*.discord` или `discordEventChannels` всё равно уходит — считается, что это другой канал. Чтобы единственным источником был NeoEssentials, выключите родной релей моста (`chat.playerMessages` / `playerJoin` / … у SDLink; подписки канала у Mc2Discord) и перезапустите. `/neoe reload` конфиг моста заново не парсит."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "Вебхук тоже требует `modules.discordIntegrationEnabled`",
+      "body": "Хотя вебхуку не нужен мод-мост, `WebhookAdapter` попадает в список только из `ChatIntegrationManager.initialize()`, а тот вызывается при старте лишь если `modules.discordIntegrationEnabled` в `config.json` истинен. При `false` не будет ни ботов, ни вебхуков. Сам адаптер при пустом URL просто idle и начнёт постить после `/neoe reload`, когда URL появится — но только если его уже зарегистрировали на старте.",
+      "fix": "Оставляйте `discordIntegrationEnabled: true`, даже если стоите только на webhookUrl. Смену модуля — рестартом."
+    },
+    {
+      "title": "Два разных файла синхронизации ролей",
+      "body": "`discordrolesync.json` — DiscordRoleSyncTask: Discord role id → **имя группы** permissions.json, побеждает группа с большим `priority`, никогда не понижает, роли читает только DCIntegration.\n\n`discord_auth.json → permissionSync` — DiscordPermissionSync на join (задержка 1 с): те же роли через `ChatIntegrationManager.findDiscordRoleIds` (опять DCIntegration), но маппинг `permissionMappings` в коде берёт **первый элемент списка как имя группы**, остальные элементы игнорируются. Комментарий файла обещает узлы вроде `neoessentials.*` / `neoessentials.kick`. Поставка как раз кладёт узлы в этот список — `setGroup(\"neoessentials.*\")` запишет несуществующую группу.\n\n`roleMapping` / `roleHierarchy` в том же файле — это роли **веб-панели** (ADMIN/MODERATOR/VIEWER), не Minecraft.",
+      "fix": "Группы игроков на сервере настраивайте в `discordrolesync.json`. `permissionMappings` не используйте как список узлов — либо выключите `permissionSync.enabled`, либо поставьте первым элементом реальное имя группы. Два синка сразу не включайте: оба пишут `user.setGroup` на join."
+    },
+    {
+      "title": "Список ролей есть только у DCIntegration",
+      "body": "`SDLinkAdapter.getDiscordRoleIds` всегда возвращает пустой список (публичное API SDLink не отдаёт роли). Mc2Discord использует default адаптера — тоже пусто. `ChatIntegrationManager.findDiscordRoleIds` берёт первый непустой ответ. Без DCIntegration и role-sync, и `permissionSync` на join не увидят ни одной роли (линк аккаунта при этом SDLink/Mc2Discord отдать могут).",
+      "fix": "Синхронизация ролей → группы: ставьте DCIntegration и линкуйте аккаунт его командой. Для одного только чата достаточно SDLink, Mc2Discord или вебхука."
+    },
+    {
+      "title": "Синк только повышает группу и не пишет во внешний плагин",
+      "body": "DiscordRoleSyncTask выходит, если `PermissionAPI.isUsingExternal()`. Игрока без совпавшей роли не трогает — админская группа не сбросится в default, когда буст в Discord кончится. Интервал таймера фиксируется в `start()` на старте сервера: правка `intervalSeconds` подхватывается после рестарта, карта ролей из файла читается каждый проход (после `/neoe reload` cache конфигов сброшен).",
+      "fix": "Понижение делайте вручную. С LuckPerms синхронизируйте роли их Discord-плагином, не этим файлом. Смену периода обхода — рестартом."
+    },
+    {
+      "title": "`channelId` и `webhookUrl` на одном событии",
+      "body": "Ботовые адаптеры смотрят `channelId`, вебхук — `webhookUrl`. Если заполнены оба, уйдут оба сообщения. Явный `channelId` не подавляется детектором native relay: детектор глушит только default-route. `discord.enabled: false` у канала чата выключает и вебхук этого канала (`resolveChatWebhook` проверяет enabled).",
+      "fix": "Для одного направления оставьте одно поле. Чтобы не дублировать join с родным релеем SDLink, либо положитесь на WARN и default-route, либо шлите join только явным `discordEventChannels.join.channelId` в канал, куда SDLink сам не пишет."
+    },
+    {
+      "title": "Эмбеды SDLink и обрезка текста",
+      "body": "`discordEmbedTemplate` (и вложенные `join`/`leave`/…) применяются к **явной** отправке в `channelId` и только адаптером SDLink. Mc2Discord и DCIntegration шлют обычный текст. Любой пользовательский текст во все три моста обрезается до лимита Discord (~2000) до отправки. Вебхук чата/advancement подставляет username и avatar игрока; join/leave/mute/afk идут от имени `Server` без аватара.",
+      "fix": "Цветные embed-join — SDLink + непустой `discordEventChannels.join.channelId`. Вебхук так не умеет."
+    },
+    {
+      "title": "Команд NeoEssentials на линковку нет",
+      "body": "В инвентаре мода нет `/discord`, `/link`, `/syncperms`. Линк делается командами моста. `/dashboardregister discord` принадлежит веб-панели и только создаёт аккаунт панели по уже существующему линку. Узлы `neoessentials.discord.syncperms` в комментарии discord_auth.json — примеры того, что можно было бы выдать, в PermissionRegistry их нет, отдельной команды нет.",
+      "fix": "Не ищите синк в `/neoe`. Связку аккаунтов настраивайте в SDLink / Mc2Discord / DCIntegration, затем файлы NeoEssentials."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "`permissionSync.permissionMappings` не выдаёт узлы прав",
+      "body": "`DiscordPermissionSync.mapDiscordRoleToPermissionGroup` берёт `permissions.get(0)` и передаёт в `user.setGroup`. Существование группы не проверяется. Поставляемый discord_auth.json начинает списки с `neoessentials.*`, `neoessentials.dashboard.temppass` и т. д. — это не имена групп. Плюс `reloadConfig()` ниоткуда не вызывается: после правки файла синглтон продолжает старый маппинг до рестарта, хотя `/neoe reload` сбрасывает JSON-кеш.",
+      "fix": "Выключите `permissionSync.enabled` и пользуйтесь `discordrolesync.json`. Если оставляете этот путь — первым элементом списка должно быть имя группы из permissions.json, и после правки нужен рестарт, не только `/neoe reload`."
+    },
+    {
+      "title": "Включили `discordRoleSync.enabled` на уже запущенном сервере — периодический обход молчит",
+      "body": "`DiscordRoleSyncTask.start()` вызывается из `ServerStartedEvent` и сразу выходит, если `enabled` тогда был false. Join-обработчик читает флаг каждый раз и после `/neoe reload` уже работает. `ScheduledExecutorService` при этом никто не поднимает — смена роли без перезахода подтянется только после рестарта (или не подтянется, пока игрок онлайн).",
+      "fix": "Первое включение role-sync — рестартом. Дальше достаточно `/neoe reload` для карты ролей; для смены `intervalSeconds` снова рестарт."
+    },
+    {
+      "title": "Детектор native relay не обновляется с `/neoe reload`",
+      "body": "Разбор `simple-discord-link.toml` / `mc2discord.toml` делается в `initialize()` адаптера на старте. Правка родного конфига моста или переключение его native-ключей без рестарта оставит старый набор подавлений: либо снова пойдут дубли, либо NeoEssentials продолжит молчать, хотя native уже выключен.",
+      "fix": "После правок конфига моста перезапускайте сервер. Смотрите WARN на старте и `nativeRelayWarnings` в статусе панели."
+    },
+    {
+      "title": "Родной релей моста по-прежнему может удвоить префикс",
+      "body": "Сообщения, которые шлёт **сам** SDLink из `chat.playerMessages`, читают `Player.getDisplayName()` (там уже префикс scoreboard-команды таблиста) и отдельно клеят ранг из LuckPerms/FTB Ranks. Это закрытый код моста. Сообщения адаптеров NeoEssentials с build 68 берут префикс из PermissionAPI и не удваиваются. Детектор как раз глушит default-route NeoEssentials, когда native включён — тогда в Discord остаётся именно удваивающий native.",
+      "fix": "Выключите native-релей моста для этого события и перезапустите, чтобы в канал шёл только адаптер NeoEssentials. `tablist.json → nametagSettings.enabled: false` убирает префикс с таблиста/над головой целиком — это не точечный фикс Discord."
+    }
+  ]
+}

@@ -1,0 +1,244 @@
+{
+  "commands": [
+    "book",
+    "cartography",
+    "cartographytable",
+    "ci",
+    "ciconfirmtoggle",
+    "clear",
+    "clearinventory",
+    "clearinventoryconfirmtoggle",
+    "condense",
+    "ctext",
+    "customtext",
+    "dispose",
+    "enchant",
+    "fix",
+    "i",
+    "item",
+    "itemdb",
+    "itemlore",
+    "itemname",
+    "loom",
+    "powertool",
+    "powertoollist",
+    "ptlist",
+    "rename",
+    "repair",
+    "sign",
+    "skull",
+    "smithing",
+    "trash"
+  ],
+  "commandDetails": {
+    "repair": {
+      "syntax": "/repair",
+      "notes": "Только игрок, право neoessentials.item.repair. Чинит предмет в основной руке (setDamageValue(0)), веток hand|all в дереве нет. Успех в чат уходит всегда, даже если рука пустая или предмет без прочности."
+    },
+    "fix": {
+      "syntax": "/fix",
+      "notes": "Тот же код, что /repair. Включается флагом commands.fix отдельно от commands.repair."
+    },
+    "enchant": {
+      "syntax": "/enchant <enchantment> [<level>] | /enchant <player> <enchantment> [<level>]",
+      "notes": "Перекрывает ванильный /enchant. <enchantment> — ResourceLocation из реестра, <level> целое 1–32767 (без аргумента — 1). Ветка с игроком требует neoessentials.item.enchant.others (или OP 2). unsafe — neoessentials.item.enchant.unsafe или глобальный unsafe-enchantments; any — neoessentials.item.enchant.any. Предмет — основная рука цели. Литералы ench и enchanthand в дереве есть при своих флагах, в реестре справки их нет."
+    },
+    "item": {
+      "syntax": "/item <item> [<amount>]",
+      "notes": "Выдача себе по id. <item> — word (minecraft: префикс можно опустить), <amount> 1–64; без количества — defaultMaxStackSize. Только игрок, neoessentials.item. Не путать с /give из PlayerStateCommands (служебные команды)."
+    },
+    "i": {
+      "syntax": "/i <item> [<amount>]",
+      "notes": "Алиас /item, то же дерево аргументов и то же право neoessentials.item."
+    },
+    "powertool": {
+      "syntax": "/powertool list | /powertool remove | /powertool <command>",
+      "notes": "Привязка по типу предмета в основной руке, не по слоту. list/remove/<command> требуют neoessentials.item.powertool внутри executes. Строка, начинающаяся с «@p », не биндится, а сразу выполняет команду по всем онлайн кроме вас (нужен neoessentials.command.target). Корневого executes нет. В дереве также ptool (commands.ptool) и powertooltoggle/ptt — в реестре справки их нет. Привязки живут в HashMap процесса и пропадают при рестарте."
+    },
+    "powertoollist": {
+      "syntax": "/powertoollist",
+      "notes": "Только свои привязки, право neoessentials.powertoollist (не item.powertool). Пустой список — ошибка empty."
+    },
+    "ptlist": {
+      "syntax": "/ptlist",
+      "notes": "Алиас /powertoollist, то же право."
+    },
+    "clearinventory": {
+      "syntax": "/clearinventory",
+      "notes": "Только себе, аргумента <player> нет. Чистит main + armor + offhand и пишет три числа. neoessentials.item.clearinventory. Подтверждения в коде команды нет."
+    },
+    "ci": {
+      "syntax": "/ci",
+      "notes": "Алиас /clearinventory, отдельный флаг commands.ci."
+    },
+    "clear": {
+      "syntax": "/clear",
+      "notes": "В реестре справки объявлен как алиас очистки инвентаря, но ClearInventoryCommand регистрирует только clearinventory, ci и clearinv. Корневого Commands.literal(\"clear\") у этой системы нет — в игре остаётся ванильный /clear."
+    },
+    "ciconfirmtoggle": {
+      "syntax": "/ciconfirmtoggle",
+      "notes": "Переключает флаг в памяти ciConfirmDisabled. /clearinventory этот флаг не читает — подтверждения всё равно нет."
+    },
+    "clearinventoryconfirmtoggle": {
+      "syntax": "/clearinventoryconfirmtoggle",
+      "notes": "Алиас /ciconfirmtoggle, то же право neoessentials.ciconfirmtoggle."
+    },
+    "dispose": {
+      "syntax": "/dispose [confirm|cancel]",
+      "notes": "Без аргумента открывает сундук 27 слотов. Предметы, положенные туда, держатся в pendingDisposals до confirm (уничтожить), cancel (вернуть) или выхода с сервера (вернуть). Закрытие GUI само по себе ничего не уничтожает."
+    },
+    "trash": {
+      "syntax": "/trash",
+      "notes": "Только открытие GUI, без веток confirm|cancel. Право neoessentials.item.dispose."
+    },
+    "condense": {
+      "syntax": "/condense [<item>]",
+      "notes": "Сжимает по фиксированной таблице (самородки→слитки→блоки и т.п.). Без аргумента — все подходящие типы в инвентаре; <item> — word, сравнивается с полным id. Остаток, который не влез, падает под ноги."
+    },
+    "itemname": {
+      "syntax": "/itemname [<name>]",
+      "notes": "Без аргумента или имя `-` снимает CUSTOM_NAME. Иначе greedy-строка с `&`-цветами на предмет в руке. neoessentials.itemname."
+    },
+    "rename": {
+      "syntax": "/rename [<name>]",
+      "notes": "Алиас /itemname."
+    },
+    "itemlore": {
+      "syntax": "/itemlore add <text> | /itemlore set <line> <text> | /itemlore remove <line> | /itemlore clear",
+      "notes": "<line> 1-based. add/set берут greedy text. Предмет в основной руке."
+    },
+    "skull": {
+      "syntax": "/skull [<player>]",
+      "notes": "Голова с профилем: без аргумента — своя, иначе word-ник (можно офлайн, если есть в profile cache; иначе GameProfile со случайным UUID и этим именем). Только себе в инвентарь."
+    },
+    "itemdb": {
+      "syntax": "/itemdb [<item>]",
+      "notes": "Без аргумента — предмет в руке; иначе word-id. Печатает registry id, max stack, прочность."
+    },
+    "book": {
+      "syntax": "/book | /book unlock | /book title <title> | /book author <author>",
+      "notes": "Без аргумента выдаёт writable book. unlock / title / author работают с книгой в руке и требуют neoessentials.book.unlock / .title / .author."
+    },
+    "sign": {
+      "syntax": "/sign | /sign <line> <text> | /sign clear [<line>]",
+      "notes": "Табличка под прицелом. Без аргументов — показать 4 строки. <line> 1–4. clear без номера чистит все строки."
+    },
+    "customtext": {
+      "syntax": "/customtext [<chapter> [<page>]]",
+      "notes": "Файл config/neoessentials/text/<chapter>.txt, по 10 строк на страницу. Без аргументов — chapter info, page 1. Имя главы режется до [a-zA-Z0-9_-]. `{player}` и `&` заменяются при выводе."
+    },
+    "ctext": {
+      "syntax": "/ctext [<chapter> [<page>]]",
+      "notes": "Алиас /customtext."
+    },
+    "loom": {
+      "syntax": "/loom",
+      "notes": "Портативный ткацкий станок, neoessentials.loom."
+    },
+    "cartography": {
+      "syntax": "/cartography",
+      "notes": "Портативный стол картографа."
+    },
+    "cartographytable": {
+      "syntax": "/cartographytable",
+      "notes": "Алиас /cartography."
+    },
+    "smithing": {
+      "syntax": "/smithing",
+      "notes": "Портативный стол кузнеца, neoessentials.smithing."
+    }
+  },
+  "examples": [
+    {
+      "title": "Выдать себе предмет, зачаровать и подписать",
+      "goal": "Собрать именной меч без ванильного /give и без редактора NBT.",
+      "commands": [
+        "/item minecraft:diamond_sword",
+        "/enchant minecraft:sharpness 5",
+        "/itemname &bКлинок",
+        "/itemlore add &7Первый клинок сервера"
+      ],
+      "result": "item без количества кладёт полный стек по defaultMaxStackSize (у меча 1). enchant вешает чары на основную руку; уровень 5 пройдёт, если включены unsafe-enchantments или есть neoessentials.item.enchant.unsafe, иначе валидатор отвергнет. itemname ставит цветное имя; itemlore add дописывает строку. /give здесь не используется: это другая команда в служебных."
+    },
+    {
+      "title": "Привязать команду к типу предмета",
+      "goal": "ПКМ палкой телепортирует домой, не занимая слот хоткея навсегда.",
+      "commands": [
+        "/item minecraft:stick 1",
+        "/powertool spawn",
+        "/powertool list",
+        "/powertoollist"
+      ],
+      "result": "Привязка ключуется id типа (`minecraft:stick`): любая палка в любой руке вызовет команду, ванильный ПКМ по блоку отменяется. list и powertoollist показывают одно и то же, но разные права (item.powertool vs powertoollist). Рестарт сервера обнуляет HashMap — привязку нужно поставить снова. Не используйте `/pt` для бинда: без аргументов это paytoggle (см. edgeCases)."
+    },
+    {
+      "title": "Починить инструмент и выбросить мусор",
+      "goal": "Починить кирку в руке и безопасно уничтожить хлам, с возможностью отменить.",
+      "commands": [
+        "/repair",
+        "/dispose",
+        "/dispose cancel"
+      ],
+      "result": "repair обнуляет damage основной руки и всегда пишет success. dispose открывает 27 слотов; положенные туда предметы исчезают из инвентаря, но ещё не уничтожены — они в pending. cancel возвращает их; confirm уничтожает; выход с сервера тоже возвращает. Просто закрыть окно недостаточно, чтобы стереть вещи навсегда."
+    },
+    {
+      "title": "Сжать руду и посмотреть id предмета",
+      "goal": "9 алмазов в блок и узнать точный registry id для китов/ящиков.",
+      "commands": [
+        "/condense diamond",
+        "/itemdb",
+        "/itemdb minecraft:diamond_block"
+      ],
+      "result": "condense diamond ищет minecraft:diamond (9→diamond_block). itemdb без аргумента описывает то, что в руке после сжатия; с аргументом — справочно, предмет в инвентарь не кладёт."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "/pt — это paytoggle, подкоманды powertool на нём висят сбоку",
+      "body": "Экономика регистрирует `Commands.literal(\"pt\").executes(paytoggle)` раньше. Powertool потом добавляет к тому же литералу детей `list`, `remove` и greedy `<command>` и **не** ставит свой корневой executes — Brigadier сливает узлы. Итог: `/pt` без аргументов переключает приём /pay (`neoessentials.economy.paytoggle`). `/pt list`, `/pt remove`, `/pt spawn` — powertool (`neoessentials.item.powertool`). В справке мода `/pt` числится как алиас powertool — это про каталог, не про корневой executes.",
+      "fix": "Бинды ставьте через `/powertool <command>`. Для paytoggle используйте `/paytoggle` или голый `/pt`. Не документируйте `/pt` как замену `/powertool`."
+    },
+    {
+      "title": "/give этой системе не принадлежит",
+      "body": "`/give` регистрирует `PlayerStateCommands` (служебные команды), ванильно-подобный выдаче другому игроку. Выдача себе по короткому id — `/item` / `/i` (`MiscItemCommands`, amount 1–64). Путать их нельзя: другое дерево, другое право (`neoessentials.give` vs `neoessentials.item`).",
+      "fix": "В гайдах по предметам пишите `/item diamond 16`, не `/give`."
+    },
+    {
+      "title": "/invsee только смотрит, /invseeedit правит",
+      "body": "Команды живут в `InventoryViewCommands` (в инвентаре — likelySystem utility, права `neoessentials.invsee` / `.edit`). `/invsee` и `/inv` открывают снимок через `buildReadOnlyMenu`: слоты с `mayPickup`/`mayPlace` = false. `/invseeedit` открывает живой инвентарь цели и ставит lock «один редактор». Свою цель открыть нельзя. EntityArgument — только онлайн. Алиасы `inv`/`ec`/`ecedit` — полные литералы с `requires()`, не `redirect()`.",
+      "fix": "Модераторам — `invsee` (и при необходимости `enderchest`). Правка чужого инвентаря — отдельный узел `invsee.edit`."
+    },
+    {
+      "title": "Powertool: тип предмета, память процесса, @p",
+      "body": "Карта `UUID → itemId → command` — статический HashMap, на диск не пишется. ПКМ выполняет команду **от имени игрока** (`performPrefixedCommand` с его source) и отменяет ванильное действие (нельзя одновременно есть/ставить этот тип). Префикс `@p ` в `/powertool` — не бинд, а немедленный прогон по всем прочим онлайн с правом `neoessentials.command.target` и подстановкой `{player}`. `allowUnsafeCommands` по умолчанию true; в false режутся `@`, `~`, `{` и т.п.",
+      "fix": "После рестарта привязки ставьте заново. Команду с селектором биндьте как обычную строку, не через `@p ` — этот префикс сработает сразу."
+    },
+    {
+      "title": "/repair всегда «успех», /clearinventory без цели и без confirm",
+      "body": "Английская вики обещает `/repair [hand|all]` и `/clearinventory [player]`. В дереве `/repair`/`/fix` без аргументов, чинится только основная рука; сообщение success уходит даже если ничего не сломано. Очистка — только свой инвентарь (main+armor+offhand). `isCiConfirmDisabled` нигде, кроме самого тоггла, не вызывается.",
+      "fix": "Чтобы починить всё — берите предметы в руку по очереди или не рассчитывайте на `all`. Чужой инвентарь чистите через `/invseeedit`, не через `/ci`."
+    },
+    {
+      "title": "enchant перекрывает ваниль и путает первый аргумент",
+      "body": "Две соседние ветки: ResourceLocation и EntityArgument.player(). Ник, совпадающий с путём чар, может уйти не в ту ветку. Уровень в Brigadier не ниже 1. Совместимость предмета — грубая (`isEnchantable`); книги пропускаются. `applyEnchantment` при выключенном unsafe дополнительно сверяет `getMaxLevel()`.",
+      "fix": "Для другого игрока всегда `/enchant <ник> <id чар> [уровень]`. Небезопасные уровни — узел `.unsafe` или конфиг."
+    },
+    {
+      "title": "dispose: GUI ≠ уничтожение",
+      "body": "Комментарий в коде говорит «удаляются при закрытии», реализация другая: закрытие оставляет `SimpleContainer` в `pendingDisposals`. Уничтожение — только `/dispose confirm`. `/trash` ветки confirm не имеет — подтверждать всё равно `/dispose confirm`.",
+      "fix": "После сортировки хлама в окне выполните `/dispose confirm`. Передумали — `/dispose cancel` или перезайдите."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "Раньше /invsee копировал предметы в инвентарь смотрящего (исправлено)",
+      "body": "До build.214 `/invsee`/`/inv`/`/ec`/`/enderchest` открывали `ChestMenu` над `SimpleContainer` с `.copy()` стака. Клиент мог вытащить копии, оригиналы оставались у цели. Сейчас read-only идёт через `buildReadOnlyMenu` (`mayPickup`/`mayPlace` = false). Правка шла через меню без слотов хотбара смотрящего — рассинхрон; слоты зрителя добавлены. Алиасы больше не `redirect()` без `requires()` (обход прав на `/inv`/`/ec` закрыт).",
+      "fix": "На текущей сборке дублирование через read-only окно не воспроизводится. Если игрок «вынес» вещи из /invsee — это либо старый билд, либо он был в `/invseeedit`."
+    },
+    {
+      "title": "/ciconfirmtoggle ни на что не влияет",
+      "body": "`MiscItemCommands.isCiConfirmDisabled` ни один вызов `/clearinventory`/`/ci` не читает: подтверждения нет, тоггл только пишет «enabled/disabled» в чат. Состояние в памяти, без DataStore.",
+      "fix": "Не обещайте игрокам превью перед очисткой. Нужна страховка — не выдавайте `neoessentials.item.clearinventory`."
+    }
+  ]
+}

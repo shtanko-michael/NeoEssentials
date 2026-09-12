@@ -1,0 +1,48 @@
+{
+  "commands": ["neoe"],
+  "commandDetails": {
+    "neoe": {
+      "syntax": "/neoe | /neoe reload | /neoe config split|validate|repair|status | /neoe <command> [args]",
+      "notes": "Длинная форма /neoessentials регистрируется отдельно, если commands.neoessentials включён, и повторяет то же дерево. Корень требует neoessentials.use (консоль всегда проходит). reload и вся ветка config — neoessentials.admin.reload. greedy-аргумент после корня маршрутизирует к другим командам мода. Help-каталог содержит ещё /neoe tpr|randomtp|randomteleport как алиасы случайного тп — это не отдельные slash-команды."
+    }
+  },
+  "examples": [
+    {
+      "title": "Включить разделённые конфиги на уже живущем сервере",
+      "goal": "Уйти от одного config.json на 800+ строк без ручного распила.",
+      "commands": [
+        "/neoe config status",
+        "/neoe config split",
+        "/neoe config validate"
+      ],
+      "result": "status говорит, split вы или нет. split создаёт main.json, commands.json, chat.json и остальные, плюс маркер `.split_configs`, а config.json превращает в заглушку. validate проверяет, что все ожидаемые файлы на месте. Нужен neoessentials.admin.reload. После split правки вносятся в мелкие файлы; старый монолит больше не читается."
+    },
+    {
+      "title": "Починить дырявый split после ручного удаления файла",
+      "goal": "Кто-то стёр chat.json, сервер ругается на загрузке.",
+      "commands": [
+        "/neoe config repair",
+        "/neoe config validate"
+      ],
+      "result": "repair дописывает недостающие split-файлы дефолтами, ничего существующее не затирает. validate должен пройти. Рестарт нужен только если чинили modules/commands — сами значения подхватит /neoe reload."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "Маркер, не ключ в JSON",
+      "body": "Split-режим включает файл `config/neoessentials/.split_configs`, а не поле в config.json. Пока маркера нет, мод читает монолит. templates/discord_embed.json — единственный split-файл в подпапке templates/.",
+      "fix": "Не ищите `splitConfigs: true` в JSON. Для включения на живом сервере — `/neoe config split`, не создание пустых файлов руками."
+    },
+    {
+      "title": "kits.json в split — не киты",
+      "body": "Определения китов живут в DataStore (коллекция kits). `kits.json` читается один раз для миграции. Настройки кулдаунов/цены китов — ключ `kits` в main.json.",
+      "fix": "Править состав кита через /createkit или store, не через split-файл kits.json."
+    },
+    {
+      "title": "reload не добавляет команды",
+      "body": "`/neoe reload` перечитывает значения, переводы, права, чат. Секции modules и commands — снимок на старте. Split/repair файловой раскладки не требует рестарта; появление новой команды в commands.json — требует.",
+      "fix": "После правки modules.*Enabled или commands.<имя> — полный рестарт."
+    }
+  ],
+  "knownIssues": []
+}

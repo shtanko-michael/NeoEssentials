@@ -1,0 +1,300 @@
+{
+  "commands": [
+    "ban", "unban", "banip", "unbanip", "banlist", "tempban", "tempbanip",
+    "kick", "kickall",
+    "mute", "unmute", "mutelist",
+    "jail", "jailfor", "unjail", "setjail", "deljail", "jaillist", "jailinfo", "jails", "togglejail",
+    "freeze", "unfreeze", "freezeall", "unfreezeall", "freezelist",
+    "vanish", "v", "unvanish", "vanishlist",
+    "warn", "warnings", "clearwarnings", "removewarn",
+    "note", "notes", "removenote",
+    "report", "reports", "reviewreport",
+    "modhistory", "history"
+  ],
+  "commandDetails": {
+    "ban": {
+      "syntax": "/ban <player> [reason]",
+      "notes": "<player> — StringArgumentType.word, сначала онлайн (без учёта регистра), иначе кэш профилей сервера; офлайн-бан возможен. Без [reason] подставляется moderation.banSettings.defaultBanReason. Закрыто neoessentials.moderation.ban на корне. Повторный бан того же UUID возвращает false, пока запись active."
+    },
+    "unban": {
+      "syntax": "/unban <player>",
+      "notes": "Имя ищется в активных банах, затем в кэше профилей. Снимает по UUID, пишет unbannedBy/unbannedAt, запись остаётся в той же коллекции player_bans с active: false. Право neoessentials.moderation.unban."
+    },
+    "banip": {
+      "syntax": "/banip <ip> [reason]",
+      "notes": "<ip> — одно слово; принимается только IPv4 из четырёх октетов 0–255, ник подставлять нельзя. Кикает всех онлайн с этим адресом. enableIPBans: false → banIP возвращает false. Право neoessentials.moderation.banip. Без причины — defaultBanReason."
+    },
+    "unbanip": {
+      "syntax": "/unbanip <ip>",
+      "notes": "Снимает активный IP-бан, архивирует с unbannedBy. Автодополнение — текущие ключи ip_bans. Право neoessentials.moderation.unbanip."
+    },
+    "banlist": {
+      "syntax": "/banlist [players | ips]",
+      "notes": "Без аргумента выполняется ветка players. players при чтении архивирует истёкшие temp-баны, если autoExpireTempBans включён. ips отдаёт сырой Map ipBans без фильтра истечения. Право neoessentials.moderation.banlist."
+    },
+    "tempban": {
+      "syntax": "/tempban <player> <duration> [reason]",
+      "notes": "<duration> — word, не greedy: «30m», «2h», «1d», не «1h 30m». Разбор BanManager.parseDuration; 0 или неизвестный формат → invalid_duration. Цель как у /ban (онлайн, иначе кэш). Право neoessentials.moderation.tempban. enableTempBans: false блокирует выдачу."
+    },
+    "tempbanip": {
+      "syntax": "/tempbanip <ip> <duration> [reason]",
+      "notes": "Тот же IPv4-фильтр, что /banip, та же <duration>-word, что /tempban. Кикает онлайн с этим IP. Хранится expireTime в ip_bans. Право neoessentials.moderation.tempbanip."
+    },
+    "kick": {
+      "syntax": "/kick <player> [reason]",
+      "notes": "Только онлайн. Себя кикнуть нельзя. Без [reason] в дереве зашито «Kicked by an operator», не defaultKickReason из конфига. Экран — kickSettings.kickMessage с {reason}/{kicker}. Пишет коллекцию kicks. Право neoessentials.moderation.kick."
+    },
+    "kickall": {
+      "syntax": "/kickall [reason]",
+      "notes": "Кикает всех, кроме отправителя. Без причины в дереве зашито «Server maintenance»; текст экрана — kickAllMessage. Право neoessentials.moderation.kickall."
+    },
+    "mute": {
+      "syntax": "/mute <target> [duration_or_reason]",
+      "notes": "<target> — EntityArgument.player(), только онлайн. Нет .requires() на корне: команда видна всем, neoessentials.chat.mute проверяется в теле (консоль проходит). duration_or_reason — greedy: первое слово вида 30m/1h/1d/2w снимается как срок, остальное — причина; без такого слова вся строка — причина, мут бессрочный. Цель с neoessentials.chat.mute.exempt (hasPermissionExplicit) не мьютится. Отдельный literal silence копирует это дерево, в этой странице не заявлен."
+    },
+    "unmute": {
+      "syntax": "/unmute <target>",
+      "notes": "Снова EntityArgument.player() — снять мут с офлайн-игрока командой нельзя, хотя запись живёт в mutes. Нет корневого .requires(), в теле neoessentials.chat.mute. Регистрация пропускается, если чат или commands.unmute выключены."
+    },
+    "mutelist": {
+      "syntax": "/mutelist",
+      "notes": "Без аргументов. Нет корневого .requires(), в теле neoessentials.chat.mute. Лениво протухает истекшие через isMuted. Консоль допускается."
+    },
+    "jail": {
+      "syntax": "/jail <player> <jail> [duration_or_reason]",
+      "notes": "<jail> — имя локации. Хвост greedy, как у /mute: токен 30m/1h/… — срок, иначе вся строка — причина бессрочной посадки. Офлайн через кэш профилей. Право neoessentials.moderation.jail. Нужна существующая локация (и хотя бы одна, если requireJailLocation)."
+    },
+    "jailfor": {
+      "syntax": "/jailfor <player> <jail> <duration> [reason]",
+      "notes": "<duration> обязателен и должен совпасть с тем же regexp, что у /jail, иначе invalid_duration. Доступ: neoessentials.moderation.jail.timed или neoessentials.moderation.jail (validateAnyPermission; в LuckPerms родительский узел не подразумевает .timed)."
+    },
+    "unjail": {
+      "syntax": "/unjail <player>",
+      "notes": "Онлайн или кэш профилей. Телепорт на originalLocation, если она была записана (онлайн на момент посадки). Право neoessentials.moderation.unjail."
+    },
+    "setjail": {
+      "syntax": "/setjail <name> [sphere <radius> | cuboid]",
+      "notes": "Только игрок. Голый /setjail <name>: полная палочная выделенка → иначе WorldEdit cuboid → иначе сфера в ногах с jailSettings.defaultSphereRadius. sphere <radius> — Double ≥ 1.0 в текущей позиции. cuboid требует палочную пару углов или выделенку WE. Право neoessentials.moderation.setjail. Палочка выдаётся /jailwand (neoessentials.jail.wand, wandItem)."
+    },
+    "deljail": {
+      "syntax": "/deljail <name>",
+      "notes": "Право то же, что setjail. Сидящих не выпускает — только предупреждает, сколько их было. Пока локации нет, canPlayerMove возвращает true, но isPlayerJailed остаётся true до /unjail или входа (вход без локации сам снимает тюрьму)."
+    },
+    "jaillist": {
+      "syntax": "/jaillist",
+      "notes": "Вопреки каталогу /help это список посаженных игроков, не локаций. Локации — /jailinfo без аргумента. Право neoessentials.moderation.jaillist."
+    },
+    "jailinfo": {
+      "syntax": "/jailinfo [jail]",
+      "notes": "Без имени — все локации; с именем — одна плюс число сидящих. Аргумент — имя клетки, не игрока. Право neoessentials.moderation.jailinfo."
+    },
+    "jails": {
+      "syntax": "/jails",
+      "notes": "Отдельный literal с тем же executeJailList, что /jaillist (посаженные, не локации). Право neoessentials.moderation.jaillist. Не redirect."
+    },
+    "togglejail": {
+      "syntax": "/togglejail <player>",
+      "notes": "Только онлайн. Если уже в тюрьме — unjail; иначе сажает в getAllJailLocations().getFirst() с причиной «Toggled by staff» без срока. Пустой список локаций → ошибка. Право neoessentials.moderation.jail."
+    },
+    "freeze": {
+      "syntax": "/freeze <player> [reason]",
+      "notes": "Только онлайн (getPlayerByName). Без причины — freezeSettings.defaultFreezeReason. Уже замороженный — ошибка. Пишет коллекцию freezes. Право neoessentials.moderation.freeze."
+    },
+    "unfreeze": {
+      "syntax": "/unfreeze <player>",
+      "notes": "Сначала ищет в списке замороженных (офлайн тоже), иначе онлайн. Право neoessentials.moderation.unfreeze."
+    },
+    "freezeall": {
+      "syntax": "/freezeall [reason]",
+      "notes": "Опциональный greedy reason есть в дереве. Не трогает отправителя и уже замороженных. Право neoessentials.moderation.freezeall."
+    },
+    "unfreezeall": {
+      "syntax": "/unfreezeall",
+      "notes": "Снимает всех в freezes, в том числе офлайн. Право neoessentials.moderation.unfreezeall."
+    },
+    "freezelist": {
+      "syntax": "/freezelist",
+      "notes": "Право neoessentials.moderation.freezelist."
+    },
+    "vanish": {
+      "syntax": "/vanish [player]",
+      "notes": "Без аргумента — себе (только игрок). Чужой <player> закрыт neoessentials.moderation.vanish.others, цель только онлайн. Корень — neoessentials.moderation.vanish. Переключатель: повторный вызов снимает ваниш. Состояние пишется в vanishes. /v копирует это дерево, если включён commands.vanish."
+    },
+    "v": {
+      "syntax": "/v [player]",
+      "notes": "Полная копия /vanish, не Brigadier-redirect. Регистрируется вместе с vanish, отдельного commands.v нет."
+    },
+    "unvanish": {
+      "syntax": "/unvanish [player]",
+      "notes": "Принудительно выключает. Без аргумента — себе; чужой — vanish.others. Право корня neoessentials.moderation.vanish. Цель только онлайн."
+    },
+    "vanishlist": {
+      "syntax": "/vanishlist",
+      "notes": "Офлайн, но ещё в vanishes, показывается UUID. Право neoessentials.moderation.vanishlist."
+    },
+    "warn": {
+      "syntax": "/warn <player> [reason]",
+      "notes": "Без причины — «No reason given.». UUID: онлайн, иначе уже существующие warns (кэш профилей не используется — первого варна офлайн-игроку без истории нет). Право neoessentials.moderation.warn."
+    },
+    "warnings": {
+      "syntax": "/warnings <player>",
+      "notes": "<player> обязателен. Печатает до 5 записей, листания нет. Право neoessentials.moderation.warnings."
+    },
+    "clearwarnings": {
+      "syntax": "/clearwarnings <player>",
+      "notes": "Стирает все варны цели. Право neoessentials.moderation.warn."
+    },
+    "removewarn": {
+      "syntax": "/removewarn <player> <warnId>",
+      "notes": "<warnId> — word; достаточно префикса в 8 символов из /warnings. Право neoessentials.moderation.warn."
+    },
+    "note": {
+      "syntax": "/note <player> <text>",
+      "notes": "<text> обязателен (greedy). Первый note офлайн-игроку без уже существующих notes не резолвится — кэш профилей не смотрят. Право neoessentials.moderation.note."
+    },
+    "notes": {
+      "syntax": "/notes <player>",
+      "notes": "До 5 записей, страниц нет. Право neoessentials.moderation.notes (отдельный от note)."
+    },
+    "removenote": {
+      "syntax": "/removenote <player> <noteId>",
+      "notes": "Префикс 8 символов, как у removewarn. Право neoessentials.moderation.note."
+    },
+    "report": {
+      "syntax": "/report <player> <reason>",
+      "notes": "Только игрок, не консоль; себя нельзя. Цель: онлайн или кэш профилей. Узел neoessentials.moderation.report по умолчанию выдан всем. Онлайн-стафф с neoessentials.moderation.reports получает английскую строку в чат, жалоба всё равно пишется в reports."
+    },
+    "reports": {
+      "syntax": "/reports",
+      "notes": "Очередь PENDING, до 8 строк, страниц нет. Право neoessentials.moderation.reports."
+    },
+    "reviewreport": {
+      "syntax": "/reviewreport <id> accept|dismiss [notes]",
+      "notes": "Ветки — литералы accept и dismiss, не свободное слово. <id> резолвится через findById (короткий префикс, если менеджер так ищет). Статусы REVIEWED / DISMISSED. Право neoessentials.moderation.reports."
+    },
+    "modhistory": {
+      "syntax": "/modhistory <player>",
+      "notes": "Онлайн, иначе кэш профилей — как PublicModerationEndpoint. Секции Bans / Mutes / Kicks / Warns, по 5 строк. Право neoessentials.moderation.history. Текст шапки захардкожен по-английски."
+    },
+    "history": {
+      "syntax": "/history <player>",
+      "notes": "dispatcher.redirect на узел modhistory. Регистрируется только если commands.modhistory включён. То же право neoessentials.moderation.history."
+    }
+  },
+  "examples": [
+    {
+      "title": "Закрыть IP, а не ник, и проверить срок",
+      "goal": "Альт на том же адресе не должен зайти после бана основного аккаунта. Нужен и вечный IP-бан, и временный.",
+      "commands": [
+        "/banip 203.0.113.10 griefing",
+        "/banlist ips",
+        "/tempbanip 203.0.113.20 2h proxy",
+        "/unbanip 203.0.113.10"
+      ],
+      "result": "В /banip и /tempbanip идёт адрес, не ник: «Steve» не пройдёт isValidIP (ровно 4 октета 0–255). Все онлайн с 203.0.113.10 сразу отключаются шаблоном ipBanMessageFormat. Запись живёт в коллекции ip_bans того же storage.type, что и весь мод; веб-панель пишет туда же через POST /api/moderation/ipban. Временный бан хранит expireTime: isIPBanned на входе и планировщик раз в checkExpiredBansInterval секунд (по умолчанию 300) при autoExpireTempBans: true архивируют его с unbannedBy = null. /banlist ips истечение в строке не печатает — в отличие от /banlist players."
+    },
+    {
+      "title": "Временный бан игрока и общая история с панелью",
+      "goal": "Выдать 30 минут, убедиться, что после истечения зайти можно, а запись не стёрлась — и что панель показывает то же, что игра.",
+      "commands": [
+        "/tempban Steve 30m cheating",
+        "/banlist",
+        "/modhistory Steve",
+        "/unban Steve"
+      ],
+      "result": "Steve кикается tempBanMessageFormat ({reason}, {bannedBy}, {expiry}). UUID резолвится онлайн или из кэша — офлайн-tempban работает, если игрок когда-то заходил. /banlist без аргумента = players и при чтении сам архивирует просроченное. /modhistory читает BanManager.getBanHistory + MuteManager + KickManager + WarnManager — те же коллекции, что GET /api/moderation/bans/{uuid} и публичный lookup. /unban не удаляет документ: active: false, заполняются unbannedBy/unbannedAt. Повторный /ban того же UUID, пока бан active, не накладывается поверх."
+    },
+    {
+      "title": "Посадить на срок и отличить /jail от /jailfor",
+      "goal": "Клетка у спавна, Steve на два часа, Alex строго через отдельную команду. По истечении — автовыпуск без /unjail.",
+      "commands": [
+        "/setjail spawn",
+        "/jail Steve spawn 2h griefing",
+        "/jailfor Alex spawn 30m",
+        "/jaillist",
+        "/jailinfo spawn"
+      ],
+      "result": "/setjail spawn без хвоста ставит сферу радиуса defaultSphereRadius (10.0) в ногах, если нет палочной/WE-выделенки. У /jail хвост greedy: слово 2h совпало с regexp срока — посадка timed, expireAt = now+2h, причина griefing. /jailfor без duration в дереве нет. Раз в секунду (20 тиков) и на входе checkJailTimeout снимает истёкших и пишет jail.released_expired. /jaillist печатает сидящих; координаты клетки — /jailinfo. Счётчик maxJailsBeforeTempBan/PermBan (3 и 6 в шаблоне) живёт только в памяти процесса: после рестарта эскалация начинается с нуля, на третий jail той же сессии придёт auto_tempban_notice, на шестой — permban вместо посадки."
+    },
+    {
+      "title": "Ваниш переживает перезаход, «видеть ваниш» — нет",
+      "goal": "Спрятаться, выйти, зайти снова — остаться невидимым. Понять, почему коллега без отдельного тира вас не видит даже с OP.",
+      "commands": [
+        "/vanish",
+        "/vanishlist",
+        "/unvanish"
+      ],
+      "result": "UUID и число priority пишутся в коллекцию vanishes и поднимаются при старте. onPlayerLeave состояние не чистит; на входе через 1 тик снова шлются пакеты скрытия. vanishOnJoin — отдельный флажок: при true любой с neoessentials.moderation.vanish автоматически ванишится, даже если раньше не прятался (в шаблоне false). Кто видит ваниш: узел neoessentials.vanish.priority.<tier> из ряда 1000, 500, 250, 100, 50, 25, 10, 5, 1, проверка hasPermissionStrict — OP и голый neoessentials.* тир не дают. Равный или больший тир видит младшего; тир 0 не видит никого. Карта viewerPriorities (сессионный «see vanished») в DataStore не пишется и ни одна команда её не заполняет: литерала /vanish see в дереве нет."
+    },
+    {
+      "title": "Мут на час в игре — и почему IP-мут только в панели",
+      "goal": "Заглушить онлайн-нарушителя на срок так, чтобы /mutelist, /modhistory и панель показали одну запись. Понять предел команды относительно панели.",
+      "commands": [
+        "/mute Steve 1h spam in chat",
+        "/mutelist",
+        "/modhistory Steve",
+        "/unmute Steve"
+      ],
+      "result": "Steve должен быть онлайн: EntityArgument.player() офлайн не принимает, хотя MuteManager ключует имя в нижнем регистре и переживает рестарт (коллекция mutes). 1h снимается как duration, spam in chat — причина; цель сразу получает target_notification. Чат, /msg и почта режутся isMuted по имени. Панель POST /api/moderation/mute бьёт в тот же MuteManager (duration там в секундах, не «1h»). IP-мут — только POST /api/moderation/ipmute → коллекция ip_mutes: игровой команды нет, и ChatMuteGuard isIPMuted не вызывает, так что IP-мут сам по себе чат не глушит. /unmute снова требует онлайн-цель."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "Одна витрина наказаний: игра и панель",
+      "body": "BanManager, MuteManager, KickManager, WarnManager, NoteManager, ReportManager, JailManager, FreezeManager, VanishManager пишут в коллекции `player_bans`, `ip_bans`, `mutes`, `ip_mutes`, `kicks`, `warns`, `notes`, `reports`, `jails`, `jail_locations`, `freezes`, `vanishes` активного `storage.type`. `ModerationEndpoint` и `PublicModerationEndpoint` вызывают те же методы, что команды, а не отдельную таблицу. Исключение по единицам времени: тело панели передаёт `duration` в **секундах** (`durationSeconds * 1000`), в игре — токены `30m`/`2h`. `duration: -1` в POST `/api/moderation/ban` = вечный бан.",
+      "fix": "После бана из панели смотрите `/banlist` и `/modhistory <player>` — это не «другая база». Не путайте секунды API с суффиксами команд."
+    },
+    {
+      "title": "Срок бана: что снимает его само",
+      "body": "`expireTime > 0 && now > expireTime` — истёк. Для игроков `/banlist` (players), `isPlayerBanned` на входе и планировщик `checkExpiredBansInterval` архивируют запись (`unbannedBy` пустой). Для IP планировщик и `isIPBanned` на входе делают то же, но `/banlist ips` отдаёт сырую карту и может показать уже мёртвый temp-бан до следующего тика очистки. `autoExpireTempBans: false` оставляет ключ в карте, проверки возвращают «не забанен», архива нет. `parseDuration` понимает `s/m/h/d/w/mo/y`; у `/tempban*` аргумент word, пробельный «1h 30m» в дерево не влезет; «1h30m» как одно слово станет 130 минутами (цифры склеиваются, суффикс `hm` падает в default = минуты).",
+      "fix": "Для составного срока пишите одно слово с одной единицей или несколько через запятую без пробела-разделителя аргументов. Не ждите, что `/banlist ips` мгновенно спрячет истекшее — смотрите вход или подождите интервал."
+    },
+    {
+      "title": "/mute, /unmute, /mutelist видны всем и бьют только по онлайну",
+      "body": "В отличие от `/ban`, на корне нет `.requires()`. Узел в реестре команд пустой (`\"\"`); `neoessentials.chat.mute` проверяется внутри. Любой игрок видит команды в автодополнении и получит отказ в теле. `<target>` — `EntityArgument.player()`, офлайн нельзя ни выдать, ни снять, хотя запись в `mutes` переживает рестарт. `/mute` регистрируется всегда (плюс literal `silence`); `/unmute` и `/mutelist` не вешаются, если чат или их флаг в `commands` выключены. Срок в первом слове greedy: regexp без `mo`/`y`, поэтому `/mute Steve 1mo` воспримет `1mo` как причину, не как месяц.",
+      "fix": "Офлайн-мут — POST `/api/moderation/mute` по имени. Чтобы команда пропала из tab-complete, закрывайте её внешним провайдером по имени, не надейтесь на корневой узел NeoEssentials."
+    },
+    {
+      "title": "Ваниш в vanishes, приоритет зрителя — только сессия и без команды",
+      "body": "Исчезнувший UUID+`priority` персистятся. `viewerPriorities` (режим «see vanished») специально не пишется и с легаси-файла не мигрируется. `enableSeeVanished` / `toggleSeeVanished` в менеджере есть, из Brigadier их никто не зовёт — `/vanish see` нет. Реальный просмотр: `neoessentials.vanish.priority.<tier>` через `hasPermissionStrict` (не OP-bypass, не голый `neoessentials.*`). Тир 0 не видит ваниш. `vanishOnJoin` ванишит вход штаба с `neoessentials.moderation.vanish`, это не то же самое, что восстановление уже записанного vanishes.",
+      "fix": "Штабу, который должен видеть коллег, выдайте конкретный `neoessentials.vanish.priority.50` (или выше цели). Не рассчитывайте, что OP сам по себе видит ваниш."
+    },
+    {
+      "title": "Срок тюрьмы и автоэскалация",
+      "body": "`expireAt` в коллекции `jails`. Проверка каждую секунду у онлайн и на логине; офлайн сидит до входа, даже если часы вышли, пока `checkJailTimeout` не отработает. `/jail <p> <jail> 2h reason` и `/jailfor` пишут один и тот же путь. Счётчик повторных посадок (`jailCounts`) не сериализуется: `/neoe reload`/рестарт обнуляет его, зато внутри аптайма 3-я посадка (шаблон `maxJailsBeforeTempBan`) даёт temp-бан `tempBanDurationMinutes` (1440), 6-я — вечный бан `System` / «Exceeded maximum jailings», посадка не создаётся, вызывающему уходит `auto_*ban_notice`. Perm-проверка идёт первой: если оба порога равны, temp-ветка мертва.",
+      "fix": "Держите `maxJailsBeforePermBan` строго выше temp. Для тестов `/jail` на одном аккаунте либо поднимите пороги, либо рестартуйте, чтобы счётчик сбросился."
+    },
+    {
+      "title": "/jaillist — не список клеток; /deljail не выпускает",
+      "body": "`executeJailList` печатает `getAllJailedPlayers()`. Локации — `/jailinfo` без аргумента. `/jails` — тот же список сидящих. `/deljail` удаляет `jail_locations`, сидящие остаются в `jails`: движение больше не возвращает в клетку (`canPlayerMove` true, если локации нет), ломание/атака всё ещё режутся по `isPlayerJailed`. На следующем входе без локации игрока снимут автоматически.",
+      "fix": "Перед сносом клетки пройдите `/jaillist` и `/unjail`. Координаты клеток смотрите `/jailinfo`, не `/jaillist`."
+    },
+    {
+      "title": "Кто резолвится офлайн, а кто нет",
+      "body": "`/ban`/`/tempban`/`/jail`/`/report`/`/modhistory` — онлайн, затем кэш профилей. `/warn`/`/note` — онлайн, затем только уже лежащие warns/notes: первого варна или note человеку, который не в игре и без истории, не будет, даже если он в кэше. `/freeze`/`/vanish`/`/kick`/`/mute`/`/togglejail` — только онлайн. `/unfreeze` сначала смотрит freeze-список (офлайн можно разморозить).",
+      "fix": "Первый `/warn`/`/note` — пока цель в игре, либо сразу через панель (она резолвит имя своими правилами)."
+    },
+    {
+      "title": "/banip не принимает ник и не принимает IPv6",
+      "body": "Игровой `isValidIP` — только dotted IPv4. Панель перед BanManager/MuteManager пропускает и IPv6. Забанить «IP игрока», подставив ник в `/banip`, нельзя: будет `invalid_ip`. Кик по IP сравнивает строку `getPlayerIP` как есть.",
+      "fix": "Адрес берите из лога входа или из панели. IPv6-бан — только dashboard `/api/moderation/ipban`."
+    },
+    {
+      "title": "Замороженный не пишет в чат; ваниш глушит звук шагов",
+      "body": "`ChatHandler` отменяет чат, если `FreezeManager.isPlayerFrozen`. Ваниш ставит `setSilent(true)` — шаги не слышны соседям. Freeze переживает рестарт (`freezes`) и на входе шлёт reminder; позиция заморозки дописывается, если была пуста.",
+      "fix": "Ничего чинить не нужно; если «не пишет» после `/freeze` — так и задумано, не путать с мутом."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "IP-мут из панели не закрывает чат",
+      "body": "`MuteManager.muteIP` / коллекция `ip_mutes` / маршруты `/api/moderation/ipmute` существуют, `isIPMuted` объявлен. `ChatMuteGuard` и `ChatHandler` проверяют только `isMuted` по имени игрока; вызовов `isIPMuted` в моде больше нет. Игровой команды IP-мута тоже нет. Запись в хранилище появляется, чат, `/msg` и почта идут как обычно.",
+      "fix": "Глушите имя через `/mute` или POST `/api/moderation/mute`. IP-бан (`/banip`) по-прежнему не пускает на сервер — это другой механизм."
+    },
+    {
+      "title": "/modhistory и штабной пинг /report не локализуются",
+      "body": "`ModHistoryCommand` собирает шапку и строки секций через `Component.literal` с английскими «Moderation history for», «Clean record», «ACTIVE/expired». После `/report` онлайн с `neoessentials.moderation.reports` получают сырую строку `[Report] <nick> reported <nick>: <reason>`, минуя lang. Остальные ответы модерации идут через ключи `commands.neoessentials.*` / `neoessentials.moderation.*`.",
+      "fix": "Для русскоязычного штаба смотрите те же данные в панели (JSON) или смиритесь с английским дампом `/modhistory`. Это не сломанный поиск — сломан только текст."
+    }
+  ]
+}

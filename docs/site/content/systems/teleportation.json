@@ -1,0 +1,292 @@
+{
+  "commands": [
+    "warp", "setwarp", "delwarp", "warps", "pwarp", "setpwarp", "delpwarp", "pwarps",
+    "home", "sethome", "delhome", "deletehome", "homes", "renamehome",
+    "spawn", "setspawn",
+    "tpa", "tpahere", "tpaccept", "tpdeny", "tpcancel", "tpaall", "tpauto", "tptoggle",
+    "tp", "tphere", "tpall", "tppos", "tpr",
+    "back", "top", "jump", "jumpto",
+    "tpo", "tpoffline", "tpohere", "warpinfo"
+  ],
+  "commandDetails": {
+    "warp": {
+      "syntax": "/warp | /warp <name> | /warp <name> <target>",
+      "notes": "Голый /warp печатает первую страницу списка (20 имён). Аргумент name — StringArgumentType.word(), отдельной ветки <page> нет: /warp 2 ищет варп с именем 2, а не страницу 2. Чужого игрока (только онлайн, getPlayerByName) везёт узел с правом neoessentials.teleport.warp.others. Корень пропускает и neoessentials.teleport.warp, и neoessentials.teleport.warp.list; сам телепорт всё равно требует teleport.warp. При perWarpPermission нужен ещё neoessentials.warps.<name>."
+    },
+    "setwarp": {
+      "syntax": "/setwarp <name> [<pos>]",
+      "notes": "Без pos ставит варп в ногах. pos — BlockPosArgument (целые, ~ допустимы, чанк должен быть загружен). Те же литералы: createwarp, addwarp. Потолок серверных варпов — поле maxWarps=50 в записи DataStore коллекции warps, не ключ config.json. Игрок-only."
+    },
+    "delwarp": {
+      "syntax": "/delwarp <name>",
+      "notes": "Те же литералы: deletewarp, removewarp, rwarp. С консоли (OP 3) зовёт deleteWarpByAdmin, из игры — deleteWarp. Подсказки — текущие имена варпов."
+    },
+    "warps": {
+      "syntax": "/warps [<page>]",
+      "notes": "page — IntegerArgumentType.integer(1). Регистрация завязана на commands.listwarps, не на commands.warps. Алиасы: warplist, listwarps. Право neoessentials.teleport.warp.list."
+    },
+    "pwarp": {
+      "syntax": "/pwarp <name>",
+      "notes": "name обязателен, голого /pwarp нет. Семья команд не регистрируется, если warpSettings.allowPlayerWarps=false. После проверки своего player warp обработчик зовёт teleportToWarp — то есть серверный варп с тем же именем, не точку игрока."
+    },
+    "setpwarp": {
+      "syntax": "/setpwarp <name>",
+      "notes": "Лимит: meta neoessentials.warps, затем neoessentials.warp.limit.<1..100>, иначе warpSettings.maxPlayerWarps (по умолчанию 3). neoessentials.warp.limit.unlimited снимает потолок. Повтор того же имени не перезаписывает, а отвечает already_exists. Кулдаун warpSetCooldown не тратится, если создание отвергнуто."
+    },
+    "delpwarp": {
+      "syntax": "/delpwarp <name>",
+      "notes": "Удаляет только свой player warp. Чужие точки этой командой не трогаются (для этого есть REST DELETE /api/warps/players/{uuid}/{name})."
+    },
+    "pwarps": {
+      "syntax": "/pwarps",
+      "notes": "Список только своих имён плюс счётчик к личному максимуму (∞ при unlimited). Чужие варпы не показывает."
+    },
+    "home": {
+      "syntax": "/home [<name>]",
+      "notes": "Без имени: ключ home, иначе первый ключ ConcurrentHashMap — не алфавит. Алиас /h не ставится, если загружен ftbessentials / ftb_essentials / essentials. В тюрьме при preventJailEscape команда молчит. Кулдаун homeTeleportCooldown, warmup — generalSettings.teleportDelay."
+    },
+    "sethome": {
+      "syntax": "/sethome <name> | /sethome confirm | /sethome deny",
+      "notes": "Голого /sethome нет, имя обязательно. confirm и deny — соседние литералы корня, имя живёт в pending-map, не в командной строке. Перезапись существующего дома всегда спрашивает подтверждение (это не ключ requireConfirmationForDelete). Алиас createhome — только без конфликтующего мода. Имя: ^[a-zA-Z0-9_-]+$, до 20 символов, регистр как ввели."
+    },
+    "delhome": {
+      "syntax": "/delhome <name> | /delhome confirm | /delhome deny",
+      "notes": "При homeSettings.requireConfirmationForDelete (по умолчанию true) удаление идёт только через /delhome confirm. Клики в чате шлют не ту строку — см. knownIssues. Алиасы removehome и rhome пропускаются при конфликте с FTB/Essentials."
+    },
+    "deletehome": {
+      "syntax": "/deletehome <name> | /deletehome confirm | /deletehome deny",
+      "notes": "Тот же Brigadier-узел, что /delhome: registerDelHomeCommandWithName(\"deletehome\"), если литерал ещё свободен. Право то же: neoessentials.teleport.home.delete."
+    },
+    "homes": {
+      "syntax": "/homes",
+      "notes": "Алиасы listhomes, homelist. Семья регистрируется только если commands.listhomes=true, ключ commands.homes на дерево не влияет. Консоль не проходит requires()."
+    },
+    "renamehome": {
+      "syntax": "/renamehome <oldname> <newname>",
+      "notes": "Вторая ветка с тем же шаблоном двух word и правом neoessentials.renamehome.others разбирает первый аргумент как <player>:<old>, но только среди онлайн. HomeCommands перед вызовом менеджера делает toLowerCase обоим именам, тогда как /sethome кладёт ключ как ввели."
+    },
+    "spawn": {
+      "syntax": "/spawn",
+      "notes": "Аргумента <player> нет — чужого на спавн этой командой не увезти. Кулдаун spawnSettings.spawnCooldown пишется в lastSpawnUsage до teleportToSpawn: неудачный телепорт всё равно сжигает ожидание. spawninfo/spawni в инвентарь этой страницы не входят."
+    },
+    "setspawn": {
+      "syntax": "/setspawn [<pos>]",
+      "notes": "Без pos — текущие ноги. pos — BlockPosArgument, загруженный чанк. Не регистрируется, если spawnSettings.allowSpawnSet=false. Право neoessentials.teleport.spawn.set."
+    },
+    "tpa": {
+      "syntax": "/tpa <player>",
+      "notes": "player — EntityArgument.player(), только онлайн. Себя отклоняет. Цель с выключенным tptoggle недоступна, если у отправителя нет neoessentials.teleport.tpo. У цели с tpauto запрос не создаётся — телепорт сразу. Одновременно одна исходящая заявка (sentRequests)."
+    },
+    "tpahere": {
+      "syntax": "/tpahere <player>",
+      "notes": "Та же схема, что /tpa, тип TPAHERE: при accept едет цель, не отправитель. Назад (/back) пишется тому, кого реально двигают."
+    },
+    "tpaccept": {
+      "syntax": "/tpaccept",
+      "notes": "Без имени игрока: принимается единственная входящая заявка (pendingRequests ключ — UUID цели). Выбрать из очереди нельзя."
+    },
+    "tpdeny": {
+      "syntax": "/tpdeny",
+      "notes": "Отклоняет ту же единственную входящую заявку. Аргументов нет."
+    },
+    "tpcancel": {
+      "syntax": "/tpcancel",
+      "notes": "Снимает свою исходящую заявку. Аргументов нет."
+    },
+    "tpaall": {
+      "syntax": "/tpaall [<target>]",
+      "notes": "Без аргумента хаб — отправитель; <target> (онлайн, word) требует neoessentials.tpaall.others. Каждому онлайн кроме хаба шлётся TPAHERE, пропуская тех, у кого tptoggle выключен. Из-за sentRequests на UUID отправителя реально уходит только первый успешный запрос."
+    },
+    "tpauto": {
+      "syntax": "/tpauto | /tpauto on|off | /tpauto <target> | /tpauto <target> on|off",
+      "notes": "Голый вызов переключает себя. Литералы on/off важнее ника: игрока on этой командой не выбрать. Чужой target — neoessentials.tpauto.others. Состояние в ConcurrentHashMap, после рестарта все снова выключены. Не обходит tptoggle: при включении на выключенный toggle приходит предупреждение."
+    },
+    "tptoggle": {
+      "syntax": "/tptoggle | /tptoggle on|off | /tptoggle <target> | /tptoggle <target> on|off",
+      "notes": "По умолчанию приём включён (нет записи = true). Чужой target — neoessentials.tptoggle.others. Тоже только в памяти. Закрывает /tpa, /tpahere и /tpaall, не закрывает /tp, /tphere, /tpall, /tpo, /tpohere."
+    },
+    "tp": {
+      "syntax": "/tp <target> | /tp <player> <target> | /tp <x> <y> <z>",
+      "notes": "Игроки — EntityArgument.player() (только онлайн). Координаты — три DoubleArgumentType, без ~ и без мира. Ветки /tp <player> <x> <y> <z> в дереве нет. Себя к себе отклоняет. Пишет /back и зовёт player.teleportTo напрямую, минуя warmup TeleportUtil."
+    },
+    "tphere": {
+      "syntax": "/tphere <player>",
+      "notes": "EntityArgument.player(), только онлайн. /back пишется цели. Исполнитель обязан быть игроком (getPlayerOrException)."
+    },
+    "tpall": {
+      "syntax": "/tpall",
+      "notes": "Всех онлайн кроме себя к ногам. Право neoessentials.teleport.admin.tpall. Консоль не проходит: нужен игрок. Каждому пишется /back."
+    },
+    "tppos": {
+      "syntax": "/tppos <coordinates>",
+      "notes": "Vec3Argument.vec3(): можно ~ ~ ~ и относительные смещения, в отличие от тройки double у /tp. Мир не меняется. Пишет /back."
+    },
+    "tpr": {
+      "syntax": "/tpr [<locationName>]",
+      "notes": "Без имени берётся randomTeleportSettings.defaultLocation (шаблон {world}). При mode=gui голый /tpr открывает биом-GUI, а /tpr <locationName> GUI обходит. Алиасы rtp, randomtp, randomteleport — те же деревья. Под /neoe и /neoessentials висят голые tpr|rtp|randomtp|randomteleport без locationName (это каталог /neoe, не эта страница). Именованный центр ставит /settpr <locationName> (сюда не заявлена). Кулдаун randomTeleportSettings.cooldown, warmup тот же teleportDelay."
+    },
+    "back": {
+      "syntax": "/back",
+      "notes": "Точка пишется перед home/warp/spawn/tpa и перед /tp|/tphere|/tpall|/tppos|/top|/jump|/jumpto. /tpo и /tpoffline из ServerAdminCommands /back не пишут. Смерть — backSettings.enableDeathBack. Свой warmup: backSettings.teleportDelay, не generalSettings. enableBackSafety по умолчанию false."
+    },
+    "top": {
+      "syntax": "/top",
+      "notes": "Сканирует столбец от maxBuildHeight вниз только выше текущей Y: из пещеры вынесет на поверхность над собой, ниже себя не ищет. Без solid+air — ошибка no_solid_block."
+    },
+    "jump": {
+      "syntax": "/jump",
+      "notes": "Тот же execute, что /jumpto: луч 100 блоков, посадка на блок над хитбоксом. Сквозь стены «не прыгает», если луч упёрся в непрозрачный блок — телепорт на него сверху."
+    },
+    "jumpto": {
+      "syntax": "/jumpto",
+      "notes": "Идентичен /jump (оба register* зовут jumpToTargetBlock). Если над целью нет двух блоков воздуха — jumpto_failed."
+    },
+    "tpo": {
+      "syntax": "/tpo <player>",
+      "notes": "ServerAdminCommands: word, только онлайн через getPlayerByName, обход tptoggle, право neoessentials.teleport.tpo, /back не пишется. DirectTeleportCommands при commands.tpo регистрирует второй ребёнок tpo → argument(\"player\") с правом neoessentials.teleport.admin.tpo и зовёт teleportToOfflinePlayer (lastLocation из PlayerData). Какой узел съест строку /tpo Steve — см. knownIssues."
+    },
+    "tpoffline": {
+      "syntax": "/tpoffline <player>",
+      "notes": "word, не EntityArgument: ник офлайн-игрока проходит. Если он онлайн — обычный teleportTo на живую сущность. Офлайн — ванильный playerdata NBT (Pos, Rotation, Dimension) через usercache; нет профиля или нет Pos — not_found / no_data. /back не пишется. Мир из Dimension, иначе overworld."
+    },
+    "tpohere": {
+      "syntax": "/tpohere <player>",
+      "notes": "word + онлайн getPlayerByName. Привозит цель, игнорируя tptoggle. /back цели не пишется. Консоль отвергается (player_only)."
+    },
+    "warpinfo": {
+      "syntax": "/warpinfo <warp>",
+      "notes": "Печатает имя, мир и координаты серверного варпа (getLocationString). Player warps не показывает. Право neoessentials.warpinfo. Регистрируется отдельно (registerWarpInfoCommand), не внутри WarpCommands.register."
+    }
+  },
+  "examples": [
+    {
+      "title": "Спавн и три варпа для нового мира",
+      "goal": "Поставить точку спавна и публичные варпы, не правя JSON руками, и проверить, что игрока можно отправить на варп командой.",
+      "commands": [
+        "/setspawn",
+        "/setwarp spawn",
+        "/setwarp market",
+        "/warps",
+        "/warpinfo market",
+        "/warp market Steve"
+      ],
+      "result": "setspawn отвечает успехом и запоминает ноги + взгляд. Каждый setwarp без координат ставит варп там же, где стоите. /warps печатает spawn, market (до 20 на страницу). /warpinfo market показывает мир и координаты. /warp market Steve требует neoessentials.teleport.warp.others и онлайн-Steve: его унесёт на market с warmup generalSettings.teleportDelay (по умолчанию 3 с), вам придёт warped_other. Голый /warp без имени — тот же список, что /warps, страница 1."
+    },
+    {
+      "title": "Дома с лимитом и переименованием",
+      "goal": "Выдать игроку несколько точек и переименовать одну, уперевшись в maxHomes, если домов уже пять.",
+      "commands": [
+        "/sethome home",
+        "/sethome farm",
+        "/homes",
+        "/renamehome farm barn",
+        "/home barn",
+        "/home"
+      ],
+      "result": "Первый sethome создаёт ключ home — именно его потом берёт голый /home. Второй — farm. /homes показывает счётчик к maxHomes (5, либо meta neoessentials.homes / neoessentials.home.<n>). renamehome farm barn сработает, только если ключ в хранилище farm в нижнем регистре: команда сама lower-case'ит оба аргумента. /home barn — warmup и, если включено, проверка безопасности. Шестой /sethome new при пяти домах ответит limit_exceeded и дом не создаст; перезапись /sethome home не занимает слот, но попросит /sethome confirm."
+    },
+    {
+      "title": "Запрос TPA и обход отказа",
+      "goal": "Проверить обычный цикл /tpa и админский обход, когда игрок закрыл запросы.",
+      "commands": [
+        "/tptoggle off",
+        "/tpa Steve",
+        "/tptoggle on",
+        "/tpa Steve",
+        "/tpaccept",
+        "/tpo Steve"
+      ],
+      "result": "После tptoggle off любой /tpa на этого игрока (кроме отправителя с neoessentials.teleport.tpo) получит tptoggle_off и заявки не будет. Включили приём — /tpa Steve шлёт кликабельный запрос на requestTimeout секунд (60). Steve пишет /tpaccept без ника. /tpo Steve не смотрит tptoggle и не создаёт заявку: это прямой teleportTo. Не путайте с /tpoffline: офлайн-ник /tpo из ServerAdminCommands не найдёт (player_not_found)."
+    },
+    {
+      "title": "Достать офлайн-игрока и случайная точка",
+      "goal": "Телепорт к последней ванильной позиции вышедшего игрока и проверка именованного RTP вокруг текущих координат.",
+      "commands": [
+        "/tpoffline Steve",
+        "/settpr wild",
+        "/tpr wild"
+      ],
+      "result": "tpoffline читает world/playerdata: если Steve в usercache и в NBT есть Pos — вы окажетесь там (в т.ч. в другом измерении из Dimension). Нет данных — no_data, /back при этом не записан. /settpr wild (команда не с этой страницы, дерево рядом с /tpr) пишет центр в randomTeleportSettings.locations.wild и чистит кэш слота; у новой записи maxRange по умолчанию 10000, не defaultMaxRange 5000. /tpr wild ищет безопасную точку в этом радиусе, затем тот же warmup: сдвинулись больше чем на 1.5 блока при cancelOnMovement — отмена."
+    },
+    {
+      "title": "Собрать всех к себе и откатить одного",
+      "goal": "Событие на спавне: подтянуть онлайн, потом вернуть одного координатами с тильдами.",
+      "commands": [
+        "/tpall",
+        "/tppos ~ ~10 ~",
+        "/tphere Steve",
+        "/back"
+      ],
+      "result": "tpall переносит всех кроме вас, каждому пишется /back; если вы одни на сервере — tpall.no_players. /tppos ~ ~10 ~ поднимает вас на 10 блоков в том же мире (у /tp 100 64 200 тильд нет — только абсолютные double). /tphere Steve притягивает его к вам и пишет ему /back. Ваш /back вернёт вас на точку до tppos, не Steve."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "Warmup общий, кулдауны разные, отмена по движению и урону",
+      "body": "`generalSettings.teleportDelay` (3 с) читают home, warp, spawn, TPA и `/tpr`. `/back` берёт свой `backSettings.teleportDelay`. Кулдауны раздельные: `homeTeleportCooldown` / `homeSetCooldown` / `homeDeleteCooldown`, `warpCooldown` / `warpSetCooldown`, `spawnCooldown`, `randomTeleportSettings.cooldown`, `cooldownBetweenRequests`. Обход: `neoessentials.teleport.bypass.warmup` (или `.home` / `.warp`) и `…bypass.cooldown`. При `cancelOnMovement` порог 1.5 блока. `cancelOnDamage` по умолчанию false; если включить, второй warmup поверх первого отвергается (`already_in_progress`) — у обработчика урона один pending на игрока. `/tp`, `/tphere`, `/tpall`, `/tpo`, `/tpohere` идут через `player.teleportTo` и этот warmup не видят.",
+      "fix": "Для «мгновенного /home» выдайте bypass.warmup, не обнуляйте teleportDelay всем. Бой закрывает только путь через TeleportUtil при `allowTeleportInCombat: false` (5 с CombatTracker) — админский /tp из боя всё равно унесёт."
+    },
+    {
+      "title": "Проверка безопасности и принудительная загрузка чанков",
+      "body": "Home/warp/spawn перед сканом зовут `TeleportUtil.preloadChunksForTeleport` (сетка 3×3, FORCED). Флаги: `enableHomeTeleportSafety`, `enableWarpSafety`, `enableSpawnSafety`, у TPA — `teleportRequestSettings.enableTeleportSafety`, у /back — `enableBackSafety` (в поставке false: выгруженный чанк происхождения считался «лава»). Опасные блоки: лава, огонь, soul fire, магма, кактус, сладкие ягоды, wither rose, nether portal, костёр, powder snow. Нет опоры под ногами или потолок в голове — `findSafeLocation`; если пусто — телепорт отменяется, ключ не «чинят» молча, кроме home/warp: найденная безопасная точка **перезаписывает** сохранённые координаты и пишет moved_to_safety. RTP грузит только чанк посадки, не 3×3.",
+      "fix": "Выключить safety, если мир ломает ландшафт под варпом. После moved_to_safety проверьте /warpinfo — точка уже не та, что ставили /setwarp."
+    },
+    {
+      "title": "Офлайн /tpoffline читает ванильный NBT, не lastLocation мода",
+      "body": "`/tpoffline` берёт профиль из usercache, затем `playerdata/<uuid>.dat`: список Pos и Dimension. Онлайн-тёзка коротко замыкается в живой teleportTo. Параллельный узел `/tpo` из DirectTeleportCommands зовёт `DirectTeleportManager.teleportToOfflinePlayer` — это строка `PlayerData.getLastLocation()` NeoEssentials, другой источник. Нет записи lastLocation — offline_player_not_found, даже если ванильный dat на месте. Ни один из путей ServerAdmin `/tpo` / `/tpoffline` / `/tpohere` не вызывает saveBackLocation.",
+      "fix": "К вышедшему — /tpoffline, не /tpo. Если tpoffline.no_data — игрок ни разу не сохранялся в этом мире (или ник не в usercache). Вернуться назад после этих команд /back не поможет, точку не писали."
+    },
+    {
+      "title": "Лимит домов: config, meta, ноды, подтверждение",
+      "body": "`getMaxHomesForPlayer`: если задана meta `neoessentials.homes` (LuckPerms `meta set neoessentials.homes N`) — берётся она (в т.ч. ниже config, 0 = домов нельзя). Иначе max(config `maxHomes`=5, высшая выданная `neoessentials.home.1`…`neoessentials.home.100`). Перезапись существующего имени лимит не ест, но всегда идёт через pending + `/sethome confirm`. Удаление — только если `requireConfirmationForDelete`, через `/delhome confirm`. Кулдаун set/delete не тратится на отклонённую попытку. `allowCrossDimensionHomes: false` запрещает sethome вне overworld (проверка `worldName.contains(\"overworld\")`).",
+      "fix": "Поднять лимит группе — meta или neoessentials.home.10, не правьте maxHomes, если часть игроков должна остаться на пяти. Подтверждение с клика в чате сломано: пишите `/sethome confirm` / `/delhome confirm` руками."
+    },
+    {
+      "title": "Player warps — отдельные хранилище и лимит, общий телепорт",
+      "body": "Коллекция `player_warps`, не `warps`. `/pwarp` / `/setpwarp` / `/delpwarp` / `/pwarps` появляются только при `allowPlayerWarps` на старте. Лимит игрока: unlimited-нода, meta `neoessentials.warps`, иначе max(`neoessentials.warp.limit.N`, `maxPlayerWarps`). `WarpManager.teleportToPlayerWarp` есть, но ни одна играбельная команда его не зовёт: `/pwarp` после getPlayerWarp вызывает `teleportToWarp` (серверные варпы). Совпадение имён увезёт на серверный варп; без серверного — not_found, хотя /pwarps имя показывает. Ветки `/pwarp <player> <name>` в Brigadier нет.",
+      "fix": "Пока баг жив, публичные точки делайте /setwarp. Личные «дома» — /sethome. Не обещайте игрокам витрину чужих pwarp."
+    },
+    {
+      "title": "Пер-варп право видно в списке, но не пускает",
+      "body": "При `perWarpPermission: true` список /warp|/warps показывает варп, если есть `neoessentials.teleport.warp` **или** `neoessentials.warps.<name>`. Сам телепорт в executeWarp требует **оба**: teleport.warp и warps.<name>. Право teleport.warp.list хватает, чтобы открыть голый /warp как список, но не чтобы уехать.",
+      "fix": "На каждый публичный варп выдайте neoessentials.warps.<имя> тем, кто должен им пользоваться. Не рассчитывайте, что одного teleport.warp достаточно, если флаг включили."
+    },
+    {
+      "title": "Потолок серверных варпов не из config.json",
+      "body": "`maxWarps` по умолчанию 50 и читается из служебной записи коллекции `warps` в DataStore (loadWarps). `WarpManager.loadConfig()` ключ `warpSettings.maxWarps` не смотрит — в поставке его там и нет. Правка на дашборде «Teleportation → maxWarps» в config.json на лимит не действует. Имена варпов по умолчанию case-insensitive (нижний регистр), в отличие от ключей домов.",
+      "fix": "Лимит 50 меняется только через запись хранилища / setMaxWarps в коде, не через config.json. Для игроков используйте maxPlayerWarps — он из конфига читается."
+    },
+    {
+      "title": "TPA: одна входящая, одна исходящая, очередь maxPendingRequests фиктивна",
+      "body": "`sentRequests` — одна заявка на отправителя. `pendingRequests` — Map по UUID цели, putIfAbsent: вторая входящая всегда target_busy, даже если `maxPendingRequests` = 5. `allowMultipleRequests` проверяет дубль той же пары, но слот цели всё равно один. `/tpaccept` без аргумента. Таймаут `requestTimeout` (60 с), кулдаун отправителя `cooldownBetweenRequests` (10 с) не тратится на отказ (busy / tptoggle / already_sent). Друзья autoAcceptFromFriends — заглушка isFriend.",
+      "fix": "Не обещайте очередь из пяти /tpa. Нужно несколько целей сразу — только если починят sentRequests (сейчас ломает и /tpaall)."
+    },
+    {
+      "title": "Тюрьма, консоль и /homes через другой ключ commands",
+      "body": "`preventJailEscape`: /home, /warp, /spawn, /pwarp отказывают jailed игроку. /tp и /tpo не проверяют. Почти все деревья требуют ServerPlayer: консоль проходит requires() у setwarp/delwarp/spawn (OP), но executeSetWarpHere/executeSpawn кастуют getEntity() к игроку. Исключение — /delwarp с консоли. Семья /homes сажается по `commands.listhomes`, /warps — по `commands.listwarps`. Выключить listhomes — /homes пропадёт, даже если commands.homes=true.",
+      "fix": "Менять набор команд — правьте именно listhomes/listwarps. С консоли варп удаляйте /delwarp, спавн и дома ставьте из игры."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "/pwarp не телепортирует на player warp",
+      "body": "Issues_Discovered.md: «Player Warps having issues». В `PwarpCommands.executePwarp` после успешного `getPlayerWarp` вызывается `warpManager.teleportToWarp(player, warpName)` — поиск в карте **серверных** варпов. Комментарий в коде: «Reuse teleport logic (may need adjustment)». Метод `teleportToPlayerWarp` существует и помечен admin-only (OP 4), но ни /pwarp, ни /warp его не вызывают. Симптом: /setpwarp shop + /pwarps показывают shop, /pwarp shop отвечает not_found либо уносит на серверный /warp shop, если имя совпало.",
+      "fix": "Не используйте pwarp как публичные точки игроков. Нужен рабочий телепорт — /home или /warp. Починить: в executePwarp вызывать телепорт по TeleportLocation из getPlayerWarp, не teleportToWarp."
+    },
+    {
+      "title": "Кнопки confirm/deny у домов шлют команду, которой нет в дереве",
+      "body": "`/sethome` и `/delhome` регистрируют литералы confirm и deny на корне, имя читают из pending-map. Сообщение с кнопками собирается как `/sethome <name> confirm` и `/delhome <name> confirm` (RUN_COMMAND). У узла `<name>` нет ребёнка confirm: Brigadier не принимает третий токен. Клик «подтвердить» не выполняет overwrite/delete. Вручную `/sethome confirm` и `/delhome confirm` работают.",
+      "fix": "Пишите в чат `/sethome confirm` или `/delhome confirm` без имени. Клики в жёлтой строке игнорируйте, пока не поправят homeConfirmComponent."
+    },
+    {
+      "title": "Два разных /tpo в одном литерале",
+      "body": "`DirectTeleportCommands.registerTpoCommand` (если modules телепортации и commands.tpo) вешает `/tpo <player>` → `teleportToOfflinePlayer` (PlayerData.lastLocation), право `neoessentials.teleport.admin.tpo`. Позже `ServerAdminCommands.registerTpo` вешает `/tpo <target>` → онлайн teleportTo с обходом tptoggle, право `neoessentials.teleport.tpo`. Имена аргументов разные (`player` vs `target`), оба word: у корня tpo два ребёнка. Какой execute получит `/tpo Steve` на конкретной версии Brigadier, из исходника не следует однозначно.",
+      "fix": "Онлайн в обход toggle — рассчитывайте на /tpo только если commands.tpo выключен (тогда останется узел ServerAdmin). Офлайн — всегда /tpoffline. Не документируйте /tpo как «офлайн-телепорт»."
+    },
+    {
+      "title": "/tpaall отправляет заявку только первому игроку",
+      "body": "`WorldInteractionCommands.executeTpaAll` в цикле зовёт `sendTeleportRequest(hub, online, TPAHERE)`. Менеджер держит одну исходящую заявку на UUID (`sentRequests`): вторая итерация отвечает already_sent и откатывается. Итог: «sent N» почти всегда 1 (или 0, если единственный кандидат с выключенным tptoggle). Это не очередь maxPendingRequests.",
+      "fix": "Собрать всех — /tpall (принудительно) или разослать /tpahere руками. /tpaall в текущем виде массовым приглашением не является."
+    }
+  ]
+}

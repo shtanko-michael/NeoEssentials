@@ -1,0 +1,111 @@
+{
+  "commands": ["dashboard", "dashboardregister", "linkaccount", "apikey"],
+  "commandDetails": {
+    "dashboard": {
+      "syntax": "/dashboard [start | stop | restart | status | url | pair <dashboardUrl> <code> | unpair]",
+      "notes": "Корень закрыт neoessentials.admin.dashboard через validateAdminPermission (консоль и OP уровня 2 проходят всегда). Голый /dashboard равен status. pair/unpair дополнительно требуют neoessentials.dashboard.pair (validatePermission, без admin-bypass). <dashboardUrl> — StringArgumentType.string(): URL с : и / нужно брать в кавычки, иначе Brigadier разрежет токен. start смотрит webDashboard.enabled и modules.webDashboardEnabled; autoStart в поставке false — HTTP сам не поднимается. Команда регистрируется, только если commands.dashboard включён."
+    },
+    "dashboardregister": {
+      "syntax": "/dashboardregister [start | complete <username> <password> | discord | status]",
+      "notes": "Игроку нужен neoessentials.dashboard.access; консоль допускается при OP 2, но все ветки кроме справки отвечают players_only. Голый вызов печатает help. <password> — greedy (можно с пробелами), минимум 8 символов; <username> — word длиной 3–20. Токен start живёт 5 минут в памяти и не пишется в DataStore. discord требует готовый SDLink / Mc2Discord / DCIntegration и уже связанный Discord."
+    },
+    "linkaccount": {
+      "syntax": "/linkaccount <code>",
+      "notes": "Без узла права и без .requires — любой игрок. Консоль получает отказ. Код из POST /api/auth/link-minecraft/start, 8 символов из ABCDEFGHJKLMNPQRSTUVWXYZ23456789, TTL 5 минут; ввод приводится toUpperCase. Это обратное направление к /dashboardregister: привязать уже существующий dashboard-аккаунт к нику, а не создать новый."
+    },
+    "apikey": {
+      "syntax": "/apikey <create <label> [role] | list | revoke <id>>",
+      "notes": "Корень требует neoessentials.dashboard.apikeys (validatePermission). Голый /apikey неполный — .executes на корне нет. <label> и <id> — word. [role] по умолчанию ADMIN; автодополнение: ADMIN, OPERATOR, MODERATOR, VIEWER. Полный токен печатается один раз (копируемый компонент) и больше не хранится открытым. list показывает id/label/role/enabled/last used, не секрет. В отличие от /dashboard, isCommandEnabled(\"apikey\") не проверяется — команда регистрируется всегда."
+    }
+  },
+  "examples": [
+    {
+      "title": "Поднять API вручную и снять адрес",
+      "goal": "В поставке webDashboard.autoStart: false и port: 8080 — после старта сервера HTTP молчит, пока не выполните start.",
+      "commands": [
+        "/dashboard status",
+        "/dashboard start",
+        "/dashboard url"
+      ],
+      "result": "status печатает running/offline, включён ли конфиг и, если останавливали командой, пометку manually disabled. start поднимает REST и WebSocket (websocketPort, в поставке 8081). url повторяет базовый http://<bind>:<port> и отказывается, если сервер не запущен. Если enabled: false — start отвечает disabled_in_config и ничего не слушает."
+    },
+    {
+      "title": "Ключ для внешней панели",
+      "goal": "Laravel/внешний бэкенд ходит в /api/* с Authorization: Bearer. Человеческий логин для этого не нужен.",
+      "commands": [
+        "/apikey create farmstead-dash ADMIN",
+        "/apikey list",
+        "/dashboard status"
+      ],
+      "result": "create печатает токен один раз — его кладут в server-side конфиг панели, не в браузер. list показывает id (он нужен для revoke) и last used: never, пока ключом не воспользовались. GET /api/ping без заголовка должен ответить 200 и {\"success\":true,\"mod\":\"neoessentials\",\"mode\":\"external|internal\"} — это проверка порта, не ключа."
+    },
+    {
+      "title": "Игрок регистрирует свой аккаунт панели",
+      "goal": "Не API-ключ, а логин/пароль для человека. Два шага: токен, затем complete.",
+      "commands": [
+        "/dashboardregister start",
+        "/dashboardregister complete steve_admin S3cretPass",
+        "/dashboardregister status"
+      ],
+      "result": "start выдаёт одноразовый токен на 5 минут. complete ищет pending по UUID (токен в чат повторно слать не нужно), проверяет длину имени/пароля и создаёт dashboard user, привязанный к этому Minecraft-аккаунту. Если у игрока уже связан Discord через компаньон-мод, complete дополнительно автолинкует его. Повторный start у уже зарегистрированного — already_registered. status показывает имя в панели, ник, время и Discord."
+    },
+    {
+      "title": "Регистрация через связанный Discord",
+      "goal": "Пароль не задаём: вход потом кнопкой Discord на стороне панели, если компаньон-мод отдаёт link.",
+      "commands": [
+        "/dashboardregister discord",
+        "/dashboardregister status"
+      ],
+      "result": "Нужен установленный и ready Simple Discord Link, Mc2Discord или DCIntegration плюс уже связанный Discord у этого UUID. Успех создаёт аккаунт с dashboard-именем = ник Minecraft. Если компаньона нет — discord_unavailable и совет идти в start/complete. DiscordSRV не поддерживается (это Bukkit-плагин). Сам NeoEssentials в discord.com не ходит."
+    },
+    {
+      "title": "Сопряжение с внешней панелью и привязка ника",
+      "goal": "Панель показывает код на своей Configuration/Settings; мод отдаёт ей API-ключ и запоминает обратный токен.",
+      "commands": [
+        "/dashboard pair \"https://dash.example.com\" ABCD1234",
+        "/linkaccount K7MNPQ2R",
+        "/dashboard unpair"
+      ],
+      "result": "pair (кавычки обязательны) POST на {url}/api/pair/complete с code, modToken (новый ключ label dashboard-pairing, роль ADMIN), serverName и websocketPort. 200 + dashboardToken — url/token/keyId пишутся в webDashboard.externalDashboard. Код linkaccount игрок берёт со страницы Settings (POST /api/auth/link-minecraft/start); успех связывает этот ник с тем dashboard-аккаунтом. unpair отзывает ключ pairing и чистит externalDashboard."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "internal vs external — другая страница",
+      "body": "Как слушается порт, что отдаёт `/`, и чем `webDashboard.mode` (`external` в поставке, `internal`/`both`) отличается при диагностике «панель не коннектится», разобрано на странице подключения панели. Здесь достаточно: `mode` читается при старте HTTP, `/neoe reload` его не меняет; `/api/ping` жив в любом mode и без Bearer.",
+      "fix": "Смена mode — рестарт модового HTTP (`/dashboard restart` или рестарт сервера). Разбор bind/файрвола/ключа — страница «Подключение панели»."
+    },
+    {
+      "title": "`/dashboard stop` ставит флаг до рестарта JVM",
+      "body": "`stopDashboard` поднимает static `manuallyDisabled`. На текущей сессии auto-start уже прошёл (он только в ServerStartedEvent), так что флаг в основном для status («override manually disabled»). После полного рестарта процесса флаг снова false: если `autoStart: true`, HTTP поднимется сам, даже если в прошлой сессии его останавливали командой. `start` сбрасывает флаг. `restart` не умеет поднимать уже лежащий сервер — сначала пишет not_running и предлагает start.",
+      "fix": "В поставке `autoStart: false` — после рестарта сервера снова нужен `/dashboard start`, независимо от stop. Не путайте stop с `webDashboard.enabled: false`."
+    },
+    {
+      "title": "pair требует второй узел, URL только в кавычках",
+      "body": "Корень `/dashboard` пропускает OP 2 через validateAdminPermission. Ветка pair/unpair дополнительно делает validatePermission(`neoessentials.dashboard.pair`). При `opsBypassPermissions: false` оператор без этого узла стартует HTTP, но pair получит отказ. Unquoted string в Brigadier — `[0-9A-Za-z_\\-+.]`, двоеточие и слэш запрещены, поэтому `http://127.0.0.1:3000` без кавычек не парсится. Хвост `/` с URL снимается. Не-200 или тело без dashboardToken — ключ dashboard-pairing сразу revoke.",
+      "fix": "Всегда `/dashboard pair \"https://host\" CODE`. Для pair выдайте `neoessentials.dashboard.pair` (или оставьте OP-bypass включённым)."
+    },
+    {
+      "title": "Два разных «привязать аккаунт»",
+      "body": "`/dashboardregister` создаёт **новый** dashboard user из онлайн-игрока (токен 5 мин, username 3–20, пароль ≥ 8). `/linkaccount` подтверждает владение ником для **уже существующего** dashboard user (код 8 символов, 5 мин, без пароля и без права). Повторный link, пока UUID уже привязан, отвергается — сначала unlink через API. Регистрационный токен при рестарте сервера сгорает (только RAM). Первый запуск HTTP при пустой коллекции пользователей создаёт `admin` со случайным паролем в лог (`Temporary password: …`, смена на первом входе) — это не `/dashboardregister`.",
+      "fix": "Игрок без аккаунта — register. Аккаунт заведён в панели/админом — Settings → код → `/linkaccount`. Потерянный пароль admin — смотрите boot-лог или сброс через `/api/users/{id}/password`."
+    },
+    {
+      "title": "WebSocket может умереть отдельно от REST",
+      "body": "И start, и auto-start ловят Throwable вокруг WebSocket (NoClassDefFoundError из отсутствующего Java-WebSocket не должен ронять сервер). HTTP при этом может быть running, а live-события на websocketPort — нет. status/url показывают только HTTP-URL, не WS.",
+      "fix": "Если REST жив, а панель «не стримит» — смотрите лог WEB_DASHBOARD на Failed to start WebSocket server и что порт 8081 свободен и отличается от HTTP."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "Неизвестный role у /apikey create всё равно создаёт ключ ADMIN",
+      "body": "`parseRole` при мусоре вроде `admins` шлёт sendFailure «expected ADMIN, OPERATOR, MODERATOR, or VIEWER. Defaulting to ADMIN» и **возвращает** `User.Role.ADMIN`. Brigadier после этого всё равно вызывает `create` — ключ появляется, токен печатается. Failure не откатывает ветку.",
+      "fix": "Сразу `/apikey list`: если роль ADMIN, а вы хотели VIEWER — `/apikey revoke <id>` и создайте заново. Не считайте красную строку в чате признаком, что ключа нет."
+    },
+    {
+      "title": "/apikey нельзя выключить секцией commands",
+      "body": "Соседние dashboard-команды смотрят `isCommandEnabled`. `ApiKeyCommand.register` этой проверки не делает: при загруженном моде `/apikey` в дереве есть всегда, закрыт только узлом `neoessentials.dashboard.apikeys` (плюс OP-bypass PermissionAPI для игроков и OP 2 для консоли).",
+      "fix": "Уберите узел у не-админов. Выключить команду ключом `commands.apikey: false` в текущей сборке нельзя."
+    }
+  ]
+}

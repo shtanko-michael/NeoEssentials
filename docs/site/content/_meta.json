@@ -1,0 +1,212 @@
+{
+  "_readme": [
+    "Structural taxonomy of the documentation site. Content lives elsewhere:",
+    "  systems/<slug>.md   — curated prose for that system (optional)",
+    "  systems/<slug>.json — command membership, examples, edge cases, known issues",
+    "Command membership comes from systems/<slug>.json first, then from permissionPrefixes.",
+    "upstreamDoc names a file in docs/Wiki/ that is embedded verbatim, so upstream syncs of",
+    "that directory never conflict with anything written here."
+  ],
+  "systems": [
+    {
+      "slug": "economy",
+      "title": "Экономика",
+      "lede": "Балансы, переводы, /baltop, магазины на сундуках и NPC, Vault API.",
+      "upstreamDoc": "EconomySystem.md",
+      "permissionPrefixes": ["neoessentials.economy", "neoessentials.shop", "neoessentials.sell", "neoessentials.worth", "neoessentials.setworth", "neoessentials.payconfirmtoggle"],
+      "configFiles": ["economy.json"]
+    },
+    {
+      "slug": "teleportation",
+      "title": "Телепортация",
+      "lede": "Дома, варпы, /tpa, /back, случайная телепортация и точка спавна.",
+      "upstreamDoc": "TeleportationSystem.md",
+      "permissionPrefixes": ["neoessentials.teleport", "neoessentials.renamehome", "neoessentials.tpaall", "neoessentials.tpauto", "neoessentials.tptoggle"],
+      "configFiles": []
+    },
+    {
+      "slug": "moderation",
+      "title": "Модерация",
+      "lede": "Баны, временные баны, IP-баны, кики, муты, тюрьма, ваниш и заморозка.",
+      "upstreamDoc": "ModerationSystem.md",
+      "permissionPrefixes": ["neoessentials.moderation", "neoessentials.jail"],
+      "configFiles": []
+    },
+    {
+      "slug": "chat",
+      "title": "Чат и сообщения",
+      "lede": "Форматирование, приватные сообщения, почта, упоминания, градиенты и анимации.",
+      "upstreamDoc": "ChatSystem.md",
+      "permissionPrefixes": ["neoessentials.chat", "neoessentials.mail", "neoessentials.msgtoggle", "neoessentials.helpop", "neoessentials.nick"],
+      "configFiles": ["animations.json"]
+    },
+    {
+      "slug": "chat-channels",
+      "title": "Каналы чата",
+      "lede": "Настройка каналов, права на них и ретрансляция в Discord.",
+      "upstreamDoc": "ChatChannels.md",
+      "permissionPrefixes": [],
+      "configFiles": []
+    },
+    {
+      "slug": "moderation-discord",
+      "title": "Discord-интеграция",
+      "lede": "Мосты SDLink / Mc2Discord / DCIntegration, вебхуки без мода-моста, синхронизация ролей в группы прав.",
+      "upstreamDoc": null,
+      "permissionPrefixes": [],
+      "configFiles": ["discord_auth.json", "discordrolesync.json"]
+    },
+    {
+      "slug": "auction",
+      "title": "Аукцион",
+      "lede": "Игроки выставляют предметы из руки, покупают через GUI и забирают непроданное из /ah expired.",
+      "upstreamDoc": null,
+      "permissionPrefixes": [],
+      "configFiles": []
+    },
+    {
+      "slug": "kits",
+      "title": "Киты",
+      "lede": "Наборы предметов, кулдауны, лимиты использований и выдача другим игрокам.",
+      "upstreamDoc": "KitManagement.md",
+      "permissionPrefixes": ["neoessentials.kits", "neoessentials.kitreset"],
+      "configFiles": ["kits.json"]
+    },
+    {
+      "slug": "items",
+      "title": "Предметы",
+      "lede": "Починка, зачарование, powertool, переименование, сжатие стеков и книги.",
+      "upstreamDoc": "ItemManagement.md",
+      "permissionPrefixes": ["neoessentials.item", "neoessentials.book", "neoessentials.sign", "neoessentials.condense", "neoessentials.customtext", "neoessentials.powertoollist", "neoessentials.ciconfirmtoggle", "neoessentials.skull", "neoessentials.loom", "neoessentials.cartography", "neoessentials.smithing"],
+      "configFiles": []
+    },
+    {
+      "slug": "utility",
+      "title": "Служебные команды",
+      "lede": "Личное время и погода, эффекты, спавн мобов, /fly, /god, /heal и прочий повседневный инструментарий.",
+      "upstreamDoc": "UtilitySystems.md",
+      "permissionPrefixes": ["neoessentials.ptime", "neoessentials.pweather", "neoessentials.spawnmob", "neoessentials.unlimited", "neoessentials.fly", "neoessentials.god", "neoessentials.heal", "neoessentials.feed", "neoessentials.speed", "neoessentials.exp", "neoessentials.kill", "neoessentials.playtime", "neoessentials.whois", "neoessentials.ping", "neoessentials.depth", "neoessentials.compass", "neoessentials.invsee", "neoessentials.enderchest", "neoessentials.rules", "neoessentials.motd", "neoessentials.rtoggle", "neoessentials.gamemode", "neoessentials.time", "neoessentials.weather", "neoessentials.broadcast", "neoessentials.broadcastworld", "neoessentials.list", "neoessentials.gc", "neoessentials.help", "neoessentials.seen", "neoessentials.near", "neoessentials.nearby", "neoessentials.getpos", "neoessentials.world", "neoessentials.anvil", "neoessentials.grindstone", "neoessentials.crafting", "neoessentials.stonecutting", "neoessentials.hat", "neoessentials.more", "neoessentials.suicide", "neoessentials.ext", "neoessentials.burn", "neoessentials.sudo", "neoessentials.effect", "neoessentials.tree", "neoessentials.lightning", "neoessentials.spawner", "neoessentials.recipe", "neoessentials.me", "neoessentials.realname"],
+      "configFiles": []
+    },
+    {
+      "slug": "afk",
+      "title": "АФК",
+      "lede": "Автоматический АФК, кик по бездействию, индикатор в таблисте.",
+      "upstreamDoc": "AFKSystem.md",
+      "permissionPrefixes": ["neoessentials.afk"],
+      "configFiles": []
+    },
+    {
+      "slug": "holograms",
+      "title": "Голограммы",
+      "lede": "Парящие анимированные тексты, вращение, покачивание, клик для торговли и плейсхолдеры.",
+      "upstreamDoc": "HologramSystem.md",
+      "permissionPrefixes": ["neoessentials.hologram"],
+      "configFiles": []
+    },
+    {
+      "slug": "scoreboard",
+      "title": "Скорборд",
+      "lede": "Боковая панель из конфига: условия показа, анимация строк, переопределения по группам и игрокам.",
+      "upstreamDoc": "ScoreboardSystem.md",
+      "permissionPrefixes": ["neoessentials.scoreboard"],
+      "configFiles": ["scoreboard.json"]
+    },
+    {
+      "slug": "leaderboard",
+      "title": "Лидерборды",
+      "lede": "Рейтинговые доски по ванильной статистике, экономике и собственным очкам, с GUI и голограммами.",
+      "upstreamDoc": "LeaderboardSystem.md",
+      "permissionPrefixes": ["neoessentials.leaderboard"],
+      "configFiles": ["leaderboard.json"]
+    },
+    {
+      "slug": "tablist",
+      "title": "Таблист",
+      "lede": "Анимированные шапка и подвал, hex-цвета, градиенты, сортировка по группам.",
+      "upstreamDoc": "TablistSystem.md",
+      "permissionPrefixes": ["neoessentials.tablist"],
+      "configFiles": ["tablist.json"]
+    },
+    {
+      "slug": "crates",
+      "title": "Ящики",
+      "lede": "Ящики с взвешенными наградами, ключи, физические блоки и анимация открытия.",
+      "upstreamDoc": "neoecrates.md",
+      "permissionPrefixes": ["neoessentials.crate"],
+      "configFiles": ["crates.json"]
+    },
+    {
+      "slug": "votifier",
+      "title": "Votifier",
+      "lede": "Приём голосов с мониторингов по протоколам V1 (RSA) и V2 (NuVotifier).",
+      "upstreamDoc": "votifier.md",
+      "permissionPrefixes": [],
+      "configFiles": ["votifier.json"]
+    },
+    {
+      "slug": "permissions",
+      "title": "Система прав",
+      "lede": "Группы, префиксы, wildcard-узлы, внешние провайдеры LuckPerms и FTB Ranks.",
+      "upstreamDoc": "PermissionSystem.md",
+      "permissionPrefixes": ["neoessentials.permissions"],
+      "configFiles": ["permissions.json"]
+    },
+    {
+      "slug": "dashboard",
+      "title": "Веб-панель",
+      "lede": "Установка, вход, привязка аккаунта через Discord и внешний режим размещения.",
+      "upstreamDoc": "WebDashboard.md",
+      "permissionPrefixes": ["neoessentials.dashboard", "neoessentials.admin.dashboard"],
+      "configFiles": []
+    },
+    {
+      "slug": "dashboard-connectivity",
+      "title": "Подключение панели",
+      "lede": "Внутренний и внешний режимы, webDashboard.mode и разбор проблем со связью.",
+      "upstreamDoc": "DashboardConnectivity.md",
+      "permissionPrefixes": [],
+      "configFiles": []
+    },
+    {
+      "slug": "localization",
+      "title": "Локализация",
+      "lede": "Выбор языка сервера, свои переводы и переопределение отдельных строк.",
+      "upstreamDoc": "LocalizationSystem.md",
+      "permissionPrefixes": ["neoessentials.language"],
+      "configFiles": []
+    },
+    {
+      "slug": "storage",
+      "title": "Хранилище",
+      "lede": "Подключаемые бэкенды JSON, YAML, SQLite и MySQL для всех данных мода.",
+      "upstreamDoc": "Storage.md",
+      "permissionPrefixes": [],
+      "configFiles": []
+    },
+    {
+      "slug": "split-configs",
+      "title": "Разделённые конфиги",
+      "lede": "Разбиение config.json на файлы по системам, проверка, ремонт и миграция.",
+      "upstreamDoc": "SplitConfigs.md",
+      "permissionPrefixes": [],
+      "configFiles": []
+    },
+    {
+      "slug": "logging",
+      "title": "Логирование",
+      "lede": "Пер-подсистемные переключатели normal/debug, категории и logs/debug.log.",
+      "upstreamDoc": "Logging.md",
+      "permissionPrefixes": [],
+      "configFiles": []
+    },
+    {
+      "slug": "api",
+      "title": "API и плейсхолдеры",
+      "lede": "PlaceholderAPI, Vault, LeaderboardAPI и REST-эндпоинты для сторонних модов.",
+      "upstreamDoc": "APISystem.md",
+      "permissionPrefixes": ["neoessentials.admin.placeholders", "neoessentials.vault"],
+      "configFiles": []
+    }
+  ]
+}

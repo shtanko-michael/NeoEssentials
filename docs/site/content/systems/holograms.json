@@ -1,0 +1,89 @@
+{
+  "commands": ["hologram"],
+  "commandDetails": {
+    "hologram": {
+      "syntax": "/hologram create <id> [<x> <y> <z> [world]] | delete <id> | rename <id> <newid> | copy <id> <newid> | addline <id> <text> | insertline <id> <index> <text> | setline <id> <index> <text> | removeline <id> <index> | moveline <id> <from> <to> | clearlines <id> | addframes <id> <lineIndex> <intervalTicks> <frames> | removeframes <id> <lineIndex> | moveto <id> <x> <y> <z> | movehere <id> | align <id> | tp <id> | near [radius] | setrefresh <id> <seconds> | toggle <id> | list | info <id> | reload | billboard <id> <fixed|vertical|horizontal|center> | textalign <id> <center|left|right> | spin <id> on [speed] [axis] | spin <id> off | spintrack <id> on|off | hover <id> on [amplitude] [speed] | hover <id> off | scale <id> <scale> | linespacing <id> <spacing> | shadow <id> on|off | seethrough <id> on|off | opacity <id> <0-255> | viewrange <id> <range> | linewidth <id> <pixels> | background <id> <transparent|#RRGGBB|#AARRGGBB>",
+      "notes": "Весь корень закрыт hasPermission: OP 4, neoessentials.hologram.admin или neoessentials.admin.* (консоль всегда). Алиас /holo — redirect на тот же узел и регистрируется только если включены и commands.hologram, и commands.holo. id хранится в нижнем регистре. Номера строк 1-based. <text> и <frames> — greedyString. Нет подкоманды setscale: масштаб — scale. create без координат — позиция игрока, Y+1.5 (консоль так создать не может). near без радиуса = 20, радиус 1–1000. spin on по умолчанию speed 3.0 ось Y; hover on — амплитуда 0.08, скорость 1.5. Модуль modules.hologramEnabled выключает регистрацию целиком."
+    }
+  },
+  "examples": [
+    {
+      "title": "Поставить приветственную голограмму у спавна",
+      "goal": "Нужна надпись над площадкой с онлайн-счётчиком, без ручной правки JSON.",
+      "commands": [
+        "/hologram create spawn_welcome",
+        "/hologram addline spawn_welcome &6&lДобро пожаловать",
+        "/hologram addline spawn_welcome &7Онлайн: &f{neoessentials_online_players}/{neoessentials_max_players}",
+        "/hologram setrefresh spawn_welcome 10",
+        "/hologram scale spawn_welcome 1.3",
+        "/hologram hover spawn_welcome on 0.1 1.2",
+        "/hologram info spawn_welcome"
+      ],
+      "result": "create без координат ставит пустую голограмму у ваших ног на высоте +1.5 и с refreshInterval 5 с. addline дописывает строки снизу (цвета `&` и плейсхолдеры `{…}`). setrefresh 10 обновляет плейсхолдеры не чаще чем раз в 10 с (глобальный pollIntervalTicks всё равно ограничивает, как часто планировщик вообще смотрит). scale 1.3 и hover on видны сразу: каждая правка вызывает respawn. info печатает мир, координаты, число строк и визуальные поля."
+    },
+    {
+      "title": "Подписать физический ящик crate_<id>",
+      "goal": "После /crate admin setblock над сундуком уже висит служебная голограмма — нужно поменять текст и размер, не создавая вторую.",
+      "commands": [
+        "/hologram list",
+        "/hologram setline crate_vote 1 &6Vote Crate",
+        "/hologram setline crate_vote 2 &eПКМ — открыть, ЛКМ — шансы",
+        "/hologram scale crate_vote 1.3"
+      ],
+      "result": "`setblock` создаёт обычную голограмму с id `crate_<id ящика>` (второй блок того же ящика — `crate_vote_2`, `crate_vote_3`). Она видна в `/hologram list` и в автодополнении id. setline заменяет строку и сбрасывает кадровую анимацию этой строки. Подпись переживает `/hologram moveto|movehere`; `/crate admin removeblock` удаляет голограмму вместе с привязкой. При `modules.hologramEnabled: false` блок-ящик работает, надписи нет."
+    },
+    {
+      "title": "Клонировать и крутить голограмму",
+      "goal": "Нужна копия той же надписи у другого портала, с вращением «как пластинка».",
+      "commands": [
+        "/hologram copy spawn_welcome portal_welcome",
+        "/hologram movehere portal_welcome",
+        "/hologram billboard portal_welcome fixed",
+        "/hologram spin portal_welcome on 3 Y",
+        "/hologram spintrack portal_welcome on"
+      ],
+      "result": "copy клонирует строки и визуал в новый id в той же точке (через Gson, без общих entity UUID). movehere переносит к вам на Y+1.5. spin on Y по умолчанию сам включает player-tracking: текст остаётся читаемым со всех сторон. spintrack off оставляет сырое вращение вокруг мировой оси — тогда имеет смысл billboard fixed."
+    },
+    {
+      "title": "Перечитать голограммы из хранилища",
+      "goal": "Поправили запись в DataStore руками и хотите увидеть результат без рестарта.",
+      "commands": [
+        "/hologram reload"
+      ],
+      "result": "Все display-entity деспавнятся, карта в памяти очищается, коллекции `holograms` читается заново, сущности спавнятся обратно. Ответ — reload_success с числом голограмм. `/neoe reload` этот путь не заменяет: у голограмм своя команда. Магазинные голограммы после reload заново получают NBT-метку шопа (`retagAllShopHolograms`), иначе клик по ним перестаёт быть покупкой."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "Автоголограммы ящиков: id crate_<id>",
+      "body": "`CrateHologramManager` при `/crate admin setblock` создаёт голограмму с префиксом `crate_`. Базовый id — `crate_<id ящика>`; если у этого ящика уже есть блок, добавляется суффикс `_2`, `_3`. Связка блок→голограмма лежит отдельно (`crate_block_holograms`), поэтому повторный setblock по тому же блоку переиспользует существующую голограмму, а не плодит вторую, и связь переживает `/hologram moveto|movehere`. Ручные правки строк живут, пока не вызовут `removeblock`.",
+      "fix": "Ищите id в `/hologram list` / автодополнении. Не создавайте вручную голограмму с тем же id — `create` ответит already_exists. Снимайте блок командой ящика, а не `/hologram delete`, если не хотите оставить «живой» сундук без подписи или наоборот."
+    },
+    {
+      "title": "Магазинные голограммы shop_ перезаписываются",
+      "body": "Шоп над табличкой создаёт interactive-голограмму `shop_<dimension>_<x>_<y>_<z>`. Клик по ней — та же покупка/продажа, что по табличке (лимит 400 мс). Любые `/hologram setline|moveto` по такому id затрёт следующий транзакцией или релоадом шопа. `interactive: true` у админских create не ставится.",
+      "fix": "Для магазина меняйте смещение голограммы средствами шопа, не `/hologram`. `/hologram info shop_…` смотреть можно."
+    },
+    {
+      "title": "Хранилище — коллекция holograms, не holograms.json",
+      "body": "Данные пишутся в DataStore при каждом `registerHologram`. Легаси `neoessentials/holograms.json` импортируется один раз, если коллекция пуста. `/hologram reload` вызывает `initialize()`: clear памяти → migrate (только если пусто) → load из DataStore. Правка старого файла после миграции ничего не даёт. Wiki апстрима, где reload «читает holograms.json с диска», устарела.",
+      "fix": "После ручной правки — править запись в коллекции `holograms`, затем `/hologram reload`."
+    },
+    {
+      "title": "/holo и выключенный модуль",
+      "body": "Алиас регистрируется как `Commands.literal(\"holo\").redirect(hologram)` только при `commands.hologram` **и** `commands.holo`. Один `holo: true` при выключенном `hologram` не создаёт ни корень, ни алиас. `modules.hologramEnabled: false` пропускает `HologramCommand.register` целиком — ящики тогда ставятся без подписи.",
+      "fix": "Держите оба флага команд включёнными. Смену модуля — рестартом."
+    },
+    {
+      "title": "Строки, кадры и refresh",
+      "body": "insertline принимает индекс `1 … lineCount+1` (вставка в конец). setline очищает `frames` этой строки. addframes требует ≥ 2 кадров через `|`, intervalTicks 1–200. create ставит `refreshInterval: 5`, даже если плейсхолдеров ещё нет; `setrefresh 0` — не пересчитывать плейсхолдеры. Глобальные `hologram.pollIntervalTicks` / `animationInterval` в config.json ограничивают планировщик для всех голограмм; `/hologram reload` их не перечитывает — нужен `/neoe reload`.",
+      "fix": "Смену poll/animation — `/neoe reload`. Кадры и текст — командами `/hologram`."
+    },
+    {
+      "title": "create, мир и регистр id",
+      "body": "`exists`/`getHologram` ключят id через `toLowerCase`. Аргумент world в create — word; если нет `:`, подставляется `minecraft:`. Автодополнение предлагает только path измерения (`overworld`), не полный ключ. create <id> без координат требует игрока; create с x y z доступен консоли. copy не переносит entity UUID (новый спавн). delete деспавнит и удаляет запись.",
+      "fix": "Пишите id латиницей в нижнем регистре заранее, чтобы не гадать. Для консоли всегда указывайте координаты и world."
+    }
+  ],
+  "knownIssues": []
+}

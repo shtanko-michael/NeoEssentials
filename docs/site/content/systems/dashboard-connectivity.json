@@ -1,0 +1,36 @@
+{
+  "commands": [],
+  "commandDetails": {},
+  "examples": [
+    {
+      "title": "Отличить «порт недоступен» от «ключ не подходит»",
+      "goal": "Внешняя панель не коннектится, и оба случая выглядят как таймаут.",
+      "commands": [
+        "/dashboard status"
+      ],
+      "result": "С машины, где крутится панель: `curl http://<ip>:8080/api/ping`. 200 и `{\"success\":true,\"mod\":\"neoessentials\",\"mode\":\"...\"}` — HTTP жив, дальше смотрите pairing/API key. Connection refused — файрвол, bind-адрес или dashboard не стартовал. `/dashboard status` в игре показывает, поднят ли встроенный HTTP."
+    },
+    {
+      "title": "Только API, без встроенного UI",
+      "goal": "Стоит Laravel NeoEssentials-Dashboard, встроенная страница на :8080 не нужна и спамит в лог про отсутствующий index.html.",
+      "commands": [
+        "/dashboard status"
+      ],
+      "result": "`webDashboard.mode: \"external\"` (дефолт) регистрирует только `/api/*`. Смена mode требует рестарта. `internal` и `both` отдают ещё и бандл UI на `/` — для этого UI должен быть упакован в jar."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "mode читается на старте",
+      "body": "Как и modules, `webDashboard.mode` не меняется от `/neoe reload`. GET `/api/ping` не требует авторизации и регистрируется в любом mode — это и есть щуп «жив ли порт».",
+      "fix": "Поменяли mode — рестарт. Диагностика сети — ping, не логин в панель."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "На старых сборках /dashboard start был мёртвым кодом",
+      "body": "Класс существовал, в диспетчер не регистрировался — команда была «unknown». В этой ветке /dashboard уже подключён; если на сервере древний jar, status/start будут неизвестны независимо от конфига.",
+      "fix": "Сверьте версию мода. На текущем форке команда должна быть в /help при включённом модуле."
+    }
+  ]
+}

@@ -1,0 +1,109 @@
+{
+  "commands": ["kit", "kits", "listkits", "createkit", "delkit", "kitreset", "showkit"],
+  "commandDetails": {
+    "kit": {
+      "syntax": "/kit [<kitname> [<player>]]",
+      "notes": "Без аргументов — список китов, на которые у вас есть per-kit право. Выдача другому требует neoessentials.kit.others на узле <player> (в автодополнении цель не появится без этого права). Консоль обязана указать <player>. Цель ищется только среди онлайн. Кулдаун и maxUses проверяются у получателя, per-kit право — у отправителя."
+    },
+    "kits": {
+      "syntax": "/kits [page]",
+      "notes": "Та же реализация, что /listkits: page ≥ 1, по 10 китов на страницу. Дерево регистрируется только если включён commands.listkits (флаг commands.kits сам по себе /kits не выключает). Игрок без neoessentials.kits.override видит лишь доступные ему киты, не полный админ-список."
+    },
+    "listkits": {
+      "syntax": "/listkits [page]",
+      "notes": "Идентично /kits. Право neoessentials.kits.list. Экономическая цена kits.commandCosts.listkits списывается при каждом вызове, в том числе при листании страниц."
+    },
+    "createkit": {
+      "syntax": "/createkit <kitname> [<displayname> [<cooldown> [<description>]]]",
+      "notes": "Только игрок (нужен инвентарь). <kitname> — слово [A-Za-z0-9_] длиной ≤ 32; в хранилище имя приводится к нижнему регистру. <displayname> — String (пробелы только в кавычках), <cooldown> — целые секунды ≥ 0 (в записи становятся миллисекундами), <description> — greedy. Копируется основной инвентарь без брони и второй руки. Повтор с тем же именем перезаписывает кит. В дереве также есть литералы makekit и addkit, в реестре справки их нет."
+    },
+    "delkit": {
+      "syntax": "/delkit <kitname> [confirm]",
+      "notes": "Первый вызов только печатает предупреждение; удаление — /delkit <kitname> confirm, без сохранённого «ожидания» и без таймаута. Цена kits.commandCosts.delkit списывается на confirm. Дополнительные литералы deletekit, removekit, rkit в дереве есть, в реестре справки — нет."
+    },
+    "kitreset": {
+      "syntax": "/kitreset <kitname> [<player>]",
+      "notes": "Сбрасывает и кулдаун, и счётчик использований. Чужому игроку — neoessentials.kitreset.others на узле <player>. Консоль обязана указать цель. Цель только онлайн."
+    },
+    "showkit": {
+      "syntax": "/showkit <kit>",
+      "notes": "Аргумент — word, поэтому /showkit starter,vip (без пробелов) разобьётся по запятой и покажет несколько китов. Per-kit право не проверяется: достаточно neoessentials.showkit. Ничего не выдаёт. Регистрируется из MiscItemCommands, не из KitCommands."
+    }
+  },
+  "examples": [
+    {
+      "title": "Собрать стартовый кит из инвентаря",
+      "goal": "Нужен набор, который новичок забирает раз в сутки, без правки файлов руками.",
+      "commands": [
+        "/createkit starter \"Starter Kit\" 86400 Хлеб и меч на первый день",
+        "/showkit starter",
+        "/kit starter"
+      ],
+      "result": "createkit забирает копии предметов из основного инвентаря (слоты 0…size-5: без брони и offhand); пустой инвентарь даст «empty_inventory». В чат приходит created/updated, число предметов, кулдаун и подсказка с правом neoessentials.kits.starter. showkit печатает displayName, описание, «24h» и строки count + имя предмета. /kit starter выдаёт предметы себе, пишет given; если места нет — лишнее падает под ноги."
+    },
+    {
+      "title": "Выдать кит другому игроку и сбросить лимит",
+      "goal": "Игрок упёрся в кулдаун или maxUses — нужно выдать кит сейчас и вернуть ему возможность забрать снова.",
+      "commands": [
+        "/kit starter Steve",
+        "/kitreset starter Steve"
+      ],
+      "result": "Первая команда требует neoessentials.kit.others; Steve должен быть онлайн, иначе «player not found». Кулдаун и maxUses проверяются у Steve, право на кит — у вас. Steve получает «received_from». kitreset снимает и таймер, и счётчик использований (без этого maxUses так и блокировал бы кит) и шлёт Steve notify."
+    },
+    {
+      "title": "Посмотреть каталог и удалить кит",
+      "goal": "Перед удалением убедиться, что в ките то, что нужно, и не снести его одним опечаткой.",
+      "commands": [
+        "/listkits",
+        "/listkits 2",
+        "/delkit starter",
+        "/delkit starter confirm"
+      ],
+      "result": "listkits без аргумента — страница 1, по 10 записей: имя, displayName, число предметов, кулдаун если > 0. Несуществующая страница — ошибка invalid_page. Первый delkit ничего не удаляет, только confirm_prompt + инструкцию. Второй — запись исчезает из DataStore-коллекции kits; повторный /kit starter даст not_found."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "Определения китов живут в DataStore, kits.json после импорта мёртв",
+      "body": "`KitManager` хранит киты в коллекции `kits` активного `storage.type` (по умолчанию JSON в `neoessentials/store/`), кулдауны — `kit_cooldowns`, счётчики — `kit_usages`. Поставляемый `config/neoessentials/kits.json` читается **один раз**: только если все три коллекции пусты и `storage.autoMigrate` включён. Файл после этого не пишется и не перечитывается — правки в нём не видны ни в `/kit`, ни после `/neoe reload`. `/neoe reload` вызывает `KitManager.reload()` и заново читает DataStore, не `kits.json`.",
+      "fix": "Новые киты — `/createkit`, удаление — `/delkit … confirm`. Поле `commands` и `maxUses` `/createkit` не задаёт: их правят в записи коллекции `kits` (или оставляют значения по умолчанию: `maxUses` −1, `commands` пустой)."
+    },
+    {
+      "title": "Команды на клейме есть, но /createkit их не пишет",
+      "body": "Английская вики утверждает, что киты «только предметы». В коде у `Kit` есть массив `commands`: после успешной выдачи предметов `runKitCommands` выполняет каждую строку от консоли с подстановкой `{player}` (ведущий `/` снимается). `/createkit` всегда создаёт кит с пустым массивом и `maxUses: -1`. Шаблон в `kits.json` как раз показывает `commands: [\"say Welcome…\"]` — это попадёт в DataStore только при том самом первом импорте.",
+      "fix": "Нужную консольную команду допишите в JSON-запись кита в хранилище и сделайте `/neoe reload`. Через `/createkit` команды не добавить."
+    },
+    {
+      "title": "skipUsedOneTimeKitsFromKitList прячет и «безлимитные» киты",
+      "body": "`canUseKit` считает `maxUses > 0` лимитом, а −1 — без ограничений. Фильтр `/listkits` при `kits.skipUsedOneTimeKitsFromKitList: true` прячет кит, если `maxUses == 1` **или** `maxUses < 0` и игрок уже брал его хотя бы раз. `/createkit` как раз пишет `maxUses: -1`. Итог: кит по-прежнему забирается через `/kit <name>`, но пропадает из `/kits`/`/listkits` после первого клейма.",
+      "fix": "Одноразовый кит — поставьте в записи `maxUses: 1`. Фильтр для списка лучше не включать, пока у китов с `/createkit` не проставлен явный `maxUses`."
+    },
+    {
+      "title": "/kit и /kits — разные команды и разные права",
+      "body": "`/kit` — `neoessentials.kits.use` плюс per-kit `neoessentials.kits.<name>` (или поле `permission` записи). `/kits`/`/listkits` — `neoessentials.kits.list`. Без `neoessentials.kits.override` (и включённого `kits.allowKitOverride`) `/listkits` показывает те же киты, что автодополнение `/kit`, а не «все киты сервера». `neoessentials.kits.nocooldown` и `neoessentials.kits.<name>.nocooldown` обходят только кулдаун; `override` обходит ещё enabled/maxUses/maxKitsPerPlayer. Консоль в `/kit` per-kit право не проверяет.",
+      "fix": "Игрокам выдавайте `kits.use` + нужные `kits.<name>`. Обзор всех китов для персонала — `kits.list` вместе с `kits.override`."
+    },
+    {
+      "title": "Имя кита и состав при создании",
+      "body": "Конструктор `Kit` оставляет в имени только `[a-z0-9_]` в нижнем регистре. `/createkit` заранее отвергает дефис (иначе `vip-kit` молча стал бы `vipkit` и не совпал бы с тем, что ввели). Броня и offhand в кит не попадают: цикл `0 … containerSize-5`. Повтор `/createkit` с тем же именем обновляет предметы, displayName, кулдаун и описание, но не трогает `commands`/`maxUses` уже лежащей записи — `createKit` собирает новый объект с пустыми командами и −1.",
+      "fix": "Дефисы в id не используйте. Броня — положите её в основной инвентарь перед `/createkit`. Обновляя кит через команду, заново пропишите `commands`/`maxUses` в хранилище, если они были."
+    },
+    {
+      "title": "pastebinCreatekit не сохраняет кит",
+      "body": "При `kits.pastebinCreatekit: true` `/createkit` **не** вызывает `kitManager.createKit`. Вместо этого сериализует JSON и возвращает URL вида `https://pastebin.com/mock/<hash>` — загрузки на Pastebin в коде нет. Кит на сервере не появляется.",
+      "fix": "Держите `pastebinCreatekit` в `false` (значение по умолчанию). Для экспорта скопируйте запись из коллекции `kits`."
+    },
+    {
+      "title": "Цели только онлайн, цены и newPlayerKit",
+      "body": "`/kit <name> <player>` и `/kitreset <kit> <player>` ищут игрока через `getPlayerByName` — офлайн не находится, очереди нет. `kits.commandCosts.<command>` списывается с **отправителя** до выдачи (`kit`, `createkit`, `listkits`, `delkit` на confirm). `kits.newPlayerKit.enabled` + `kitName` выдают кит при первом входе; кита с таким именем на момент входа может не быть — это отдельный путь, не `/kit`.",
+      "fix": "Офлайн-выдачу делайте, когда игрок зайдёт. Цены проверяйте, если экономика включена. Имя в `newPlayerKit.kitName` должно совпадать с id кита после санитизации."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "kits.pastebinCreatekit отдаёт поддельный URL и не создаёт кит",
+      "body": "`uploadToPastebin` в `CreateKitCommand` — заглушка: всегда возвращает `https://pastebin.com/mock/…`, HTTP-вызова нет. При включённом флаге ветка сохранения в DataStore пропускается целиком, поэтому `/kit` этот кит не видит.",
+      "fix": "Оставьте `kits.pastebinCreatekit: false`. Нужен JSON — заберите его из коллекции `kits` в хранилище."
+    }
+  ]
+}

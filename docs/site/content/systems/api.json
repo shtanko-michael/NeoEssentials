@@ -1,0 +1,106 @@
+{
+  "commands": ["placeholder", "vault"],
+  "commandDetails": {
+    "placeholder": {
+      "syntax": "/placeholder [list | stats | info <identifier> | test <text>]",
+      "notes": "Корень закрыт neoessentials.admin.placeholders через validateAdminPermission (OP 2 и консоль проходят). Голый /placeholder — справка. <identifier> — word с автодополнением из реестра; <text> — greedy, в том числе со скобками {neoessentials_balance}. test берёт контекст только у самого исполнителя: аргумента игрока в дереве нет (вопреки javadoc класса). С консоли player == null, персональные токены остаются нераскрытыми. Команда не регистрируется при commands.placeholder: false."
+    },
+    "vault": {
+      "syntax": "/vault [info | convert <from> <to>]",
+      "notes": "Регистрация только если modules.vaultEnabled и commands.vault. .requires: ванильный OP уровня 3 **или** neoessentials.vault.admin (для консоли UUID нет, остаётся hasPermission(3)). Голый /vault равен info. convert сравнивает имена провайдеров без пробелов (case-insensitive) и требует минимум двух зарегистрированных VaultEconomy. Узел neoessentials.vault.admin в PermissionRegistry не объявлен — без OP 3 его нужно выдать явно, registry-default его не даст."
+    }
+  },
+  "examples": [
+    {
+      "title": "Проверить канонические {neoessentials_*} в игре",
+      "goal": "Убедиться, что реестр жив и что именно видит PlaceholderManager — не короткий алиас таблиста.",
+      "commands": [
+        "/placeholder list",
+        "/placeholder info neoessentials_balance",
+        "/placeholder test Привет {neoessentials_name}, баланс {neoessentials_balance}, группа {neoessentials_group}"
+      ],
+      "result": "list печатает идентификаторы вида neoessentials_name, neoessentials_balance, leaderboard_…, votifier_…, crate_keys — expansion id + _ + имя. info neoessentials_balance — registered, потому что DefaultPlaceholderExpansion.getIdentifier() = neoessentials и в наборе есть balance. test прогоняет PlaceholderManager.setPlaceholders от вашего игрока: имя/баланс/группа подставляются. Тот же текст с {balance} или {player} test не раскроет — этих ключей в реестре нет."
+    },
+    {
+      "title": "Совместимые {luckperms_*} и {ftbranks_*}",
+      "goal": "Вставить текст, скопированный со сборки с LuckPerms PAPI, и понять, что это алиасы PermissionAPI, а не мост к чужому expansion.",
+      "commands": [
+        "/placeholder test {luckperms_prefix}{luckperms_group}{luckperms_suffix}",
+        "/placeholder test {ftbranks_prefix}{ftbranks_rank}",
+        "/placeholder test {neoessentials_prefix}{neoessentials_group}"
+      ],
+      "result": "Оба семейства резолвятся через PermissionAPI.getPrefix/getSuffix/группу: при активном LuckPerms — его мета, при FTB Ranks — его, без внешнего мода — внутренние группы. {luckperms_prefix} работает даже если LuckPerms никогда не стоял. info luckperms_prefix скорее скажет not_registered: это не запись реестра, а отдельная ветка resolveExternalPlaceholder."
+    },
+    {
+      "title": "REST рядом с командой: ping и resolve",
+      "goal": "Внешний бэкенд проверяет порт без ключа, а подстановку текста — уже с Bearer.",
+      "commands": [
+        "/dashboard start",
+        "/apikey create placeholders ADMIN",
+        "/placeholder stats"
+      ],
+      "result": "После start: GET http://<host>:8080/api/ping без Authorization → {\"success\":true,\"mod\":\"neoessentials\",\"mode\":\"external\"} (порт в поставке 8080). GET /api/placeholders/list, /api/placeholders/stats и /api/placeholders/resolve?player=<name>&text=… требуют AUTH (сессия или API key). resolve на сервере — тот же PlaceholderManager, что /placeholder test. stats в игре печатает registered_placeholders и прочие счётчики реестра. Сопряжение панели целиком — `/dashboard pair \"<url>\" <code>` (токен панели не вводится руками)."
+    },
+    {
+      "title": "Кто сейчас экономика/права/чат для других модов",
+      "goal": "Сторонний NeoForge-мод ходит в VaultServiceRegistry, не в классы NeoEssentials. Нужно увидеть активного провайдера.",
+      "commands": [
+        "/vault info"
+      ],
+      "result": "Три строки: Economy, Permission, Chat — активное имя и список всех регистраций с меткой [registeredBy]. Встроенные провайдеры садятся с ServicePriority.NORMAL и registeredBy neoessentials. При economy.useExternalEconomy и моде sg_economy в список попадает адаптер HIGH. Другой мод перекрывает встроенную экономику, зарегистрировав VaultEconomy с HIGH/HIGHEST — магазины NeoEssentials после этого тоже идут через VaultShopEconomyAdapter."
+    },
+    {
+      "title": "Свести балансы двух экономик у онлайна",
+      "goal": "На сервере два VaultEconomy, нужно выровнять балансы текущего онлайна, не офлайна.",
+      "commands": [
+        "/vault info",
+        "/vault convert NeoEssentials OtherEco"
+      ],
+      "result": "Имена в convert — getName() без пробелов. Меньше двух провайдеров — convert_need_two. Цикл только по server.getPlayerList().getPlayers(): офлайн-счета не трогаются. Для каждого: createPlayerAccount на приёмнике при необходимости, затем deposit/withdraw на разницу балансов. Счётчик в convert_complete = число обработанных онлайн-игроков, не число ненулевых переводов."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "Канон — {neoessentials_*}; короткие {player}/{tps} живут в других конвейерах",
+      "body": "DefaultPlaceholderExpansion id `neoessentials` без подчёркиваний (резолвер режет токен по **первому** `_`: `{neoessentials_balance}` → expansion `neoessentials` + `balance`; id вида `my_mod` никогда не матчится). Набор: name/username/displayname, prefix/suffix/group, channel, world/x/y/z/biome, health/food/level/exp/gamemode/ping, balance/balance_formatted/balance_raw/currency_symbol/baltop_rank/pay_toggle, server_name/server_motd/online_players/max_players, time/time_24/date, afk/afk_time/afk_reason, deaths/player_kills/mob_kills/play_time. `{tps}`, `{online}`, `{max}`, `{player}` PlaceholderManager **не** знает: их подставляют TablistManager.applyPlaceholders и ChatFormatter.resolveShortPlaceholders. `/placeholder test {tps}` вернёт токен как есть. `{balance}` без префикса в test тоже не раскроется — в реестре ключ `neoessentials_balance`.",
+      "fix": "В чат-форматах, MOTD, таблисте можно мешать оба стиля. Для `/placeholder test`, REST `/api/placeholders/resolve` и чужого мода через PlaceholderAPI пишите `{neoessentials_…}`. Свой expansion регистрируйте id без `_`."
+    },
+    {
+      "title": "Консоль и игрок в test; REST resolve умеет чужой ник",
+      "body": "`/placeholder test` ловит `getPlayerOrException` и при неудаче (консоль) резолвит с player=null. Токены с requiresPlayer (почти все, кроме server_name/motd/online/max/time/date) остаются `{…}`. В Brigadier нет аргумента цели — javadoc «test <text> [player]» врёт. HTTP `GET /api/placeholders/resolve?player=&text=` как раз принимает чужой онлайн-ник.",
+      "fix": "Проверять персональные токены — из игры. С консоли смотрите server_* или бейте в REST с ?player=."
+    },
+    {
+      "title": "REST — это HTTP панели, Vault — отдельная Java-шина",
+      "body": "Dashboard API (порт `webDashboard.port`, в поставке 8080) — JSON для внешней панели: Bearer-сессия или `/apikey`, `/api/ping` без ключа, `/api/placeholders/*` с ключом, pairing через `/dashboard pair`. Vault API — четыре интерфейса в отдельном артефакте (`VaultEconomy` / `VaultPermission` / `VaultChat` / `VaultServiceRegistry`), без Minecraft-классов, без HTTP. Чужой мод делает compileOnly на vault-api и registerEconomy(…, HIGH, \"mymod\"). Это не взаимозаменяемые поверхности: REST не депозитит через VaultServiceRegistry, Vault не авторизует панель.",
+      "fix": "Панель и скрипты — REST + API key. Межмодовая экономика/права/префиксы — VaultServiceRegistry. Не кладите Bearer в фронтенд."
+    },
+    {
+      "title": "/vault convert не видит офлайн и не переносит историю",
+      "body": "В коде прямой комментарий «no offline player scanning needed in NeoForge» и цикл только по онлайн-списку. Разница балансов догоняется deposit/withdraw на приёмнике; исходный провайдер не обнуляется. Имя для автодополнения — `provider.getName().replace(\" \", \"\")`.",
+      "fix": "Перед convert зайдите нужными игроками. Офлайн-остатки переносите средствами самих экономик. Сверьте имена в `/vault info`, не «человеческое» название мода."
+    },
+    {
+      "title": "OP 2 недостаточно для /vault",
+      "body": "Большинство админ-команд мода пропускает уровень 2. `/vault` требует `src.hasPermission(3)` либо узел `neoessentials.vault.admin`. OP 2 без узла команду не увидит. Консоль обычно проходит как уровень 4. Узла нет в PermissionRegistry — `neoessentials.*` внутренним wildcard его не создаст как «зарегистрированный default», только если вы сами выдадите литерал или покрывающий wildcard.",
+      "fix": "Выдайте `neoessentials.vault.admin` или поднимите оператора до 3+."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "{neoessentials_tps} из апстрим-вики в реестре нет",
+      "body": "APISystem.md и таблица «Server-wide» обещают `{neoessentials_tps}` / `{tps}`. В `DefaultPlaceholderExpansion.initializePlaceholders` ключа `tps` нет, ветки switch тоже нет. TPS считает TablistManager.getTps и подставляет только короткий `{tps}` в шапке таблиста и в chat short-form. `/placeholder test {neoessentials_tps}` и REST resolve оставят токен нетронутым. То же с `{player}`: в expansion это `name`/`username`/`displayname`, а `{player}` режет только таблист.",
+      "fix": "Для PlaceholderAPI/REST используйте `{neoessentials_name}` и смиритесь, что TPS через этот реестр не отдаётся. В tablist.json пишите `{tps}`."
+    },
+    {
+      "title": "Javaddoc /placeholder test [player] не совпадает с деревом",
+      "body": "Заголовок класса PlaceholderCommand обещает необязательную цель. Регистрация: `test` → greedy `text` → executes. Всё после первого слова уходит в текст, отдельного аргумента player нет. Попытка `/placeholder test {neoessentials_name} Steve` просто резолвит строку «{neoessentials_name} Steve» от исполнителя.",
+      "fix": "Чужой контекст — только GET `/api/placeholders/resolve?player=Steve&text=…`."
+    },
+    {
+      "title": "/vault convert молча пропускает офлайн-счета",
+      "body": "Это не недописанный TODO в вики: метод сознательно итерирует только онлайн. Админ, сверивший baltop из SQLite с двумя провайдерами, увидит convert_complete по числу онлайна (часто 0–несколько) и решит, что конвертация «сломалась», хотя офлайн просто вне скоупа.",
+      "fix": "Считать команду сессионной сверкой онлайна, не миграцией базы. Полный перенос — экспорт/импорт самой экономики."
+    }
+  ]
+}
