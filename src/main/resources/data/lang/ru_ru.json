@@ -2156,7 +2156,7 @@
     "commands.neoessentials.permission_check.cannot_target_self":  "§cВы не можете применить эту команду к самому себе.",
     "commands.neoessentials.permission_check.target_protected":  "§cВы не можете выбрать этого игрока целью — он защищён.",
     "commands.neoessentials.permission_check.no_permission_required":  "§cУ вас нет прав на использование этой команды.",
-    "commands.neoessentials.permission_check.no_permission_required_any":  "§cУ вас нет прав на использование этой команды.}",
+    "commands.neoessentials.permission_check.no_permission_required_any":  "§cУ вас нет прав на использование этой команды.",
     "commands.neoessentials.permission_check.or_separator":  "§7 или §f",
     "commands.neoessentials.language.stats.overrides":  "Активных переопределений: {0}",
     "commands.neoessentials.language.info.cmd_switch":  "  §e/language <code> §7- Сменить язык сервера (например, /language ru_ru)",
