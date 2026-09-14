@@ -151,9 +151,25 @@
         "/neoe reload"
       ],
       "result": "Ключ `chat.modMessagePrefix` в `config.json`; при сплите — `config/neoessentials/chat.json`. Пустая строка в поставке — префикса нет. Вернуть старый тег: `\"&8[&bNE&8] &r\"` (нужен пробел в конце, иначе текст прилипнет). `MessageUtil.success/error/warning/info`, `SupportLinks` и несколько команд с `prefixedLiteral` читают ключ с диска на каждое сообщение, `/neoe reload` достаточно. `MessageUtil.component()` и шаблон `chat-format` этот ключ не читают."
+    },
+    {
+      "title": "Свои сообщения о входе и выходе без ванильных дублей",
+      "goal": "Скрыть строки Minecraft «присоединился к игре» / «покинул игру» и показать свои цветные сообщения.",
+      "commands": [
+        "В config/neoessentials/config.json, внутри объекта chat: `suppressVanillaJoinQuitMessages: true`",
+        "Там же: `customJoinMessage: \"&a[+] &e{neoessentials_displayname} &fзашёл на сервер\"`",
+        "Там же: `customQuitMessage: \"&c[-] &e{neoessentials_displayname} &fвышел с сервера\"`",
+        "Перезапустить сервер"
+      ],
+      "result": "NeoEssentials перехватывает ванильные join/leave-рассылки и отправляет только настроенный шаблон. Доступны плейсхолдеры PlaceholderAPI, включая `{neoessentials_displayname}`, `{neoessentials_username}`, `{neoessentials_prefix}`, `{neoessentials_suffix}` и `{neoessentials_world}`. Цвета: обычные `&0`–`&f`, стили `&k`–`&r`, а также hex `&#RRGGBB`, например `&#FFD700Золотой`."
     }
   ],
   "edgeCases": [
+    {
+      "title": "Сообщения входа/выхода требуют рестарта",
+      "body": "`suppressVanillaJoinQuitMessages` по умолчанию `false`: после обновления мод не меняет привычное поведение существующего сервера. При `true` выключаются обе ванильные строки. Шаблон `none` для конкретного события означает, что NeoEssentials ничего не отправит; это подходит, например, чтобы скрыть только выходы. Сам перехват подключается при старте Minecraft, поэтому одного `/neoe reload` недостаточно после установки новой версии мода.",
+      "fix": "Добавьте ключ и шаблоны в объект `chat` активного `config/neoessentials/config.json`, проверьте JSON-запятые и перезапустите сервер. Изменение уже загруженных шаблонов можно применить обычным `/neoe reload`."
+    },
     {
       "title": "Вентиль chat.richText.enabled (баг «игнора конфига» закрыт)",
       "body": "Раньше preprocessTags красил `<red>`/`<bold>` даже при выключенном rich text, а путь без enableChatEnhancements вызывал processRichText по сырой строке. Сейчас при `chat.richText.enabled: false` (дефолт) `RichTextFormatter.preprocessTags` вызывает `stripAllRichTags`: снимаются gradient/rainbow/named-color/format/`<color:#>`/`<hover>`/`<click>`, `&`-коды шаблона остаются. При `true` теги конвертируются; `allowGradients`/`allowRainbow` (дефолт true) действуют только внутри этой ветки. Английская вики, что hover/click «не закрыты флагом», устарела.\n\nИсключение: `{animation:NAME}` прогоняется через `processAnimationFrameGradients` **до** вентиля — кадр из `animations.json` с `<gradient>` в чате красится даже при выключенном richText. Сообщение игрока дополнительно режется `restrictPlayerMessageColors`: без `neoessentials.chat.namedcolors` `<tag>` из текста игрока вырезаются ещё до вставки в `{MESSAGE}`. Узлы `neoessentials.chat.richtext` / `gradient` / `rainbow` нигде в пайплайне не читаются.",
