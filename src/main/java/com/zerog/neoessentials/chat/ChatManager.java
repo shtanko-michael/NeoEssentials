@@ -39,6 +39,7 @@ public class ChatManager {
     // Config toggles and options
     private final String customJoinMessage;
     private final String customQuitMessage;
+    private final boolean suppressVanillaJoinQuitMessages;
     // Chat format: can be a string (default) or a map for per-group/world - thread-safe
     private final String defaultChatFormat;
     private final java.util.Map<String, String> chatFormatMap;
@@ -56,6 +57,8 @@ public class ChatManager {
         this.playerChatPermissions = toSet(chatConfig, "playerChatPermissions");
         this.customJoinMessage = chatConfig.has("customJoinMessage") ? chatConfig.get("customJoinMessage").getAsString() : "none";
         this.customQuitMessage = chatConfig.has("customQuitMessage") ? chatConfig.get("customQuitMessage").getAsString() : "none";
+        this.suppressVanillaJoinQuitMessages = chatConfig.has("suppressVanillaJoinQuitMessages")
+            && chatConfig.get("suppressVanillaJoinQuitMessages").getAsBoolean();
         // Support chat-format as string or object
         if (chatConfig.has("chat-format")) {
             if (chatConfig.get("chat-format").isJsonObject()) {
@@ -119,6 +122,7 @@ public class ChatManager {
     // Accessors for chat config options
     public String getCustomJoinMessage() { return customJoinMessage; }
     public String getCustomQuitMessage() { return customQuitMessage; }
+    public boolean suppressVanillaJoinQuitMessages() { return suppressVanillaJoinQuitMessages; }
 
     /**
      * Returns the chat format for a given group and/or world.

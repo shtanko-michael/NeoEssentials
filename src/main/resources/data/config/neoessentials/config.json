@@ -1275,12 +1275,15 @@
     "playerChatPermissions": [],
 
     /* Custom join / quit messages.
-     * Use "none" for the built-in default message.
+     * Set suppressVanillaJoinQuitMessages to true to replace the vanilla
+     * "joined/left the game" broadcasts without producing duplicate lines.
+     * Use "none" to send no NeoEssentials message for that event.
      * Placeholders: {neoessentials_displayname}, {neoessentials_username},
      *   {neoessentials_prefix}, {neoessentials_suffix}, {neoessentials_world},
-     *   and more via PlaceholderAPI. Use '&' for colors.
+     *   and more via PlaceholderAPI. Use '&' for colors (including &#RRGGBB hex).
      * Example: "&a{neoessentials_prefix}&f{neoessentials_displayname} &ejoined the server!"
      */
+    "suppressVanillaJoinQuitMessages": false,
     "customJoinMessage": "none",
     "customQuitMessage": "none"
   },

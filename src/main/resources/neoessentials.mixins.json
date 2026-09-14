@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "package": "com.zerog.neoessentials.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "PlayerListMixin",
+    "ServerGamePacketListenerImplMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

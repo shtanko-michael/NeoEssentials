@@ -158,7 +158,7 @@ public class PlayerJoinQuitHandler {
                 String resolvedMessage = PlaceholderAPI.setPlaceholders(player, customJoinMessage);
                 
                 // Convert color codes and create component
-                String coloredMessage = resolvedMessage.replaceAll("&([0-9a-fk-or])", "§$1");
+                String coloredMessage = applyLegacyColors(resolvedMessage);
                 Component formattedMessage = Component.literal(coloredMessage);
                 
                 // Broadcast the custom join message to all players
@@ -220,7 +220,7 @@ public class PlayerJoinQuitHandler {
                 String resolvedMessage = PlaceholderAPI.setPlaceholders(player, customQuitMessage);
                 
                 // Convert color codes and create component
-                String coloredMessage = resolvedMessage.replaceAll("&([0-9a-fk-or])", "§$1");
+                String coloredMessage = applyLegacyColors(resolvedMessage);
                 Component formattedMessage = Component.literal(coloredMessage);
                 
                 // Broadcast the custom quit message to all players
@@ -242,5 +242,14 @@ public class PlayerJoinQuitHandler {
         } catch (Exception e) {
             NeoLog.error(LOGGER, LogCategory.CHAT, "Error handling quit event for player " + player.getName().getString(), e);
         }
+    }
+
+    /** Converts ampersand colors, including Minecraft's six-digit legacy hex form, into legacy codes. */
+    private static String applyLegacyColors(String message) {
+        String hex = message.replaceAll(
+            "(?i)&#([0-9a-f])([0-9a-f])([0-9a-f])([0-9a-f])([0-9a-f])([0-9a-f])",
+            "\u00A7x\u00A7$1\u00A7$2\u00A7$3\u00A7$4\u00A7$5\u00A7$6"
+        );
+        return hex.replaceAll("(?i)&x(?=(&[0-9a-f]){6})|&([0-9a-fk-or])", "\u00A7$1$2");
     }
 }
