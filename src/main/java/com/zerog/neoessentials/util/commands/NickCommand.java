@@ -34,6 +34,17 @@ import java.util.regex.Pattern;
  */
 public class NickCommand {
     private static final Map<UUID, String> NICKNAMES = new ConcurrentHashMap<>();
+    /**
+     * The real profile name that was current when a nickname was assigned.
+     *
+     * <p>A nickname equal to that name is visually redundant, but historically it was
+     * persisted just like an intentional nickname. Account names are resolved by
+     * session-resolver while this map is keyed by the stable account UUID, so retaining
+     * such a redundant entry made a later account rename appear stale in TAB. Keeping the
+     * assignment-time name lets {@link #onPlayerJoin(ServerPlayer)} distinguish that case
+     * without ever clearing an intentionally different nickname.</p>
+     */
+    private static final Map<UUID, String> NICKNAME_PROFILE_NAMES = new ConcurrentHashMap<>();
     private static final Path NICK_DATA_FILE = ResourceUtil.getConfigPath("nickname_data.json");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
     // Updated to allow hex color codes like &#5d6a2c
@@ -201,7 +212,7 @@ public class NickCommand {
         }
         
         // Set nickname
-        NICKNAMES.put(player.getUUID(), nickname);
+        rememberNickname(player, nickname);
         saveNicknameData();
         
         // Apply nickname to player's display name
@@ -222,7 +233,7 @@ public class NickCommand {
             return 0;
         }
         
-        NICKNAMES.remove(player.getUUID());
+        removeNickname(player.getUUID());
         saveNicknameData();
         
         // Reset player's display name
@@ -283,7 +294,7 @@ public class NickCommand {
         }
         
         // Set nickname
-        NICKNAMES.put(target.getUUID(), nickname);
+        rememberNickname(target, nickname);
         saveNicknameData();
         
         // Apply nickname
@@ -311,7 +322,7 @@ public class NickCommand {
             return 0;
         }
         
-        NICKNAMES.remove(target.getUUID());
+        removeNickname(target.getUUID());
         saveNicknameData();
         
         // Reset display name
@@ -479,7 +490,7 @@ public class NickCommand {
         if (withoutColors.length() > 16 || withoutColors.length() < 3) return "Nickname must be 3-16 characters (excluding color codes).";
         if (isNicknameTaken(nickname, target.getUUID())) return "That nickname is already taken.";
 
-        NICKNAMES.put(target.getUUID(), nickname);
+        rememberNickname(target, nickname);
         saveNicknameData();
         updatePlayerDisplayName(target);
         return null;
@@ -487,7 +498,7 @@ public class NickCommand {
 
     /** Reset a player's nickname from a non-command caller (the dashboard). Always succeeds. */
     public static String resetNicknameAdmin(ServerPlayer target) {
-        NICKNAMES.remove(target.getUUID());
+        removeNickname(target.getUUID());
         saveNicknameData();
         updatePlayerDisplayName(target);
         return null;
@@ -504,6 +515,17 @@ public class NickCommand {
         return player.getName().getString();
     }
     
+    private static void rememberNickname(ServerPlayer player, String nickname) {
+        UUID playerId = player.getUUID();
+        NICKNAMES.put(playerId, nickname);
+        NICKNAME_PROFILE_NAMES.put(playerId, player.getGameProfile().getName());
+    }
+
+    private static void removeNickname(UUID playerId) {
+        NICKNAMES.remove(playerId);
+        NICKNAME_PROFILE_NAMES.remove(playerId);
+    }
+
     /**
      * Load nickname data from file
      */
@@ -520,7 +542,21 @@ public class NickCommand {
             for (Map.Entry<String, JsonElement> entry : data.entrySet()) {
                 try {
                     UUID playerId = UUID.fromString(entry.getKey());
-                    String nickname = entry.getValue().getAsString();
+                    JsonElement value = entry.getValue();
+                    String nickname;
+                    if (value.isJsonObject()) {
+                        JsonObject record = value.getAsJsonObject();
+                        nickname = record.get("nickname").getAsString();
+                        if (record.has("profileName") && !record.get("profileName").isJsonNull()) {
+                            String profileName = record.get("profileName").getAsString();
+                            if (!profileName.isBlank()) NICKNAME_PROFILE_NAMES.put(playerId, profileName);
+                        }
+                    } else {
+                        // Legacy entries did not record the profile name. Leave them intact:
+                        // an old value might be intentional, and guessing would risk deleting
+                        // it after an account rename.
+                        nickname = value.getAsString();
+                    }
                     NICKNAMES.put(playerId, nickname);
                 } catch (Exception e) {
                     // Skip invalid entries
@@ -539,7 +575,15 @@ public class NickCommand {
             JsonObject data = new JsonObject();
             
             for (Map.Entry<UUID, String> entry : NICKNAMES.entrySet()) {
-                data.addProperty(entry.getKey().toString(), entry.getValue());
+                String profileName = NICKNAME_PROFILE_NAMES.get(entry.getKey());
+                if (profileName == null || profileName.isBlank()) {
+                    data.addProperty(entry.getKey().toString(), entry.getValue());
+                    continue;
+                }
+                JsonObject record = new JsonObject();
+                record.addProperty("nickname", entry.getValue());
+                record.addProperty("profileName", profileName);
+                data.add(entry.getKey().toString(), record);
             }
             
             Files.createDirectories(NICK_DATA_FILE.getParent());
@@ -575,6 +619,21 @@ public class NickCommand {
      * for them).
      */
     public static void onPlayerJoin(ServerPlayer player) {
+        UUID playerId = player.getUUID();
+        String nickname = NICKNAMES.get(playerId);
+        String assignedProfileName = NICKNAME_PROFILE_NAMES.get(playerId);
+        String currentProfileName = player.getGameProfile().getName();
+        if (nickname != null
+            && nickname.equals(assignedProfileName)
+            && !assignedProfileName.equals(currentProfileName)) {
+            // The stored tab override was only a copy of the account name at the time it
+            // was assigned. Account names can change while the UUID stays stable; restore
+            // vanilla profile rendering rather than showing that stale copy. A deliberately
+            // different nickname never satisfies this condition and is preserved.
+            removeNickname(playerId);
+            saveNicknameData();
+        }
+
         var server = player.getServer();
         if (server != null) {
             applyNicknamesToOnlinePlayers(server);
