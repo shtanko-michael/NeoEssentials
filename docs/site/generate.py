@@ -19,6 +19,7 @@ Sources
   docs/site/content/*.md ............... this fork's added guides / pitfalls / known issues
   docs/site/content/systems/*.json ..... verified syntax + examples per command
   docs/site/content/_meta.json ......... system taxonomy and navigation
+  docs/site/content/regionguard/ ....... curated RegionGuard reference pages
 
 Usage:  python docs/site/generate.py [--out docs/site/_site]
 """
@@ -39,6 +40,7 @@ CONFIG_DIR = os.path.join(ROOT, 'src', 'main', 'resources', 'data', 'config', 'n
 LANG_DIR = os.path.join(ROOT, 'src', 'main', 'resources', 'data', 'lang')
 UPSTREAM_WIKI = os.path.join(ROOT, 'docs', 'Wiki')
 CONTENT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'content')
+REGIONGUARD_CONTENT_DIR = os.path.join(CONTENT_DIR, 'regionguard')
 ASSETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets')
 PUBLIC_SITE = 'https://shtanko-michael.github.io/NeoEssentials'
 
@@ -427,10 +429,11 @@ def code(v):
 NAV = None  # filled in build()
 
 
-def page(rel, title, subtitle, body, toc=None, active='', wide=False, extra_head=''):
+def page(rel, title, subtitle, body, toc=None, active='', wide=False, extra_head='',
+         product='neoessentials', nav=None):
     up = '../' * rel
     nav_html = []
-    for group in NAV:
+    for group in nav or NAV:
         links = []
         for item in group['items']:
             cls = ' class="on"' if item['id'] == active else ''
@@ -446,8 +449,19 @@ def page(rel, title, subtitle, body, toc=None, active='', wide=False, extra_head
             toc_html = ('<aside class="toc"><p class="toc-title">На этой странице</p>'
                         '<ul>%s</ul></aside>' % items)
 
-    site_name = 'Farmstead NeoEssentials'
+    is_regionguard = product == 'regionguard'
+    product_name = 'RegionGuard' if is_regionguard else 'NeoEssentials'
+    product_home = 'regionguard/index.html' if is_regionguard else 'index.html'
+    site_name = 'Farmstead ' + product_name
     doc_title = title if title == site_name else '%s · %s' % (title, site_name)
+
+    product_switch = (
+        '<nav class="product-switch" aria-label="Выбор мода">'
+        '<a href="%sindex.html"%s>NeoEssentials</a>'
+        '<a href="%sregionguard/index.html"%s>RegionGuard</a>'
+        '</nav>' % (
+            up, '' if is_regionguard else ' class="on" aria-current="page"',
+            up, ' class="on" aria-current="page"' if is_regionguard else ''))
 
     return """<!doctype html>
 <html lang="ru" data-base="{up}">
@@ -465,19 +479,20 @@ def page(rel, title, subtitle, body, toc=None, active='', wide=False, extra_head
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap">
-<link rel="stylesheet" href="{up}assets/site.css">
+<link rel="stylesheet" href="{up}assets/site.css?v=2">
 {extra_head}
 </head>
 <body{bodycls}>
 <a class="skip" href="#main">К содержимому</a>
 <header class="topbar">
-  <a class="brand" href="{up}index.html" aria-label="Farmstead NeoEssentials">
+  <a class="brand" href="{up}{product_home}" aria-label="{site_name}">
     <img class="brand-logo" src="{up}assets/farmstead.png" alt="" width="36" height="36">
     <span class="brand-text">
       <span class="brand-kicker">Farmstead</span>
-      <span class="brand-name">NeoEssentials</span>
+      <span class="brand-name">{product_name}</span>
     </span>
   </a>
+  {product_switch}
   <div class="search-wrap">
     <input id="q" type="search" placeholder="Поиск по командам, правам и конфигу…" autocomplete="off" spellcheck="false">
     <div id="results" hidden></div>
@@ -496,10 +511,8 @@ def page(rel, title, subtitle, body, toc=None, active='', wide=False, extra_head
   </main>
 </div>
 <footer class="site-foot">
-  <p><strong>Farmstead NeoEssentials</strong> — форк мода для сервера
-  <a href="https://farmsteadminecraft.online">Farmstead Minecraft</a>.
-  Не путать с апстримом
-  <a href="https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials">ZeroG NeoEssentials</a>.</p>
+  <p><strong>{site_name}</strong> — документация мода для сервера
+  <a href="https://farmsteadminecraft.online">Farmstead Minecraft</a>.{footer_tail}</p>
 </footer>
 <script src="{up}assets/site.js" defer></script>
 </body>
@@ -507,7 +520,11 @@ def page(rel, title, subtitle, body, toc=None, active='', wide=False, extra_head
 """.format(up=up, title=e(title), doc_title=e(doc_title), subtitle=e(subtitle),
            body=body, nav=''.join(nav_html),
            toc=toc_html, extra_head=extra_head,
-           bodycls=' class="wide"' if wide else '')
+           bodycls=' class="wide"' if wide else '', product_home=product_home,
+           product_name=product_name, site_name=site_name, product_switch=product_switch,
+           footer_tail=(' Не путать с апстримом '
+                        '<a href="https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials">'
+                        'ZeroG NeoEssentials</a>.' if not is_regionguard else ''))
 
 
 def write(out_dir, rel_path, content):
@@ -942,6 +959,47 @@ def build(out_dir, base, wiki_out=None):
     write(out_dir, 'troubleshooting/index.html',
           page(1, 'Известные проблемы', 'Симптом, причина и что с этим делать — по всем системам.',
                b, toc, active='troubleshooting'))
+
+    # ---- RegionGuard -------------------------------------------------------
+    # RegionGuard is maintained in the parent Farmstead monorepo, while this site is built from
+    # the standalone NeoEssentials repository on GitHub Actions. Keep its curated documentation
+    # here so Pages builds are self-contained and do not depend on a sibling checkout.
+    rg_meta = read_json(os.path.join(REGIONGUARD_CONTENT_DIR, '_meta.json'), {}) or {}
+    rg_pages = rg_meta.get('pages', [])
+    rg_groups = []
+    for group_name in rg_meta.get('groups', []):
+        items = []
+        for item in rg_pages:
+            if item.get('group') != group_name:
+                continue
+            slug = item.get('slug', '')
+            items.append({
+                'id': 'rg-' + (slug or 'index'),
+                'title': item.get('navTitle') or item['title'],
+                'href': 'regionguard/%s' % (('%s/index.html' % slug) if slug else 'index.html'),
+            })
+        if items:
+            rg_groups.append({'title': group_name, 'items': items})
+
+    for item in rg_pages:
+        slug = item.get('slug', '')
+        source = item.get('source') or ((slug or 'index') + '.md')
+        source_path = os.path.join(REGIONGUARD_CONTENT_DIR, source)
+        if not os.path.exists(source_path):
+            warn('RegionGuard page "%s" points at missing content %s' % (slug or 'index', source))
+            continue
+        body, toc = add_heading_ids(md_to_html(read(source_path)))
+        out_path = 'regionguard/%s' % (('%s/index.html' % slug) if slug else 'index.html')
+        rel = 2 if slug else 1
+        write(out_dir, out_path,
+              page(rel, item['title'], item.get('lede', ''), body, toc,
+                   active='rg-' + (slug or 'index'), wide=item.get('wide', False),
+                   product='regionguard', nav=rg_groups))
+        search.append({'t': item['title'], 'd': item.get('lede', ''), 'u': out_path,
+                       'k': 'RegionGuard'})
+        for keyword in item.get('keywords', []):
+            search.append({'t': keyword, 'd': item.get('lede', ''), 'u': out_path,
+                           'k': 'RegionGuard'})
 
     # ---- assets & search ---------------------------------------------------
     os.makedirs(os.path.join(out_dir, 'assets'), exist_ok=True)

@@ -1,0 +1,72 @@
+{
+  "groups": ["Начало", "Справочник", "Руководства"],
+  "pages": [
+    {
+      "slug": "",
+      "source": "index.md",
+      "title": "Farmstead RegionGuard",
+      "navTitle": "Обзор",
+      "group": "Начало",
+      "lede": "Защита регионов для Minecraft 1.21.1: приваты, владельцы, флаги и интеграция с WorldEdit.",
+      "keywords": ["RegionGuard", "приват", "регион"]
+    },
+    {
+      "slug": "quickstart",
+      "title": "Быстрый старт",
+      "group": "Начало",
+      "lede": "Установка, права и создание первого защищённого региона.",
+      "keywords": ["установка RegionGuard", "создать приват", "/rg define"]
+    },
+    {
+      "slug": "commands",
+      "title": "Команды RegionGuard",
+      "navTitle": "Команды",
+      "group": "Справочник",
+      "lede": "Полный синтаксис /rg: создание, управление участниками, флаги и телепортация.",
+      "keywords": ["/rg", "/rg claim", "/rg flag", "/rg info"],
+      "wide": true
+    },
+    {
+      "slug": "flags",
+      "title": "Флаги RegionGuard",
+      "navTitle": "Флаги",
+      "group": "Справочник",
+      "lede": "Все флаги региона, значения по умолчанию, приоритеты и правила обхода.",
+      "keywords": ["pvp deny", "build deny", "entry deny", "interact", "mob-spawning"],
+      "wide": true
+    },
+    {
+      "slug": "permissions",
+      "title": "Права RegionGuard",
+      "navTitle": "Права",
+      "group": "Справочник",
+      "lede": "Командные ноды, права на отдельные флаги, административный bypass и лимиты приватов.",
+      "keywords": ["regionguard.command", "regionguard.bypass.pvp", "regionguard.regions", "LuckPerms"],
+      "wide": true
+    },
+    {
+      "slug": "configuration",
+      "title": "Конфигурация RegionGuard",
+      "navTitle": "Конфигурация",
+      "group": "Справочник",
+      "lede": "Серверный TOML, локализация, хранение регионов и совместимость с другими модами.",
+      "keywords": ["regionguard-server.toml", "defaultDeniedFlagsOnClaim", "Pixelmon", "WorldEdit"]
+    },
+    {
+      "slug": "regions",
+      "title": "Как устроены регионы",
+      "navTitle": "Регионы и участники",
+      "group": "Руководства",
+      "lede": "Границы, пересечения, владельцы, участники, глобальный регион и хранение данных.",
+      "keywords": ["__global__", "владелец региона", "участник региона", "приоритет региона"]
+    },
+    {
+      "slug": "troubleshooting",
+      "title": "Решение проблем RegionGuard",
+      "navTitle": "Решение проблем",
+      "group": "Руководства",
+      "lede": "Частые причины, по которым приват, флаг, право или интеграция работает не так, как ожидается.",
+      "keywords": ["RegionGuard не работает", "флаг не работает", "нет прав", "WorldEdit selection"]
+    }
+  ]
+}
