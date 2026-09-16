@@ -24,10 +24,40 @@
 | `regionguard.command.flag.mob-damage` | `mob-damage` |
 | `regionguard.command.flag.invincibility` | `invincibility` |
 | `regionguard.command.flag.passive-entity-damage` | `passive-entity-damage` |
+| `regionguard.command.flag.fall-damage` | `fall-damage` |
 | `regionguard.command.flag.item-drop` | `item-drop` |
 | `regionguard.command.flag.potion-splash` | `potion-splash` |
 | `regionguard.command.flag.greeting` | `greeting` |
 | `regionguard.command.flag.farewell` | `farewell` |
+
+## Рекомендованный набор для `default`
+
+Владелец региона всё равно не может менять чужой регион. Для обычной роли разумно выдать базовые команды и безопасные флаги своего привата, но не `invincibility`, управление спавном мобов, маяком и взрывами:
+
+```text
+regionguard.command
+regionguard.command.define
+regionguard.command.redefine
+regionguard.command.remove
+regionguard.command.list
+regionguard.command.info
+regionguard.command.tp
+regionguard.command.members
+regionguard.command.flag
+regionguard.command.flag.greeting
+regionguard.command.flag.farewell
+regionguard.command.flag.deny-message
+regionguard.command.flag.weather
+regionguard.command.flag.entry
+regionguard.command.flag.interact
+regionguard.command.flag.use
+regionguard.command.flag.chest-access
+regionguard.command.flag.pvp
+regionguard.command.flag.passive-entity-damage
+regionguard.command.flag.fall-damage
+regionguard.command.flag.item-drop
+regionguard.command.flag.potion-splash
+```
 
 Пример минимального просмотра собственных регионов:
 

@@ -10,7 +10,7 @@
 
 ## Права для обычного игрока
 
-Минимальный набор для создания и управления собственным приватом:
+Минимальный набор для создания и управления собственным приватом. Ниже перечислены безопасные флаги дома; `regionguard.command.flag.*` вместо них выдаст также опасные балансные флаги, включая `invincibility`.
 
 ```text
 regionguard.command
@@ -22,7 +22,19 @@ regionguard.command.info
 regionguard.command.tp
 regionguard.command.members
 regionguard.command.flag
-regionguard.command.flag.*
+regionguard.command.flag.greeting
+regionguard.command.flag.farewell
+regionguard.command.flag.deny-message
+regionguard.command.flag.weather
+regionguard.command.flag.entry
+regionguard.command.flag.interact
+regionguard.command.flag.use
+regionguard.command.flag.chest-access
+regionguard.command.flag.pvp
+regionguard.command.flag.passive-entity-damage
+regionguard.command.flag.fall-damage
+regionguard.command.flag.item-drop
+regionguard.command.flag.potion-splash
 ```
 
 OP уровня 2 и выше проходит командные проверки без этих нод. Подробности и безопасные наборы прав приведены в разделе [«Права»](../permissions/).
@@ -90,6 +102,14 @@ OP уровня 2 и выше проходит командные проверк
 ```
 
 При `pvp deny` статус владельца или участника не даёт обхода. Ударить игрока в защищённом регионе сможет только администратор с `regionguard.bypass.pvp` или OP уровня 2.
+
+Безопасная зона, где игроки не теряют предметы и не получают урон от мобов:
+
+```text
+/rg flag home mob-damage deny
+/rg flag home item-drop deny
+/rg flag home potion-splash deny
+```
 
 ## Изменение границ и удаление
 

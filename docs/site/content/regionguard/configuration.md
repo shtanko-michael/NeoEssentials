@@ -8,8 +8,8 @@ allowFallbackSelection = true
 enablePixelmonCompat = true
 language = "ru_ru"
 maxRegionsPerPlayer = 3
-defaultDeniedFlagsOnClaim = ["build", "block-break", "block-place", "chest-access", "tnt"]
-defaultAllowedFlagsOnClaim = ["interact", "use", "entry", "pvp", "mob-spawning", "mob-entry", "passive-entity-damage", "fall-damage", "fire-spread", "creeper-explosion", "other-explosion", "thunder", "pixelmon-spawn", "pixelmon-entry", "pixelmon-player"]
+defaultDeniedFlagsOnClaim = ["build", "block-break", "block-place", "chest-access", "tnt", "invincibility"]
+defaultAllowedFlagsOnClaim = ["interact", "use", "entry", "pvp", "mob-damage", "mob-spawning", "mob-entry", "passive-entity-damage", "fall-damage", "item-drop", "potion-splash", "fire-spread", "creeper-explosion", "other-explosion", "thunder", "pixelmon-spawn", "pixelmon-entry", "pixelmon-player"]
 ```
 
 | Ключ | По умолчанию | Назначение |
@@ -22,6 +22,8 @@ defaultAllowedFlagsOnClaim = ["interact", "use", "entry", "pvp", "mob-spawning",
 | `defaultAllowedFlagsOnClaim` | список | Булевы флаги, записываемые как `true` после deny-списка. При повторе побеждает allow. |
 
 Неизвестные ID и небулевы флаги в списках пропускаются с предупреждением. ID нормализуются: регистр не важен, `_` превращается в `-`.
+
+Новый приват не делает игроков бессмертными: `invincibility` явно записывается как `deny` (`false`). Новые флаги `mob-damage`, `item-drop` и `potion-splash` по умолчанию разрешены. Изменение списка влияет только на приваты, созданные после изменения TOML; существующие регионы не переписываются.
 
 ## Дополнительный JSON
 
