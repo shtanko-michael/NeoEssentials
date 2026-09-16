@@ -1153,7 +1153,6 @@
     "commands.neoessentials.teleport.warp.set_cooldown":  "§cYou must wait §f{0}§c second(s) before creating another warp.",
     "commands.neoessentials.teleport.warp.unsafe_location":  "§cThe warp location is unsafe and no safe spot could be found.",
     "commands.neoessentials.teleport.warp.unsafe":  "§cThe destination of warp §f{0}§c is unsafe and could not be resolved.",
-    "commands.neoessentials.teleport.warp.moved_to_safety":  "§eThe warp location was adjusted to the nearest safe spot.",
     "commands.neoessentials.teleport.warp.overworld_only":  "§cWarps can only be set in the Overworld.",
     "commands.neoessentials.teleport.warp.cross_dimension_disabled":  "§cCross-dimension warps are disabled.",
     "commands.neoessentials.teleport.warp.distance_exceeded":  "§cThat warp is too far away (max distance: {0}).",

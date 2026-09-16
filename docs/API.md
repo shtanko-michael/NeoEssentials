@@ -534,7 +534,7 @@ Only one resource (`/settings`). **GET = AUTH; PUT/POST = ADMIN.** PUT is a part
 { "success":true,
   "generalSettings":{"teleportDelay":3,"enableTeleportWarmup":true,"cancelTeleportOnMove":true,"cancelTeleportOnDamage":true,"maxTeleportDistance":0},
   "homeSettings":{"homeSetCooldown":0,"homeTeleportCooldown":0,"homeDeleteCooldown":0,"maxHomes":5,"enableHomeSafety":true,"allowCrossDimensionHomes":true},
-  "warpSettings":{"warpSetCooldown":0,"warpCooldown":0,"maxWarps":50,"enableWarpSafety":true},
+  "warpSettings":{"warpSetCooldown":0,"warpCooldown":0,"maxWarps":50},
   "spawnSettings":{"spawnCooldown":0,"enableSpawnSafety":true},
   "backSettings":{"backCooldown":0,"teleportDelay":3,"enableDeathBack":true,"enableTeleportBack":true} }
 ```

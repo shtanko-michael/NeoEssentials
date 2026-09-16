@@ -720,8 +720,6 @@
       "warpSetCooldown": 60,
       // Allow warps across dimensions
       "allowCrossDimensionWarps": true,
-      // Block warps to unsafe locations
-      "enableWarpSafety": true,
       // Log warp creation / deletion / usage
       "logWarpActions": true,
       // Require 'neoessentials.warps.<name>' permission for each individual warp

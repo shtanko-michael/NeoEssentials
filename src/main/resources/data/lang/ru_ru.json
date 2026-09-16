@@ -115,7 +115,6 @@
     "commands.neoessentials.teleport.warp.set_cooldown":  "§cПодождите §f{0}§c секунд, прежде чем создавать другой варп.",
     "commands.neoessentials.teleport.warp.unsafe_location":  "§cПозиция варпа небезопасна, и безопасного места не найдено.",
     "commands.neoessentials.teleport.warp.unsafe":  "§cМесто назначения варпа §f{0}§c небезопасно, и его не удалось разрешить.",
-    "commands.neoessentials.teleport.warp.moved_to_safety":  "§eПозиция варпа скорректирована на ближайшее безопасное место.",
     "commands.neoessentials.teleport.warp.overworld_only":  "§cВарпы можно устанавливать только в Верхнем мире.",
     "commands.neoessentials.teleport.warp.cross_dimension_disabled":  "§cМеждуизмеренческие варпы отключены.",
     "commands.neoessentials.teleport.warp.distance_exceeded":  "§cЭтот варп слишком далеко (макс. расстояние: {0}).",

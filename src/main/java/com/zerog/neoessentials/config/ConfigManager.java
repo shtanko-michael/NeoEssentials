@@ -4078,7 +4078,7 @@ public class ConfigManager {
 
     /**
      * Returns true if home teleport safety is enabled in teleportation.homeSettings config section.
-     * Accepts both "enableHomeTeleportSafety" (canonical) and "enableHomeSafety" (alias, consistent with enableWarpSafety).
+     * Accepts both "enableHomeTeleportSafety" (canonical) and "enableHomeSafety" (legacy alias).
      * (teleportation.homeSettings.enableHomeTeleportSafety or teleportation.homeSettings.enableHomeSafety)
      */
     public boolean isHomeTeleportSafetyEnabled() {
@@ -4091,7 +4091,7 @@ public class ConfigManager {
                 if (homeSettings.has("enableHomeTeleportSafety")) {
                     return homeSettings.get("enableHomeTeleportSafety").getAsBoolean();
                 }
-                // Also accept alias key (enableHomeSafety, consistent with enableWarpSafety naming)
+                // Also accept the legacy enableHomeSafety alias.
                 if (homeSettings.has("enableHomeSafety")) {
                     return homeSettings.get("enableHomeSafety").getAsBoolean();
                 }

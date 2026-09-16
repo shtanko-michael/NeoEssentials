@@ -71,7 +71,6 @@ public class WarpManager {
 
     // Configuration
     private int teleportDelay = 0; // Instant for warps by default
-    private boolean requireSafeLocations = true;
     private boolean allowOverworldOnly = false;
     private int maxWarps = 50;
     private boolean caseSensitiveNames = false;
@@ -99,9 +98,6 @@ public class WarpManager {
                     if (tp.has("warpSettings")) {
                         JsonObject warpSettings = tp.getAsJsonObject("warpSettings");
 
-                        if (warpSettings.has("enableWarpSafety")) {
-                            requireSafeLocations = warpSettings.get("enableWarpSafety").getAsBoolean();
-                        }
                         if (warpSettings.has("allowPlayerWarps")) {
                             allowPlayerWarps = warpSettings.get("allowPlayerWarps").getAsBoolean();
                         }
@@ -154,7 +150,7 @@ public class WarpManager {
                 }
             }
             NeoLog.info(LOGGER, LogCategory.TELEPORTATION, "[WarpManager] Config loaded — safetyCheck={}, maxWarps={}, allowPlayerWarps={}, maxPlayerWarps={}, warmup={}s, useCooldown={}s, setCooldown={}s, crossDimension={}",
-                requireSafeLocations, maxWarps, allowPlayerWarps, maxPlayerWarps, teleportDelay, warpUseCooldown, warpSetCooldown, allowCrossDimensionWarps);
+                false, maxWarps, allowPlayerWarps, maxPlayerWarps, teleportDelay, warpUseCooldown, warpSetCooldown, allowCrossDimensionWarps);
         } catch (Exception e) {
             LOGGER.warn("Failed to load warp config, using defaults: {}", e.getMessage());
         }
@@ -566,33 +562,6 @@ public class WarpManager {
             return false;
         }
         
-        // Check if location is safe - read from config dynamically
-        boolean requireSafe = true; // Default to true for safety
-        try {
-            JsonObject config = ConfigManager.getInstance().getConfig(ConfigManager.MAIN_CONFIG);
-            if (config.has("teleportation")) {
-                JsonObject tp = config.getAsJsonObject("teleportation");
-                if (tp.has("warpSettings")) {
-                    JsonObject warpSettings = tp.getAsJsonObject("warpSettings");
-                    if (warpSettings.has("enableWarpSafety")) {
-                        requireSafe = warpSettings.get("enableWarpSafety").getAsBoolean();
-                    }
-                }
-            }
-        } catch (Exception e) {
-            LOGGER.warn("Failed to read warp safety config, defaulting to enabled: {}", e.getMessage());
-        }
-
-        if (requireSafe && !location.isSafe()) {
-            TeleportLocation safeLocation = location.findSafeLocation();
-            if (safeLocation == null) {
-                creator.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.warp.unsafe_location"));
-                return false;
-            }
-            location = safeLocation;
-            creator.sendSystemMessage(MessageUtil.warning("commands.neoessentials.teleport.warp.moved_to_safety"));
-        }
-        
         // Atomic warp-limit check + creation: checking warps.size() and then putIfAbsent as two
         // separate steps let two concurrent creations with different names both pass the limit
         // check before either inserted, letting the count exceed maxWarps — same TOCTOU class
@@ -667,7 +636,7 @@ public class WarpManager {
      * Create a warp — admin/console variant that doesn't require a ServerPlayer
      * (used by the web dashboard, where there's no in-game player to message).
      * Applies the same validation as {@link #createWarp(ServerPlayer, String, TeleportLocation)}
-     * (name format, warp limit, cross-dimension/overworld-only restrictions, safety check)
+     * (name format, warp limit, cross-dimension/overworld-only restrictions).
      * but reports failures via the returned reason instead of chat messages.
      *
      * @return {@code null} on success, or a short reason string on failure.
@@ -683,30 +652,6 @@ public class WarpManager {
 
         if (allowOverworldOnly && !isOverworld(location)) {
             return "overworld_only";
-        }
-
-        boolean requireSafe = true;
-        try {
-            JsonObject config = ConfigManager.getInstance().getConfig(ConfigManager.MAIN_CONFIG);
-            if (config.has("teleportation")) {
-                JsonObject tp = config.getAsJsonObject("teleportation");
-                if (tp.has("warpSettings")) {
-                    JsonObject warpSettings = tp.getAsJsonObject("warpSettings");
-                    if (warpSettings.has("enableWarpSafety")) {
-                        requireSafe = warpSettings.get("enableWarpSafety").getAsBoolean();
-                    }
-                }
-            }
-        } catch (Exception e) {
-            LOGGER.warn("Failed to read warp safety config, defaulting to enabled: {}", e.getMessage());
-        }
-
-        if (requireSafe && !location.isSafe()) {
-            TeleportLocation safeLocation = location.findSafeLocation();
-            if (safeLocation == null) {
-                return "unsafe_location";
-            }
-            location = safeLocation;
         }
 
         String normalizedName = caseSensitiveNames ? warpName : warpName.toLowerCase();
@@ -819,41 +764,6 @@ public class WarpManager {
             lastWarpUseTimestamps.put(playerId, System.currentTimeMillis());
         }
 
-        // Check if warp location is still safe - read from config dynamically
-        boolean requireSafe = true; // Default to true for safety
-        try {
-            JsonObject config = ConfigManager.getInstance().getConfig(ConfigManager.MAIN_CONFIG);
-            if (config.has("teleportation")) {
-                JsonObject tp = config.getAsJsonObject("teleportation");
-                if (tp.has("warpSettings")) {
-                    JsonObject warpSettings = tp.getAsJsonObject("warpSettings");
-                    if (warpSettings.has("enableWarpSafety")) {
-                        requireSafe = warpSettings.get("enableWarpSafety").getAsBoolean();
-                    }
-                }
-            }
-        } catch (Exception e) {
-            LOGGER.warn("Failed to read warp safety config, defaulting to enabled: {}", e.getMessage());
-        }
-
-        if (requireSafe && !warp.isSafe()) {
-            TeleportLocation safeLocation = warp.findSafeLocation();
-            if (safeLocation == null) {
-                NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "teleportToWarp: warp '{}' is unsafe and no safe location found, teleport blocked", warpName);
-                player.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.warp.unsafe", warpName));
-                return;
-            }
-
-            // Update warp to safe location
-            String normalizedName = caseSensitiveNames ? warpName : warpName.toLowerCase();
-            warps.put(normalizedName, safeLocation);
-            saveWarps();
-            warp = safeLocation;
-
-            NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "teleportToWarp: warp '{}' moved to safe location {}", warpName, safeLocation.getLocationString());
-            player.sendSystemMessage(MessageUtil.warning("commands.neoessentials.teleport.warp.moved_to_safety", warpName));
-        }
-        
         // Save current location for /back command
         com.zerog.neoessentials.teleportation.Misc.MiscTeleportManager.getInstance().saveBackLocation(player);
 
@@ -881,6 +791,7 @@ public class WarpManager {
         }
 
         // Perform teleportation — safety already resolved above, so pass findSafe=false
+        // No safe-location fallback is permitted for server warps.
         TeleportLocation finalWarp = warp;
         TeleportUtil.teleportPlayer(player, finalWarp, delayTicks, false).thenAccept(result -> {
             if (result.isSuccess()) {
@@ -965,9 +876,6 @@ public class WarpManager {
                     if (config.has("teleportDelay")) {
                         teleportDelay = config.get("teleportDelay").getAsInt();
                     }
-                    if (config.has("requireSafeLocations")) {
-                        requireSafeLocations = config.get("requireSafeLocations").getAsBoolean();
-                    }
                     if (config.has("allowOverworldOnly")) {
                         allowOverworldOnly = config.get("allowOverworldOnly").getAsBoolean();
                     }
@@ -1014,7 +922,6 @@ public class WarpManager {
 
             JsonObject config = new JsonObject();
             config.addProperty("teleportDelay", teleportDelay);
-            config.addProperty("requireSafeLocations", requireSafeLocations);
             config.addProperty("allowOverworldOnly", allowOverworldOnly);
             config.addProperty("maxWarps", maxWarps);
             config.addProperty("caseSensitiveNames", caseSensitiveNames);
@@ -1028,9 +935,6 @@ public class WarpManager {
     // Configuration getters/setters
     public int getTeleportDelay() { return teleportDelay; }
     public void setTeleportDelay(int delay) { this.teleportDelay = Math.max(0, delay); }
-    
-    public boolean isRequireSafeLocations() { return requireSafeLocations; }
-    public void setRequireSafeLocations(boolean require) { this.requireSafeLocations = require; }
     
     public boolean isAllowOverworldOnly() { return allowOverworldOnly; }
     public void setAllowOverworldOnly(boolean allow) { this.allowOverworldOnly = allow; }

@@ -132,7 +132,6 @@ public class TeleportEndpoint implements HttpHandler {
             // warpSettings
             JsonObject warp = new JsonObject();
             int warpSetCooldown = 0, warpUseCooldown = 0, maxWarps = 50;
-            boolean warpSafety = true;
             if (config.has("teleportation")) {
                 JsonObject tp = config.getAsJsonObject("teleportation");
                 if (tp.has("warpSettings")) {
@@ -140,13 +139,11 @@ public class TeleportEndpoint implements HttpHandler {
                     if (ws.has("warpSetCooldown")) warpSetCooldown = ws.get("warpSetCooldown").getAsInt();
                     if (ws.has("warpCooldown")) warpUseCooldown = ws.get("warpCooldown").getAsInt();
                     if (ws.has("maxWarps")) maxWarps = ws.get("maxWarps").getAsInt();
-                    if (ws.has("enableWarpSafety")) warpSafety = ws.get("enableWarpSafety").getAsBoolean();
                 }
             }
             warp.addProperty("warpSetCooldown", warpSetCooldown);
             warp.addProperty("warpCooldown", warpUseCooldown);
             warp.addProperty("maxWarps", maxWarps);
-            warp.addProperty("enableWarpSafety", warpSafety);
             response.add("warpSettings", warp);
 
             // spawnSettings
@@ -256,7 +253,6 @@ public class TeleportEndpoint implements HttpHandler {
                 applyIntIfPresent(wsIn, ws, "warpSetCooldown", 0, 86400);
                 applyIntIfPresent(wsIn, ws, "warpCooldown", 0, 86400);
                 applyIntIfPresent(wsIn, ws, "maxWarps", 1, 10000);
-                applyBoolIfPresent(wsIn, ws, "enableWarpSafety");
             }
 
             // ── spawnSettings ────────────────────────────────────────────────

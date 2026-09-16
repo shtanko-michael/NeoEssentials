@@ -15,7 +15,7 @@
     },
     "setwarp": {
       "syntax": "/setwarp <name> [<pos>]",
-      "notes": "Без pos ставит варп в ногах. pos — BlockPosArgument (целые, ~ допустимы, чанк должен быть загружен). Те же литералы: createwarp, addwarp. Потолок серверных варпов — поле maxWarps=50 в записи DataStore коллекции warps, не ключ config.json. Игрок-only."
+      "notes": "Без pos ставит варп в ногах. pos — BlockPosArgument (целые, ~ допустимы, чанк должен быть загружен). Точка сохраняется и используется строго в этих координатах: проверка безопасности не ищет замену и не меняет варп. Те же литералы: createwarp, addwarp. Потолок серверных варпов — поле maxWarps=50 в записи DataStore коллекции warps, не ключ config.json. Игрок-only."
     },
     "delwarp": {
       "syntax": "/delwarp <name>",
@@ -228,8 +228,8 @@
     },
     {
       "title": "Проверка безопасности и принудительная загрузка чанков",
-      "body": "Home/warp/spawn перед сканом зовут `TeleportUtil.preloadChunksForTeleport` (сетка 3×3, FORCED). Флаги: `enableHomeTeleportSafety`, `enableWarpSafety`, `enableSpawnSafety`, у TPA — `teleportRequestSettings.enableTeleportSafety`, у /back — `enableBackSafety` (в поставке false: выгруженный чанк происхождения считался «лава»). Опасные блоки: лава, огонь, soul fire, магма, кактус, сладкие ягоды, wither rose, nether portal, костёр, powder snow. Нет опоры под ногами или потолок в голове — `findSafeLocation`; если пусто — телепорт отменяется, ключ не «чинят» молча, кроме home/warp: найденная безопасная точка **перезаписывает** сохранённые координаты и пишет moved_to_safety. RTP грузит только чанк посадки, не 3×3.",
-      "fix": "Выключить safety, если мир ломает ландшафт под варпом. После moved_to_safety проверьте /warpinfo — точка уже не та, что ставили /setwarp."
+      "body": "Home/spawn перед сканом зовут `TeleportUtil.preloadChunksForTeleport` (сетка 3×3, FORCED). Флаги: `enableHomeTeleportSafety`, `enableSpawnSafety`, у TPA — `teleportRequestSettings.enableTeleportSafety`, у /back — `enableBackSafety` (в поставке false: выгруженный чанк происхождения считался «лава»). Опасные блоки: лава, огонь, soul fire, магма, кактус, сладкие ягоды, wither rose, nether portal, костёр, powder snow. Нет опоры под ногами или потолок в голове — `findSafeLocation`; если пусто — телепорт отменяется. Серверные варпы — исключение в другую сторону: они всегда сохраняются и используются ровно в заданных координатах, без поиска безопасной замены и без изменения записи. RTP грузит только чанк посадки, не 3×3.",
+      "fix": "Для серверного варпа проверяйте площадку до `/setwarp`: после создания мод никогда не сдвигает эту точку. Проверить сохранённые координаты можно через `/warpinfo <имя>`."
     },
     {
       "title": "Офлайн /tpoffline читает ванильный NBT, не lastLocation мода",
