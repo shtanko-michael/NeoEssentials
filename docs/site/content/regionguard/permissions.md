@@ -17,6 +17,18 @@
 
 Обычному игроку нужны сразу два слоя: `regionguard.command` и нода нужной подкоманды. Для флага нужен третий слой — `regionguard.command.flag.<flag-id>`.
 
+Для флагов безопасности и сообщений используются следующие точные ноды:
+
+| Нода | Флаг |
+|---|---|
+| `regionguard.command.flag.mob-damage` | `mob-damage` |
+| `regionguard.command.flag.invincibility` | `invincibility` |
+| `regionguard.command.flag.passive-entity-damage` | `passive-entity-damage` |
+| `regionguard.command.flag.item-drop` | `item-drop` |
+| `regionguard.command.flag.potion-splash` | `potion-splash` |
+| `regionguard.command.flag.greeting` | `greeting` |
+| `regionguard.command.flag.farewell` | `farewell` |
+
 Пример минимального просмотра собственных регионов:
 
 ```text
@@ -70,4 +82,4 @@ regionguard.bypass.mob-entry
 
 ## OP и консоль
 
-OP уровня 2 и выше обходит командные проверки, ограничения владения и лимит регионов. Для PvP такой OP также обходит `pvp deny`. Консоль и командные блоки могут выполнять подходящие команды, но команды, которым нужен объект игрока или его выделение, требуют игрового контекста.
+OP уровня 2 и выше обходит командные проверки, ограничения владения и лимит регионов. Он также может войти в любой регион и обходит запреты на строительство, взаимодействия, контейнеры, урон пассивным существам, выбрасывание предметов и зелья. Для PvP такой OP также обходит `pvp deny`. Экологические правила и защитные эффекты зоны (`invincibility`, `fall-damage`, `mob-damage`, взрывы и т.п.) продолжают действовать. Консоль и командные блоки могут выполнять подходящие команды, но команды, которым нужен объект игрока или его выделение, требуют игрового контекста.
