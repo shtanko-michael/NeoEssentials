@@ -429,28 +429,13 @@ private final ScheduledExecutorService scheduler = Executors.newScheduledThreadP
 
         TeleportLocation targetLocation = new TeleportLocation(destination);
 
-        NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "executeTeleportRequest: teleporter={} destination={} type={} safetyCheck={}",
-            teleporter.getName().getString(), destination.getName().getString(), type, enableTeleportSafety);
+        NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "executeTeleportRequest: teleporter={} destination={} type={}",
+            teleporter.getName().getString(), destination.getName().getString(), type);
 
         // Enforce teleport safety if enabled — find a nearby safe spot rather than blocking entirely
-        if (enableTeleportSafety && !targetLocation.isSafe()) {
-            TeleportLocation safeLocation = targetLocation.findSafeLocation();
-            if (safeLocation == null) {
-                teleporter.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.request.unsafe_location", destination.getName().getString()));
-                destination.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.request.unsafe_location_other", teleporter.getName().getString()));
-                if (logTeleportRequests) {
-                    LOGGER.warn("Teleport request from {} to {} blocked: no safe location found near destination",
-                        teleporter.getName().getString(), destination.getName().getString());
-                }
-                return;
-            }
-            // Warn and continue with safe location
-            NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "executeTeleportRequest: destination location unsafe, moved to safe location {}",
-                safeLocation.getLocationString());
-            teleporter.sendSystemMessage(MessageUtil.warning("commands.neoessentials.teleport.request.moved_to_safety"));
-            targetLocation = safeLocation;
-        }
-        int delayTicks = teleportDelay * 20;
+        // TPA is deliberately immediate: the [Accept] action must give prompt feedback and
+        // not invite repeated clicks while a warm-up is running.
+        int delayTicks = TeleportUtil.INSTANT_TELEPORT;
         // findSafe=false: teleport to the destination player's exact position.
         // Using findSafe=true caused /tpa to nether-lava players to land on the nether roof
         // (scanColumnTopDown found Y=128 above bedrock), and /tpa to ocean-boat players to

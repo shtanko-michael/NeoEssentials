@@ -75,11 +75,11 @@
     },
     "tpa": {
       "syntax": "/tpa <player>",
-      "notes": "player — EntityArgument.player(), только онлайн. Себя отклоняет. Цель с выключенным tptoggle недоступна, если у отправителя нет neoessentials.teleport.tpo. У цели с tpauto запрос не создаётся — телепорт сразу. Одновременно одна исходящая заявка (sentRequests)."
+      "notes": "player — EntityArgument.player(), только онлайн. Себя отклоняет. Цель с выключенным tptoggle недоступна, если у отправителя нет neoessentials.teleport.tpo. У цели с tpauto запрос не создаётся — телепорт сразу. После /tpaccept запрос тоже переносит сразу, точно к текущей позиции цели: без warmup и без поиска соседней «безопасной» точки. Одновременно одна исходящая заявка (sentRequests)."
     },
     "tpahere": {
       "syntax": "/tpahere <player>",
-      "notes": "Та же схема, что /tpa, тип TPAHERE: при accept едет цель, не отправитель. Назад (/back) пишется тому, кого реально двигают."
+      "notes": "Та же мгновенная схема, что /tpa, тип TPAHERE: при accept едет цель, не отправитель, точно к текущей позиции отправителя. Назад (/back) пишется тому, кого реально двигают."
     },
     "tpaccept": {
       "syntax": "/tpaccept",
@@ -196,7 +196,7 @@
         "/tpaccept",
         "/tpo Steve"
       ],
-      "result": "После tptoggle off любой /tpa на этого игрока (кроме отправителя с neoessentials.teleport.tpo) получит tptoggle_off и заявки не будет. Включили приём — /tpa Steve шлёт кликабельный запрос на requestTimeout секунд (60). Steve пишет /tpaccept без ника. /tpo Steve не смотрит tptoggle и не создаёт заявку: это прямой teleportTo. Не путайте с /tpoffline: офлайн-ник /tpo из ServerAdminCommands не найдёт (player_not_found)."
+      "result": "После tptoggle off любой /tpa на этого игрока (кроме отправителя с neoessentials.teleport.tpo) получит tptoggle_off и заявки не будет. Включили приём — /tpa Steve шлёт кликабельный запрос на requestTimeout секунд (60). Steve нажимает [Принять] или пишет /tpaccept без ника: отправитель сразу оказывается в его текущей позиции, без warmup и без подмены точки ближайшим «безопасным» местом. /tpo Steve не смотрит tptoggle и не создаёт заявку: это прямой teleportTo. Не путайте с /tpoffline: офлайн-ник /tpo из ServerAdminCommands не найдёт (player_not_found)."
     },
     {
       "title": "Достать офлайн-игрока и случайная точка",
@@ -223,12 +223,12 @@
   "edgeCases": [
     {
       "title": "Warmup общий, кулдауны разные, отмена по движению и урону",
-      "body": "`generalSettings.teleportDelay` (3 с) читают home, warp, spawn, TPA и `/tpr`. `/back` берёт свой `backSettings.teleportDelay`. Кулдауны раздельные: `homeTeleportCooldown` / `homeSetCooldown` / `homeDeleteCooldown`, `warpCooldown` / `warpSetCooldown`, `spawnCooldown`, `randomTeleportSettings.cooldown`, `cooldownBetweenRequests`. Обход: `neoessentials.teleport.bypass.warmup` (или `.home` / `.warp`) и `…bypass.cooldown`. При `cancelOnMovement` порог 1.5 блока. `cancelOnDamage` по умолчанию false; если включить, второй warmup поверх первого отвергается (`already_in_progress`) — у обработчика урона один pending на игрока. `/tp`, `/tphere`, `/tpall`, `/tpo`, `/tpohere` идут через `player.teleportTo` и этот warmup не видят.",
+      "body": "`generalSettings.teleportDelay` (3 с) читают home, warp, spawn и `/tpr`. `/tpa` и `/tpahere` после принятия мгновенные. `/back` берёт свой `backSettings.teleportDelay`. Кулдауны раздельные: `homeTeleportCooldown` / `homeSetCooldown` / `homeDeleteCooldown`, `warpCooldown` / `warpSetCooldown`, `spawnCooldown`, `randomTeleportSettings.cooldown`, `cooldownBetweenRequests`. Обход: `neoessentials.teleport.bypass.warmup` (или `.home` / `.warp`) и `…bypass.cooldown`. При `cancelOnMovement` порог 1.5 блока. `cancelOnDamage` по умолчанию false; если включить, второй warmup поверх первого отвергается (`already_in_progress`) — у обработчика урона один pending на игрока. `/tp`, `/tphere`, `/tpall`, `/tpo`, `/tpohere` идут через `player.teleportTo` и этот warmup не видят.",
       "fix": "Для «мгновенного /home» выдайте bypass.warmup, не обнуляйте teleportDelay всем. Бой закрывает только путь через TeleportUtil при `allowTeleportInCombat: false` (5 с CombatTracker) — админский /tp из боя всё равно унесёт."
     },
     {
       "title": "Проверка безопасности и принудительная загрузка чанков",
-      "body": "Home/spawn перед сканом зовут `TeleportUtil.preloadChunksForTeleport` (сетка 3×3, FORCED). Флаги: `enableHomeTeleportSafety`, `enableSpawnSafety`, у TPA — `teleportRequestSettings.enableTeleportSafety`, у /back — `enableBackSafety` (в поставке false: выгруженный чанк происхождения считался «лава»). Опасные блоки: лава, огонь, soul fire, магма, кактус, сладкие ягоды, wither rose, nether portal, костёр, powder snow. Нет опоры под ногами или потолок в голове — `findSafeLocation`; если пусто — телепорт отменяется. Серверные варпы — исключение в другую сторону: они всегда сохраняются и используются ровно в заданных координатах, без поиска безопасной замены и без изменения записи. RTP грузит только чанк посадки, не 3×3.",
+      "body": "Home/spawn перед сканом зовут `TeleportUtil.preloadChunksForTeleport` (сетка 3×3, FORCED). Флаги: `enableHomeTeleportSafety`, `enableSpawnSafety`, у /back — `enableBackSafety` (в поставке false: выгруженный чанк происхождения считался «лава»). `/tpa` и `/tpahere` не сканируют блоки у живого игрока-цели: принятый запрос переносит точно в его текущую позицию. Опасные блоки для остальных безопасных телепортов: лава, огонь, soul fire, магма, кактус, сладкие ягоды, wither rose, nether portal, костёр, powder snow. Нет опоры под ногами или потолок в голове — `findSafeLocation`; если пусто — телепорт отменяется. Серверные варпы — исключение в другую сторону: они всегда сохраняются и используются ровно в заданных координатах, без поиска безопасной замены и без изменения записи. RTP грузит только чанк посадки, не 3×3.",
       "fix": "Для серверного варпа проверяйте площадку до `/setwarp`: после создания мод никогда не сдвигает эту точку. Проверить сохранённые координаты можно через `/warpinfo <имя>`."
     },
     {
