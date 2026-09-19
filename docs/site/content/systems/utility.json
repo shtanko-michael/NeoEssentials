@@ -473,10 +473,6 @@
       "syntax": "/nuke [target]",
       "notes": "Не удаление сущностей. Без цели — все онлайн; с целью — один ник. Над каждым 5×5 сетка PrimedTnt (шаг 5, −10..10) на maxBuildHeight, fuse 80 тиков. Право neoessentials.nuke. Консоль без цели бомбит всех."
     },
-    "me": {
-      "syntax": "/me <action>",
-      "notes": "Аргумент MessageArgument.message() — слияние с ванильным /me (StringArgumentType ломал разбор). Префикс §5* §d<имя> §f. Консоль шлёт от имени «Console»."
-    },
     "firework": {
       "syntax": "/firework clear | /firework power <level> | /firework fire [amount] | /firework color <options>",
       "notes": "Корневого .executes нет — голый /firework не выполняется. Нужна ракета в основной руке. power Integer 0–127; fire 1–50 и отдельное neoessentials.firework.fire; color — greedyString: hex[,hex] и опционально fade:/shape (star, large, creeper, burst) / trail|twinkle|flicker. Только игрок."

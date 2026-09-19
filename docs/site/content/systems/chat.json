@@ -6,6 +6,7 @@
     "helpop",
     "ignore",
     "mail",
+    "me",
     "message",
     "msg",
     "msgtoggle",
@@ -22,7 +23,11 @@
   "commandDetails": {
     "msg": {
       "syntax": "/msg <target> <message>",
-      "notes": "Brigadier регистрирует то же дерево ещё как /tell, /w, /message и /pm (последнего нет в реестре команд мода). <target> — EntityArgument.player(), только онлайн. Корень закрыт neoessentials.chat.msg (консоль проходит). Себе писать нельзя. Если цель игнорирует отправителя — отказ, SocialSpy не срабатывает. Если у цели включён /msgtoggle — отказ, кроме OP 4 и neoessentials.chat.msgtoggle.bypass. Заглушённый отправитель тоже режется. LastMessageManager записывает пару только у получателя. Форматы: chat.messaging.msgFormatTo / msgFormatFrom, иначе lang."
+      "notes": "Brigadier регистрирует то же дерево ещё как /tell, /w, /message, /me и /pm (последнего нет в реестре команд мода). <target> — EntityArgument.player(), только онлайн. Корень закрыт neoessentials.chat.msg (консоль проходит). Себе писать нельзя. Если цель игнорирует отправителя — отказ, SocialSpy не срабатывает. Если у цели включён /msgtoggle — отказ, кроме OP 4 и neoessentials.chat.msgtoggle.bypass. Заглушённый отправитель тоже режется. LastMessageManager записывает пару только у получателя. Форматы: chat.messaging.msgFormatTo / msgFormatFrom, иначе lang."
+    },
+    "me": {
+      "syntax": "/me <target> <message>",
+      "notes": "Алиас /msg: отправляет личное сообщение, а не действие в общий чат. Использует те же проверки права neoessentials.chat.msg, mute, ignore и /msgtoggle."
     },
     "message": {
       "syntax": "/message <target> <message>",

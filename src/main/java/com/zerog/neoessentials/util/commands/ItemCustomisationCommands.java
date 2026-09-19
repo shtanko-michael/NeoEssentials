@@ -9,7 +9,6 @@ import com.zerog.neoessentials.util.MessageUtil;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
-import net.minecraft.commands.arguments.MessageArgument;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -38,7 +37,6 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Item customisation & miscellaneous commands ported from EssentialsX:
  *
- *  /me <action>                     — broadcast action message
  *  /tptoggle [on|off]               — toggle teleport request acceptance
  *  /gc                              — show server memory/TPS/uptime info
  *  /lightning [player]              — strike lightning at target or self (alias: /smite)
@@ -56,7 +54,6 @@ public class ItemCustomisationCommands {
     private static final Map<UUID, Boolean> tpToggleState = new ConcurrentHashMap<>();
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        registerMe(dispatcher);
         registerTpToggle(dispatcher);
         registerGc(dispatcher);
         registerLightning(dispatcher);
@@ -66,36 +63,6 @@ public class ItemCustomisationCommands {
         registerRemove(dispatcher);
         registerLoom(dispatcher);
         registerCartography(dispatcher);
-    }
-
-    // ── /me <action> ──────────────────────────────────────────────────────────
-    private static void registerMe(CommandDispatcher<CommandSourceStack> d) {
-        d.register(Commands.literal("me")
-            .requires(src -> {
-                var p = src.getPlayer();
-                return p == null || PermissionAPI.hasPermission(p.getUUID(), "neoessentials.me");
-            })
-            // Vanilla already registers its own built-in "/me <action>" using
-            // MessageArgumentType for the "action" argument. Brigadier's addChild() merges
-            // same-named argument nodes by keeping the FIRST-registered node's type and just
-            // swapping in whichever .executes() was registered last — so regardless of what
-            // type this registration declares, the argument is retrieved at runtime as
-            // whatever vanilla's node actually is. Using StringArgumentType here (as this used
-            // to) threw "Argument 'action' is defined as Message, not String" for exactly that
-            // reason. Matching vanilla's own MessageArgument.message() avoids the mismatch.
-            .then(Commands.argument("action", MessageArgument.message())
-                .executes(ctx -> {
-                    var src = ctx.getSource();
-                    String action = MessageArgument.getMessage(ctx, "action").getString();
-                    String name = src.getPlayer() != null
-                        ? src.getPlayer().getName().getString() : "Console";
-                    Component msg = MessageUtil.coloredText("§5* §d" + name + " §f" + action);
-                    src.getServer().getPlayerList().getPlayers().forEach(p -> p.sendSystemMessage(msg));
-                    src.getServer().sendSystemMessage(msg);
-                    return 1;
-                })
-            )
-        );
     }
 
     // ── /tptoggle [on|off] [player] ───────────────────────────────────────────

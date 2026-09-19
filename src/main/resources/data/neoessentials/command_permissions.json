@@ -1403,18 +1403,6 @@
       "description_ru": "Управление почтовыми сообщениями",
       "description_en": "Manage mail messages"
     },
-    "me": {
-      "permission": "neoessentials.me",
-      "aliases": [],
-      "op_level": null,
-      "sub_permissions": {},
-      "extra_permissions": {},
-      "file": "util/commands/ItemCustomisationCommands.java",
-      "category": "items",
-      "notes": "",
-      "description_ru": "Отправить сообщение о действии всем",
-      "description_en": "Broadcast an action message"
-    },
     "more": {
       "permission": "neoessentials.more",
       "aliases": [],
@@ -1450,6 +1438,7 @@
         "tell",
         "w",
         "message",
+        "me",
         "pm"
       ],
       "op_level": null,
@@ -3291,9 +3280,6 @@
     ],
     "neoessentials.mail.sendtempall": [
       "mail (sendtempall)"
-    ],
-    "neoessentials.me": [
-      "me"
     ],
     "neoessentials.moderation.ban": [
       "ban"

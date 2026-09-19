@@ -5,6 +5,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
+import net.minecraft.commands.arguments.MessageArgument;
 import net.minecraft.server.level.ServerPlayer;
 import com.zerog.neoessentials.api.ChatAPI;
 import com.zerog.neoessentials.chat.ChatManager;
@@ -34,10 +35,32 @@ public class MsgCommand {
         registerCommand(dispatcher, "tell");
         registerCommand(dispatcher, "w");
         
-        // Also register with test names to see if custom commands work at all
-        NeoLog.debug(LOGGER, LogCategory.CHAT, "MsgCommand - Also registering test commands: /message, /pm");
+        NeoLog.debug(LOGGER, LogCategory.CHAT, "MsgCommand - Also registering aliases: /message, /me, /pm");
         registerCommand(dispatcher, "message");
+        registerMeCommand(dispatcher);
         registerCommand(dispatcher, "pm");
+    }
+
+    /**
+     * Replaces vanilla's global action command with the private-message alias.
+     *
+     * Vanilla already owns {@code /me <action>}. Brigadier merges same-named
+     * argument nodes, so this deliberately uses its {@link MessageArgument}
+     * instead of adding a separate {@code <target> <message>} branch. The
+     * replacement executor forwards the complete argument to {@code /msg},
+     * retaining all of that command's permission and delivery safeguards.
+     */
+    private static void registerMeCommand(CommandDispatcher<CommandSourceStack> dispatcher) {
+        dispatcher.register(Commands.literal("me")
+            .then(Commands.argument("action", MessageArgument.message())
+                .executes(ctx -> {
+                    String privateMessage = MessageArgument.getMessage(ctx, "action").getString();
+                    ctx.getSource().getServer().getCommands()
+                        .performPrefixedCommand(ctx.getSource(), "msg " + privateMessage);
+                    return 1;
+                })
+            )
+        );
     }
     
     private static void registerCommand(CommandDispatcher<CommandSourceStack> dispatcher, String commandName) {

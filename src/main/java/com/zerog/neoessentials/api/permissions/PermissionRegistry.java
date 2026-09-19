@@ -332,7 +332,6 @@ public class PermissionRegistry {
         register("neoessentials.unlimited.others", "Toggle unlimited items for another player", PermissionCategory.ADMIN, false);
         register("neoessentials.condense", "Condense items to storage blocks", PermissionCategory.PLAYER, false);
         // Item customisation & misc
-        register("neoessentials.me", "Broadcast action messages (/me)", PermissionCategory.CHAT, true);
         register("neoessentials.tptoggle", "Toggle teleport request acceptance", PermissionCategory.TELEPORT, true);
         register("neoessentials.tptoggle.others", "Toggle tptoggle for another player", PermissionCategory.TELEPORT, false);
         register("neoessentials.gc", "View server memory and TPS info", PermissionCategory.ADMIN, false);

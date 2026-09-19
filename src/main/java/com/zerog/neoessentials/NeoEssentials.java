@@ -879,6 +879,7 @@ public class NeoEssentials {
         // ========== CHAT/MESSAGING COMMANDS ==========
         registry.registerCommandWithPermission("msg", "Send a private message", "neoessentials.chat.msg");
         registry.registerCommandWithPermission("message", "Send a private message (alias)", "neoessentials.chat.msg");
+        registry.registerCommandWithPermission("me", "Send a private message (alias)", "neoessentials.chat.msg");
         registry.registerCommandWithPermission("tell", "Send a private message (alias)", "neoessentials.chat.msg");
         registry.registerCommandWithPermission("whisper", "Send a private message (alias)", "neoessentials.chat.msg");
         registry.registerCommandWithPermission("w", "Send a private message (alias)", "neoessentials.chat.msg");
@@ -1097,7 +1098,6 @@ public class NeoEssentials {
         com.zerog.neoessentials.util.commands.UtilityCommands.register(dispatcher);
 
         // ========== ITEM CUSTOMISATION & MISC COMMANDS ==========
-        registry.registerCommand("me", "Broadcast an action message");
         registry.registerCommand("tptoggle", "Toggle teleport request acceptance");
         registry.registerCommand("gc", "Show server memory and TPS info");
         registry.registerCommandWithPermission("mem", "Show server memory info (alias)", "neoessentials.gc");
