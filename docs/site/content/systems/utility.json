@@ -107,7 +107,7 @@
   "commandDetails": {
     "bb": {
       "syntax": "/bb <player>",
-      "notes": "Команда RegionGuard, а не NeoEssentials. Нужна базовая нода regionguard.command, а также статус owner или member обычного региона (не __global__) под игроком. Указанный игрок должен быть онлайн; owner/member этого же региона остаётся на месте, гость телепортируется на настроенный spawn NeoEssentials (если он установлен) либо на ванильный spawn и получает сообщение о возврате."
+      "notes": "Команда RegionGuard, а не NeoEssentials. Нужна базовая нода regionguard.command, а также статус owner или member обычного региона (не __global__) под игроком. Указанный игрок должен быть онлайн и находиться в том же регионе; owner/member этого же региона остаётся на месте, гость немедленно телепортируется на настроенный spawn NeoEssentials (если он установлен) либо на ванильный spawn и получает сообщение о возврате. Warmup и сообщения обычной /spawn не вызываются."
     },
     "help": {
       "syntax": "/help | /help <page_or_command> | /help <command> <page>",
