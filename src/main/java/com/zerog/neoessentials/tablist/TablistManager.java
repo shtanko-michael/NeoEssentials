@@ -5,6 +5,7 @@ import com.google.gson.JsonObject;
 import com.zerog.neoessentials.api.permissions.PermissionAPI;
 import com.zerog.neoessentials.chat.RichTextFormatter;
 import com.zerog.neoessentials.config.ConfigManager;
+import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundTabListPacket;
 import net.minecraft.server.MinecraftServer;
@@ -91,6 +92,20 @@ public class TablistManager {
     private String afkSuffix = " &7[AFK]";
     /** Per-group colour overrides loaded from tablist.json groupColors section. */
     private final Map<String, String> groupColors = new LinkedHashMap<>();
+    /**
+     * Permission-system meta key holding the colour ONE player's own name is drawn in, or empty to
+     * switch the feature off.
+     *
+     * <p>A player's name cannot be coloured by {@link #playerFormat}: vanilla renders a tab row and a
+     * nametag as {@code teamPrefix + <the name> + teamSuffix}, and the name is a bare component that
+     * takes no style from the prefix sitting beside it. The only per-player colour vanilla offers
+     * there is the TEAM's, which is why the value read from this key must be one of the sixteen
+     * {@link ChatFormatting} colours and never a hex.</p>
+     *
+     * <p>Reading it from meta rather than deriving it from the prefix is the whole point: derived
+     * from the prefix, every name simply continued whatever colour the prefix ended on.</p>
+     */
+    private String nameColorMeta = "farmstead-namecolor";
 
     // Per-group header/footer frame overrides (group name → frame list)
     private final Map<String, List<String>> groupHeaderFrames = new LinkedHashMap<>();
@@ -132,6 +147,7 @@ public class TablistManager {
     private final Map<UUID, String> lastTeamName   = new ConcurrentHashMap<>();
     private final Map<UUID, String> lastTeamPrefix = new ConcurrentHashMap<>();
     private final Map<UUID, String> lastTeamSuffix = new ConcurrentHashMap<>();
+    private final Map<UUID, ChatFormatting> lastTeamColor = new ConcurrentHashMap<>();
     // Same dirty-check idea, for the nickname tab-list display-name override — see
     // updateNicknameOverridePacket()'s javadoc for why this exists at all.
     private final Map<UUID, String> lastNicknameOverride = new ConcurrentHashMap<>();
@@ -181,6 +197,9 @@ public class TablistManager {
             showAfkIndicator     = !tab.has("showAfkIndicator")   || tab.get("showAfkIndicator").getAsBoolean();
             afkSuffix            = tab.has("afkSuffix")           ? tab.get("afkSuffix").getAsString() : " &7[AFK]";
             playerFormat         = tab.has("playerFormat")        ? tab.get("playerFormat").getAsString() : playerFormat;
+            // Meta key for the per-player name colour; "" switches it off and leaves every team on
+            // the vanilla default.
+            nameColorMeta        = tab.has("nameColorMeta")        ? tab.get("nameColorMeta").getAsString() : nameColorMeta;
             parsePlayerFormat();
 
             // Nametag (above-head) master toggle
@@ -424,6 +443,7 @@ public class TablistManager {
         try {
             String prefix = getPermissionPrefix(player, server);
             String suffix = getPermissionSuffix(player, server);
+            ChatFormatting nameColor = resolveNameColor(player);
 
             // Append AFK suffix to the team suffix when AFK
             String effectiveSuffix = suffix;
@@ -437,7 +457,7 @@ public class TablistManager {
             // dirty-check's inputs, so this must run unconditionally every call, not just when
             // that check finds something to do. See updateNicknameOverridePacket()'s javadoc
             // for why this even needs to exist.
-            updateNicknameOverridePacket(player, server, prefix, effectiveSuffix);
+            updateNicknameOverridePacket(player, server, prefix, effectiveSuffix, nameColor);
 
             // BTLP-style: encode group weight (or, with groupSections on, the exact column-grid
             // slot) into the team name for client-side sort order.
@@ -460,7 +480,12 @@ public class TablistManager {
             if (columnKey != null) {
                 rawTeamName = columnKey;
             } else {
-                int contentTag = Objects.hash(prefix, effectiveSuffix) & 0xFFFFFF;
+                // The colour is part of what makes two rows DIFFERENT, so it belongs in the hash
+                // beside the prefix and suffix. A team colour, like a team prefix, is one value
+                // shared by every member: leave it out and two players with the same prefix but
+                // different name colours land on one team, and whichever updates last repaints the
+                // other one.
+                int contentTag = Objects.hash(prefix, effectiveSuffix, nameColor) & 0xFFFFFF;
                 if (TablistLayout.getInstance().isSortByGroupWeight()) {
                     int weight = getGroupWeight(player);
                     int sortKey = 9999 - Math.min(weight, 9999);
@@ -480,12 +505,14 @@ public class TablistManager {
             String cachedTeam   = lastTeamName.get(uuid);
             String cachedPrefix = lastTeamPrefix.get(uuid);
             String cachedSuffix = lastTeamSuffix.get(uuid);
+            ChatFormatting cachedColor = lastTeamColor.get(uuid);
 
             boolean teamChanged   = !teamName.equals(cachedTeam);
             boolean prefixChanged = !prefix.equals(cachedPrefix);
             boolean suffixChanged = !effectiveSuffix.equals(cachedSuffix);
+            boolean colorChanged  = !Objects.equals(nameColor, cachedColor);
 
-            if (!teamChanged && !prefixChanged && !suffixChanged) {
+            if (!teamChanged && !prefixChanged && !suffixChanged && !colorChanged) {
                 return; // Nothing to update — no packet needed
             }
 
@@ -493,6 +520,11 @@ public class TablistManager {
             lastTeamName.put(uuid, teamName);
             lastTeamPrefix.put(uuid, prefix);
             lastTeamSuffix.put(uuid, effectiveSuffix);
+            if (nameColor == null) {
+                lastTeamColor.remove(uuid);
+            } else {
+                lastTeamColor.put(uuid, nameColor);
+            }
 
             ServerScoreboard scoreboard = server.getScoreboard();
 
@@ -515,6 +547,15 @@ public class TablistManager {
             }
             if (suffixChanged || teamChanged) {
                 team.setPlayerSuffix(RichTextFormatter.processTablistText(formatBetweenPlayerSuffix + effectiveSuffix + formatTrail));
+            }
+
+            // The one place a player's own NAME can be coloured. Vanilla renders both the tab row and
+            // the nametag as teamPrefix + <bare name component> + teamSuffix, and a bare component
+            // takes no style from the sibling beside it — so no playerFormat can reach the name, and
+            // the team colour is what does. RESET restores the vanilla default for a player with no
+            // colour, which is also what makes taking the colour away take it away.
+            if (colorChanged || teamChanged) {
+                team.setColor(nameColor == null ? ChatFormatting.RESET : nameColor);
             }
 
             // Only re-add to team when the team itself changed (avoid redundant add packets)
@@ -554,7 +595,7 @@ public class TablistManager {
      * change, AFK toggle, or config reload can change the prefix/suffix without anyone
      * re-running {@code /nick}.
      */
-    private void updateNicknameOverridePacket(ServerPlayer player, MinecraftServer server, String prefix, String effectiveSuffix) {
+    private void updateNicknameOverridePacket(ServerPlayer player, MinecraftServer server, String prefix, String effectiveSuffix, ChatFormatting nameColor) {
         UUID uuid = player.getUUID();
         String nickname = com.zerog.neoessentials.util.commands.NickCommand.getNickname(uuid);
         if (nickname == null || nickname.isEmpty()) {
@@ -565,7 +606,12 @@ public class TablistManager {
             return;
         }
 
-        String raw = formatLead + prefix + formatBetweenPrefixPlayer + nickname + formatBetweenPlayerSuffix + effectiveSuffix + formatTrail;
+        // The colour code goes INTO the text here, unlike the team path above: a display-name
+        // override is used by the client verbatim, with no team involved at all, so the team colour
+        // this player was just given would never reach a nicknamed row.
+        String raw = formatLead + prefix + formatBetweenPrefixPlayer
+                + colorCodeOf(nameColor) + nickname
+                + formatBetweenPlayerSuffix + effectiveSuffix + formatTrail;
         if (raw.equals(lastNicknameOverride.get(uuid))) return; // unchanged — no packet needed
         lastNicknameOverride.put(uuid, raw);
 
@@ -585,7 +631,45 @@ public class TablistManager {
         String prefix = getPermissionPrefix(player, server);
         String suffix = getPermissionSuffix(player, server);
         if (showAfkIndicator && isAfk(player)) suffix = suffix + afkSuffix;
-        return formatLead + prefix + formatBetweenPrefixPlayer + nickname + formatBetweenPlayerSuffix + suffix + formatTrail;
+        return formatLead + prefix + formatBetweenPrefixPlayer
+                + colorCodeOf(resolveNameColor(player)) + nickname
+                + formatBetweenPlayerSuffix + suffix + formatTrail;
+    }
+
+    /** Section sign, spelled out so this file needs no non-ASCII literal. */
+    private static final char SECTION_SIGN = '\u00A7';
+
+    /**
+     * The colour this player's own name is drawn in, or null when they have none.
+     *
+     * <p>Only the sixteen vanilla colours can come back, because the value ends up as a scoreboard
+     * team colour and a team takes nothing else. A stored value that is not one of them is treated
+     * as "none" rather than guessed at.</p>
+     */
+    private ChatFormatting resolveNameColor(ServerPlayer player) {
+        if (nameColorMeta == null || nameColorMeta.isBlank()) return null;
+        try {
+            String raw = PermissionAPI.getMetaString(player.getUUID(), nameColorMeta);
+            if (raw == null) return null;
+            String trimmed = raw.trim();
+            // Tolerated because operators also set this by hand with /lp: "&b", the section-sign form
+            // and a bare "b" all mean the same colour, and only the last is what Farmstead writes.
+            if (trimmed.length() == 2 && (trimmed.charAt(0) == '&' || trimmed.charAt(0) == SECTION_SIGN)) {
+                trimmed = trimmed.substring(1);
+            }
+            if (trimmed.length() != 1) return null;
+            ChatFormatting formatting = ChatFormatting.getByCode(Character.toLowerCase(trimmed.charAt(0)));
+            return formatting != null && formatting.isColor() ? formatting : null;
+        } catch (Throwable e) {
+            NeoLog.debug(LOGGER, LogCategory.GENERAL, "Failed to read name colour meta '{}' for {}: {}",
+                    nameColorMeta, player.getName().getString(), e.getMessage());
+            return null;
+        }
+    }
+
+    /** {@code &x} for a colour, or "" for none — for the text paths that carry their own codes. */
+    private static String colorCodeOf(ChatFormatting color) {
+        return color == null ? "" : "&" + color.getChar();
     }
 
     // ── Build header/footer (returns raw text for processTablistText) ─────────

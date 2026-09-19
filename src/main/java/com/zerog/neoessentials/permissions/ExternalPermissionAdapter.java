@@ -42,6 +42,22 @@ public interface ExternalPermissionAdapter {
     }
 
     /**
+     * Read a string meta/option value for the user (e.g. LuckPerms meta, set via
+     * {@code /lp user <name> meta set <key> <value>}).
+     *
+     * <p>Separate from {@link #getMetaInt} rather than a parse on top of it: the values this reads
+     * are not numbers at all — Farmstead writes a colour code here — and an adapter that can only
+     * produce integers must be able to say so by leaving this at its default.</p>
+     *
+     * @param uuid The UUID of the user.
+     * @param key The meta key (e.g. "farmstead-namecolor").
+     * @return The value, or null if the backend has no meta concept or the key is not set.
+     */
+    default String getMetaString(UUID uuid, String key) {
+        return null;
+    }
+
+    /**
      * Reload the external permission data (if supported).
      */
     void reload();

@@ -1632,7 +1632,9 @@ public class ConfigManager {
                                        // v10 — removed permissionMappings_common_examples, a dead
                                        //       stub self-labeled "not loaded by the mod"
                                        // v9  — removed OAuth2 (no direct Discord API calls); dashboard login now sources identity from a Discord companion mod (SDLink/Mc2Discord)
-        put(TABLIST_CONFIG, 5);        // v5  — migrated to // comment style
+        put(TABLIST_CONFIG, 6);        // v6  — added tablist.nameColorMeta (per-player name colour,
+                                       //        applied as the scoreboard team colour)
+                                       // v5  — migrated to // comment style
         put(ANIMATIONS_CONFIG, 2);     // v2  — migrated to // comment style
         put(SCOREBOARD_CONFIG, 1);     // v1  — initial sidebar scoreboard config
         put(LEADERBOARD_CONFIG, 3);    // v3  — add entryFormat/headerFormat/icon board styling fields

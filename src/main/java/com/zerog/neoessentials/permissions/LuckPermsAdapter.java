@@ -274,6 +274,24 @@ public class LuckPermsAdapter implements ExternalPermissionAdapter {
     }
 
     @Override
+    public String getMetaString(UUID uuid, String key) {
+        if (!luckPermsLoaded || luckPermsApi == null) {
+            return null;
+        }
+        try {
+            User user = getUserOrLoad(uuid);
+            if (user == null) {
+                return null;
+            }
+            QueryOptions queryOptions = QueryOptions.defaultContextualOptions();
+            return user.getCachedData().getMetaData(queryOptions).getMetaValue(key);
+        } catch (Exception e) {
+            LOGGER.error("Error reading meta '{}' for user {}: {}", key, uuid, e.getMessage(), e);
+            return null;
+        }
+    }
+
+    @Override
     public String getPrefix(UUID uuid) {
         NeoLog.debug(LOGGER, LogCategory.PERMISSIONS,"=== LUCKPERMS PREFIX REQUEST ===");
         NeoLog.debug(LOGGER, LogCategory.PERMISSIONS,"UUID: {}", uuid);

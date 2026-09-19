@@ -1,6 +1,6 @@
 {
   // DO NOT MODIFY: Used by NeoEssentials for automatic config updates.
-  "_configVersion": 5,
+  "_configVersion": 6,
 
   /* ================================================================
      NeoEssentials — Tablist Configuration  (tablist.json)
@@ -60,8 +60,21 @@
     /* How each player's name appears in the player-list rows (scoreboard teams).
      * Supports: {prefix} {player} {suffix} {displayname} {group}
      * Plus all color/format syntax above.
+     *
+     * NOTE: a color code placed in front of {player} does NOT color the name. Vanilla renders a row
+     * as teamPrefix + <the bare name> + teamSuffix, and the name takes no style from the prefix
+     * beside it — only the team's own color reaches it. See nameColorMeta below.
      */
     "playerFormat": "&f{prefix}&r{player}{suffix}",
+
+    /* Permission-system meta key holding the color ONE player's name is drawn in — the per-player
+     * name color playerFormat cannot express. Applied as the scoreboard team's color, so it reaches
+     * both the tab-list row and the nametag above the head, and must therefore be one of the sixteen
+     * vanilla colors: a single code, with or without the & ("b", "&b").
+     *   /lp user <name> meta set farmstead-namecolor b
+     * Empty string disables it and leaves every team on the vanilla default.
+     */
+    "nameColorMeta": "farmstead-namecolor",
 
     // Hide vanished players from other players' tablists and {online} count.
     // Staff with 'neoessentials.vanish.see' always see them.

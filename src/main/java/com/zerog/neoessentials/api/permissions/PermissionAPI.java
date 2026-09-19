@@ -317,6 +317,23 @@ public class PermissionAPI {
     }
 
     /**
+     * Read a string meta value for the player from the external permission system
+     * (e.g. LuckPerms: {@code /lp user <name> meta set <key> <value>}).
+     *
+     * @return The value, or null when no external adapter is configured, the adapter has no meta
+     *         support, or the key is not set.
+     */
+    public static String getMetaString(UUID uuid, String key) {
+        if (uuid == null || key == null || key.trim().isEmpty()) {
+            return null;
+        }
+        if (externalAdapter != null) {
+            return externalAdapter.getMetaString(uuid, key);
+        }
+        return null;
+    }
+
+    /**
      * Registry-default fallback — <em>without</em> calling back into the external adapter.
      *
      * <p>Used by both:

@@ -1,5 +1,7 @@
 {
-  "commands": ["tablist"],
+  "commands": [
+    "tablist"
+  ],
   "commandDetails": {
     "tablist": {
       "syntax": "/tablist [reload | enable | disable | preview | info | animations list | independent [on|off] | layout [info|sort] | set <header|footer> <text> | player <target> <header|footer> <text> | player <target> nametag <prefix|suffix> <text> | player <target> reset | group <group> <header|footer> <text> | group <group> nametag <prefix|suffix> <text> | group <group> reset | proxy status | proxy setserver <server> <count> | fakeplayer <list|refresh> | fakeplayer add <id> <display> | fakeplayer remove <id>]",
@@ -111,6 +113,11 @@
       "title": "Права и доступ к команде",
       "body": "Единственный узел системы — `neoessentials.tablist.admin`; он закрывает корень `/tablist`, поэтому у игрока без него команда даже не появляется в дереве. Консоль (источник без игрока) проходит проверку всегда. Плюс работают общие механизмы прав: байпас для операторов при `opsBypassPermissions` и ванильный OP-fallback. Отдельно от прав команду можно полностью отключить: `modules.tablistEnabled: false` в `config.json` — тогда `/tablist` не регистрируется вовсе, а тик таблиста не идёт.",
       "fix": "Если `/tablist` «не существует» даже у оператора — проверьте `modules.tablistEnabled` и `commands.tablist` в `config.json`, а не права."
+    },
+    {
+      "title": "Цвет ника в табе и над головой задаётся только цветом команды",
+      "body": "Ванильный клиент рисует строку таба и ник над головой как `префикс команды + <голое имя> + суффикс команды`, и имя — это компонент без собственного стиля. Соседний префикс ему стиль не передаёт, поэтому цветовой код перед `{player}` в `playerFormat` на сам ник не влияет никак: он попадает в конец префикса команды и раскрашивает пустоту. Единственное, что до имени доходит, — **цвет самой команды**, а он может быть только одним из шестнадцати ванильных, без hex.",
+      "fix": "Персональный цвет ника задаётся ключом меты из `tablist.nameColorMeta` (по умолчанию `farmstead-namecolor`): `/lp user <ник> meta set farmstead-namecolor b`. Значение — один ванильный код, с `&` или без; таблист превращает его в цвет команды, поэтому он виден и в табе, и над головой. Пустая строка в `nameColorMeta` выключает механику целиком. Игроки с одинаковым префиксом, но разным цветом ника попадают в разные команды — цвет входит в хэш имени команды, иначе один затирал бы ник другого."
     }
   ],
   "knownIssues": [
