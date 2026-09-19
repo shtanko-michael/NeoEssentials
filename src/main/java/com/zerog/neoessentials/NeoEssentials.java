@@ -1223,6 +1223,7 @@ public class NeoEssentials {
     }
 
     private static void registerRegionGuardHelpCommands(CommandRegistry registry) {
+        registry.registerCommandWithPermission("bb <player>", "Return a non-member of your current region to spawn", "regionguard.command");
         registry.registerCommand("rg define <id>", "Create a region from your current selection");
         registry.registerCommand("rg claim <id>", "Create a region from your current selection");
         registry.registerCommand("rg redefine <id>", "Redefine a region using your current selection");

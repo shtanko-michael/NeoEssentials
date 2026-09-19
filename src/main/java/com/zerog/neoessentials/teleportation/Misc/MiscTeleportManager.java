@@ -12,7 +12,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
-import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -218,9 +217,8 @@ public class MiscTeleportManager {
         deathLocationTimestamps.put(playerId, System.currentTimeMillis());
         persistLocations(playerId);
 
-        // Do NOT send a chat message here — LivingDeathEvent fires while the player is
-        // transitioning to the death screen, so they cannot read it.  The "use /back to
-        // return to death location" hint is sent on respawn instead (see onPlayerRespawn).
+        // Saving a death point is deliberately silent. A player who has /back can use it;
+        // players without that permission should not receive an unusable command hint.
         NeoLog.info(LOGGER, LogCategory.TELEPORTATION, "Saved death location for {}: {}", 
                    player.getName().getString(), deathLocation);
     }
@@ -457,8 +455,6 @@ public class MiscTeleportManager {
     
     /**
      * Event handler: Save death location when player dies.
-     * The hint message is NOT sent here (player is in-death-screen); it is sent
-     * on respawn via {@link #onPlayerRespawn} instead.
      *
      * <p>Uses {@code receiveCanceled = true} so the death position is captured even
      * when another mod cancels the event (keep-inventory, god-mode plugins, etc.).
@@ -479,27 +475,6 @@ public class MiscTeleportManager {
         MiscTeleportManager.getInstance().saveDeathLocation(player);
     }
 
-    /**
-     * Event handler: Send the "death location saved – use /back" hint after
-     * the player has respawned and can actually read the message.
-     */
-    @SubscribeEvent
-    public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
-        if (!(event.getEntity() instanceof ServerPlayer player)) return;
-        MiscTeleportManager mgr = MiscTeleportManager.getInstance();
-        if (!mgr.enableDeathBack) return;
-        // Only show the hint if this respawn was due to death (not /kill or end-portal return)
-        UUID playerId = player.getUUID();
-        if (mgr.deathLocations.containsKey(playerId) || mgr.deathLocationTimestamps.containsKey(playerId)) {
-            net.minecraft.server.MinecraftServer server = player.getServer();
-            if (server == null) return;
-            // Delay one tick so the hint arrives after vanilla respawn messages
-            com.zerog.neoessentials.scheduler.DelayedTaskScheduler.schedule(1,
-                () -> player.sendSystemMessage(
-                    MessageUtil.info("commands.neoessentials.teleport.misc.death_location_saved")));
-        }
-    }
-    
     /**
      * Configuration getters/setters
      */

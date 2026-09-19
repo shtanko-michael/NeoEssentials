@@ -5,6 +5,7 @@
     "antioch",
     "anvil",
     "backup",
+    "bb",
     "bc",
     "bcastworld",
     "beezooka",
@@ -104,6 +105,10 @@
     "xp"
   ],
   "commandDetails": {
+    "bb": {
+      "syntax": "/bb <player>",
+      "notes": "Команда RegionGuard, а не NeoEssentials. Нужна базовая нода regionguard.command, а также статус owner или member обычного региона (не __global__) под игроком. Указанный игрок должен быть онлайн; owner/member этого же региона остаётся на месте, гость телепортируется на настроенный spawn NeoEssentials (если он установлен) либо на ванильный spawn и получает сообщение о возврате."
+    },
     "help": {
       "syntax": "/help | /help <page_or_command> | /help <command> <page>",
       "notes": "Перед регистрацией рефлексией снимает ванильные узлы help и ?. Один word-аргумент: чистое число ≥ 1 — номер страницы (по 10 команд), иначе поиск по имени/описанию в каталоге CommandRegistry. Вторая страница только у /help <command> <page>, у /? её нет. Список фильтруется по реальному узлу из CommandPermissionRegistry; консоль и держатели neoessentials.admin / neoessentials.* видят всё. Узел — neoessentials.help (не neoessentials.?)."
@@ -510,7 +515,7 @@
     },
     "rg": {
       "syntax": "/rg define <id> | /rg claim <id> | /rg redefine <id> | /rg remove <id> | /rg delete <id> | /rg list | /rg tp <id> | /rg clearowners <id> | /rg clearmembers <id> | /rg info [id] | /rg addowner <id> <player> | /rg addmember <id> <player> | /rg delowner <id> <player> | /rg delmember <id> <player> | /rg flag <id> list | /rg flag <id> <flag> <value> | /rg flag <id> clear <flag> [value]",
-      "notes": "helpCatalogOnly: NeoEssentials не строит Brigadier для /rg. Дерево принадлежит моду «regionguard»; эти 17 строк попадают в /help только если ModList.isLoaded(\"regionguard\") на старте. Без мода /rg в каталоге нет и NE его не регистрирует. Права и поведение — у RegionGuard, не у узлов neoessentials.rg."
+      "notes": "helpCatalogOnly: NeoEssentials не строит Brigadier для /rg. Дерево принадлежит моду «regionguard»; эти 17 строк, а также /bb <player>, попадают в /help только если ModList.isLoaded(\"regionguard\") на старте. Без мода /rg и /bb в каталоге нет и NE их не регистрирует. Права и поведение — у RegionGuard, не у узлов neoessentials.rg."
     }
   },
   "examples": [

@@ -127,7 +127,7 @@
     },
     "back": {
       "syntax": "/back",
-      "notes": "Точка пишется перед home/warp/spawn/tpa и перед /tp|/tphere|/tpall|/tppos|/top|/jump|/jumpto. /tpo и /tpoffline из ServerAdminCommands /back не пишут. Смерть — backSettings.enableDeathBack. Свой warmup: backSettings.teleportDelay, не generalSettings. enableBackSafety по умолчанию false."
+      "notes": "Точка пишется перед home/warp/spawn/tpa и перед /tp|/tphere|/tpall|/tppos|/top|/jump|/jumpto. /tpo и /tpoffline из ServerAdminCommands /back не пишут. Смерть — backSettings.enableDeathBack; точка сохраняется без уведомления в чат. Свой warmup: backSettings.teleportDelay, не generalSettings. enableBackSafety по умолчанию false."
     },
     "top": {
       "syntax": "/top",

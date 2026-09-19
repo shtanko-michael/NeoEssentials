@@ -1933,6 +1933,20 @@
       "description_ru": "Сбросить таймер сна (предотвратить фантомов)",
       "description_en": "Reset your sleep timer (prevent phantoms)"
     },
+    "bb": {
+      "permission": "regionguard.command",
+      "aliases": [],
+      "op_level": 2,
+      "sub_permissions": {},
+      "extra_permissions": {
+        "region_membership": "Исполнитель должен быть владельцем или участником обычного региона под собой; сама permission-нода этого не заменяет."
+      },
+      "file": "command/RegionCommands.java (внешний мод: regionguard)",
+      "category": "regionguard",
+      "notes": "ВНЕШНИЙ МОД RegionGuard. Нужна базовая нода regionguard.command (либо op-level 2), но исполнитель дополнительно обязан быть owner или member региона, в котором стоит. Цель — только онлайн-игрок; owner/member этого региона остаётся на месте, остальных команда переносит на spawn.",
+      "description_ru": "Вернуть на спавн гостя текущего привата",
+      "description_en": "Return a guest of the current claim to spawn"
+    },
     "rg": {
       "permission": "regionguard.command",
       "aliases": [],
