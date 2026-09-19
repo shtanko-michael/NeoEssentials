@@ -12,6 +12,7 @@ import com.zerog.neoessentials.logging.NeoLog;
 import com.zerog.neoessentials.util.MessageUtil;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.commands.arguments.coordinates.Coordinates;
 import net.minecraft.commands.arguments.coordinates.Vec3Argument;
@@ -195,6 +196,8 @@ public class DirectTeleportCommands {
                 return source.hasPermission(2);
             })
             .then(Commands.argument("player", StringArgumentType.word())
+                .suggests((ctx, b) -> SharedSuggestionProvider.suggest(
+                    ctx.getSource().getServer().getPlayerNames(), b))
                 .executes(ctx -> teleportToOfflinePlayer(ctx, StringArgumentType.getString(ctx, "player"))))
         );
     }

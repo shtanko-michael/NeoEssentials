@@ -85,6 +85,8 @@ public class WarnCommand {
         dispatcher.register(Commands.literal("removewarn")
             .requires(src -> PermissionValidator.validatePermission(src, "neoessentials.moderation.warn").hasPermission())
             .then(Commands.argument("player", StringArgumentType.word())
+                .suggests((ctx, b) -> SharedSuggestionProvider.suggest(
+                    ctx.getSource().getServer().getPlayerNames(), b))
                 .then(Commands.argument("warnId", StringArgumentType.word())
                     .executes(ctx -> executeRemoveWarn(ctx,
                         StringArgumentType.getString(ctx, "player"),

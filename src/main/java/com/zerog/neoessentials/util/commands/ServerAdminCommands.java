@@ -414,6 +414,7 @@ public class ServerAdminCommands {
         d.register(Commands.literal("tpoffline")
             .requires(src -> { var p = src.getPlayer(); return p == null || PermissionAPI.hasPermission(p.getUUID(), "neoessentials.teleport.tpoffline"); })
             .then(Commands.argument("player", StringArgumentType.word())
+                .suggests((ctx, b) -> SharedSuggestionProvider.suggest(ctx.getSource().getServer().getPlayerNames(), b))
                 .executes(ctx -> {
                     var src = ctx.getSource();
                     var self = src.getPlayer();

@@ -556,6 +556,8 @@ public class HomeCommands {
             )
             // /renamehome <player:old> <new>  — admin format
             .then(Commands.argument("playercolon", StringArgumentType.word())
+                .suggests((ctx, b) -> SharedSuggestionProvider.suggest(
+                    ctx.getSource().getServer().getPlayerNames(), b))
                 .requires(src -> src.getPlayer() == null
                     || PermissionAPI.hasPermission(src.getPlayer().getUUID(), PERMISSION_RENAMEHOME_OTHERS))
                 .then(Commands.argument("newname2", StringArgumentType.word())

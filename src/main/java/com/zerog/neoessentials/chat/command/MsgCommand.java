@@ -4,6 +4,7 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.commands.arguments.MessageArgument;
 import net.minecraft.server.level.ServerPlayer;
@@ -53,6 +54,8 @@ public class MsgCommand {
     private static void registerMeCommand(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("me")
             .then(Commands.argument("action", MessageArgument.message())
+                .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(
+                    ctx.getSource().getServer().getPlayerNames(), builder))
                 .executes(ctx -> {
                     String privateMessage = MessageArgument.getMessage(ctx, "action").getString();
                     ctx.getSource().getServer().getCommands()

@@ -19,6 +19,7 @@ import com.zerog.neoessentials.logging.LogCategory;
 import com.zerog.neoessentials.logging.NeoLog;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -57,6 +58,8 @@ public class ShopCommand {
             .then(Commands.literal("list")
                 .executes(ctx -> executeList(ctx.getSource(), null))
                 .then(Commands.argument("player", StringArgumentType.word())
+                    .suggests((ctx, b) -> SharedSuggestionProvider.suggest(
+                        ctx.getSource().getServer().getPlayerNames(), b))
                     .executes(ctx -> executeList(ctx.getSource(),
                         StringArgumentType.getString(ctx, "player")))))
             .then(Commands.literal("info")

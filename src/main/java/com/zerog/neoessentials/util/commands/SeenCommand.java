@@ -4,6 +4,7 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.server.level.ServerPlayer;
 import com.zerog.neoessentials.config.ConfigManager;
 import com.zerog.neoessentials.util.MessageUtil;
@@ -67,6 +68,8 @@ public class SeenCommand {
         dispatcher.register(
             Commands.literal("seen")
                 .then(Commands.argument("player", StringArgumentType.word())
+                    .suggests((ctx, b) -> SharedSuggestionProvider.suggest(
+                        ctx.getSource().getServer().getPlayerNames(), b))
                     .executes(ctx -> {
                         PermissionValidator.PermissionResult permResult = 
                             PermissionValidator.validatePermission(ctx.getSource(), "neoessentials.seen");

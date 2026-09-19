@@ -17,6 +17,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
@@ -275,6 +276,8 @@ public class MailCommand {
                 })
                 // /mail clear <index-or-player>
                 .then(Commands.argument("indexOrPlayer", StringArgumentType.word())
+                    .suggests((ctx, b) -> SharedSuggestionProvider.suggest(
+                        ctx.getSource().getServer().getPlayerNames(), b))
                     .executes(ctx -> {
                         String arg = StringArgumentType.getString(ctx, "indexOrPlayer");
                         if (isPositiveInt(arg)) {
