@@ -34,11 +34,11 @@ public class GodModeEventHandler {
         }
     }
 
-    /** Track session start for playtime and initialise god/fly maps. */
+    /** Track the session and restore persisted fly/god state. */
     @SubscribeEvent
     public static void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
-            PlayerStateCommands.onPlayerJoin(player.getUUID());
+            PlayerStateCommands.onPlayerJoin(player);
             com.zerog.neoessentials.util.commands.UtilityCommands.onPlayerJoin(player);
         }
     }

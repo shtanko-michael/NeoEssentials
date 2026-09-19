@@ -223,11 +223,11 @@
     },
     "fly": {
       "syntax": "/fly | /fly on | /fly off | /fly <target> | /fly <target> on | /fly <target> off",
-      "notes": "requires: p == null || узел — консоль и командный блок проходят без OP. Цель — word, только онлайн getPlayerByName. Порядок не [on|off] [player], а сначала цель, либо голые on/off на себя. Чужой — neoessentials.fly.others на ветке target. Без on/off — invert mayfly, при выключении сбрасывает flying и fallDistance."
+      "notes": "requires: p == null || узел — консоль и командный блок проходят без OP. Цель — word, только онлайн getPlayerByName. Порядок не [on|off] [player], а сначала цель, либо голые on/off на себя. Чужой — neoessentials.fly.others на ветке target. Без on/off — invert mayfly, при выключении сбрасывает flying и fallDistance. Включённое состояние сохраняется по UUID и восстанавливается после входа, если у игрока по-прежнему есть neoessentials.fly."
     },
     "god": {
       "syntax": "/god | /god on | /god off | /god <target> | /god <target> on | /god <target> off",
-      "notes": "requires: p == null || узел — консоль и командный блок проходят без OP. Цель — word, только онлайн getPlayerByName. Состояние в HashMap, при quit снимается, на диск не пишется. Включение дополнительно фулл-хилит и ставит голод 20. Чужой — god.others."
+      "notes": "requires: p == null || узел — консоль и командный блок проходят без OP. Цель — word, только онлайн getPlayerByName. Включение дополнительно фулл-хилит и ставит голод 20. Чужой — god.others. Включённое состояние сохраняется по UUID и восстанавливается после входа, если у игрока по-прежнему есть neoessentials.god."
     },
     "heal": {
       "syntax": "/heal [target]",
@@ -586,9 +586,9 @@
       "fix": "Ванильную выдачу с NBT делайте через `/minecraft:give`. Для кейсов — только `/crate key give`. Не полагайтесь на порядок «первый diamond_ore vs diamond» в fuzzy contains."
     },
     {
-      "title": "Состояние /god, /ptime, /pweather и /unlimited живёт до выхода",
-      "body": "`godMode`, `playerTimes`, `playerWeather` и `unlimitedItems` — карты в памяти. `onPlayerQuit` их чистит (для ptime/pweather комментарий в коде: persist nothing). После реконнекта бог, клиентское время/погода и безлимитные предметы сброшены. /fly пишет в Abilities и может пережить выход как часть игрока, это уже ваниль, не карта мода.",
-      "fix": "Не стройте на /god постоянный иммунитет. Нужен клиентский вечный день — ставьте его после входа (командный блок, скрипт, панель)."
+      "title": "Состояние /fly и /god сохраняется, остальные персональные переключатели — нет",
+      "body": "Включённые /fly и /god пишутся в коллекцию DataStore `player_command_states` по UUID и восстанавливаются при следующем входе. Восстановление требует, чтобы у игрока осталось соответствующее право neoessentials.fly или neoessentials.god; при снятом праве сохранённый флаг удаляется. `playerTimes`, `playerWeather` и `unlimitedItems` остаются картами в памяти и при выходе очищаются.",
+      "fix": "Для постоянного полёта или защиты включите /fly или /god один раз. Для клиентского времени, погоды и unlimited используйте командный блок, скрипт или панель после входа."
     },
     {
       "title": "/xp не равен /exp, /mob не равен /spawnmob",

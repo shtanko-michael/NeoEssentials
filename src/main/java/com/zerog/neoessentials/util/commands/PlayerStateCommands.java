@@ -5,7 +5,10 @@ import com.mojang.brigadier.arguments.FloatArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
+import com.google.gson.JsonObject;
 import com.zerog.neoessentials.api.permissions.PermissionAPI;
+import com.zerog.neoessentials.storage.DataStore;
+import com.zerog.neoessentials.storage.StorageManager;
 import com.zerog.neoessentials.util.MessageUtil;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -55,6 +58,10 @@ public class PlayerStateCommands {
 
     // God mode state: UUID → enabled
     private static final Map<UUID, Boolean> godMode = new HashMap<>();
+    private static final String PLAYER_STATES_COLLECTION = "player_command_states";
+    private static final String FLY_STATE_KEY = "fly";
+    private static final String GOD_STATE_KEY = "god";
+    private static final DataStore PLAYER_STATES = StorageManager.getInstance().getStore();
     // Join time for playtime (supplemented by persistent data in a real impl)
     private static final Map<UUID, Long> sessionStart = new HashMap<>();
 
@@ -98,11 +105,7 @@ public class PlayerStateCommands {
         var src = ctx.getSource();
         ServerPlayer target = resolveTarget(src, targetName);
         if (target == null) return 0;
-        boolean newState = enable != null ? enable : !target.getAbilities().mayfly;
-        target.getAbilities().mayfly = newState;
-        if (!newState) target.getAbilities().flying = false;
-        target.onUpdateAbilities();
-        target.fallDistance = 0f;
+        boolean newState = setFly(target, enable);
         String state = MessageUtil.enabledState(newState);
         if (isOtherTarget(src, target)) {
             src.sendSuccess(() -> MessageUtil.success("commands.neoessentials.fly.other", target.getName().getString(), state), true);
@@ -138,14 +141,7 @@ public class PlayerStateCommands {
         var src = ctx.getSource();
         ServerPlayer target = resolveTarget(src, targetName);
         if (target == null) return 0;
-        boolean cur = godMode.getOrDefault(target.getUUID(), false);
-        boolean newState = enable != null ? enable : !cur;
-        godMode.put(target.getUUID(), newState);
-        // Restore health/hunger when enabling (Essentials pattern)
-        if (newState) {
-            target.setHealth(target.getMaxHealth());
-            target.getFoodData().setFoodLevel(20);
-        }
+        boolean newState = setGod(target, enable);
         String state = MessageUtil.enabledState(newState);
         if (isOtherTarget(src, target)) {
             src.sendSuccess(() -> MessageUtil.success("commands.neoessentials.god.other", target.getName().getString(), state), true);
@@ -173,6 +169,7 @@ public class PlayerStateCommands {
         if (!newState) target.getAbilities().flying = false;
         target.onUpdateAbilities();
         target.fallDistance = 0f;
+        savePersistentState(target.getUUID(), FLY_STATE_KEY, newState);
         return newState;
     }
 
@@ -181,6 +178,7 @@ public class PlayerStateCommands {
         boolean cur = godMode.getOrDefault(target.getUUID(), false);
         boolean newState = enable != null ? enable : !cur;
         godMode.put(target.getUUID(), newState);
+        savePersistentState(target.getUUID(), GOD_STATE_KEY, newState);
         if (newState) {
             target.setHealth(target.getMaxHealth());
             target.getFoodData().setFoodLevel(20);
@@ -230,15 +228,54 @@ public class PlayerStateCommands {
         return null;
     }
 
-    /** Called on player quit to clean up god/fly state. */
+    /** Called on player quit to clean up session-only caches. Persistent fly/god state remains stored. */
     public static void onPlayerQuit(UUID uuid) {
         godMode.remove(uuid);
         sessionStart.remove(uuid);
     }
 
-    /** Called on player join to track session start. */
-    public static void onPlayerJoin(UUID uuid) {
+    /** Restores persisted fly/god state for a player who still has the corresponding permission. */
+    public static void onPlayerJoin(ServerPlayer player) {
+        UUID uuid = player.getUUID();
         sessionStart.put(uuid, System.currentTimeMillis());
+
+        JsonObject state = PLAYER_STATES.get(PLAYER_STATES_COLLECTION, uuid.toString());
+        if (state == null) return;
+
+        if (isStateEnabled(state, FLY_STATE_KEY)) {
+            if (PermissionAPI.hasPermission(uuid, "neoessentials.fly")) {
+                player.getAbilities().mayfly = true;
+                player.onUpdateAbilities();
+                player.fallDistance = 0f;
+            } else {
+                savePersistentState(uuid, FLY_STATE_KEY, false);
+            }
+        }
+
+        if (isStateEnabled(state, GOD_STATE_KEY)) {
+            if (PermissionAPI.hasPermission(uuid, "neoessentials.god")) {
+                godMode.put(uuid, true);
+            } else {
+                savePersistentState(uuid, GOD_STATE_KEY, false);
+            }
+        }
+    }
+
+    private static boolean isStateEnabled(JsonObject state, String key) {
+        return state.has(key) && state.get(key).getAsBoolean();
+    }
+
+    /** Writes one state flag and removes an empty record, keeping every storage backend tidy. */
+    private static void savePersistentState(UUID uuid, String key, boolean enabled) {
+        JsonObject state = PLAYER_STATES.get(PLAYER_STATES_COLLECTION, uuid.toString());
+        if (state == null) state = new JsonObject();
+        state.addProperty(key, enabled);
+
+        if (!isStateEnabled(state, FLY_STATE_KEY) && !isStateEnabled(state, GOD_STATE_KEY)) {
+            PLAYER_STATES.delete(PLAYER_STATES_COLLECTION, uuid.toString());
+        } else {
+            PLAYER_STATES.put(PLAYER_STATES_COLLECTION, uuid.toString(), state);
+        }
     }
 
     // ── /heal [player] ────────────────────────────────────────────────────────
