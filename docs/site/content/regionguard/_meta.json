@@ -41,7 +41,7 @@
       "navTitle": "Права",
       "group": "Справочник",
       "lede": "Командные ноды, права на отдельные флаги, административный bypass и лимиты приватов.",
-      "keywords": ["regionguard.command", "regionguard.bypass.pvp", "regionguard.regions", "LuckPerms"],
+      "keywords": ["regionguard.command", "regionguard.admin", "regionguard.bypass.pvp", "regionguard.regions", "LuckPerms"],
       "wide": true
     },
     {
