@@ -262,7 +262,9 @@ public class HelpCommand {
      * falls back to the registered English description if not found.
      */
     private static String getLocalizedDescription(CommandRegistry.CommandInfo cmd) {
-        String name = cmd.getName().toLowerCase();
+        // Registry entries may include their usage (for example, "bb <player>").
+        // Translation keys are named after the root command literal, not its arguments.
+        String name = cmd.getName().split("\\s+", 2)[0].toLowerCase(java.util.Locale.ROOT);
         String descKey = "commands.neoessentials.cmd." + name + ".description";
         if (MessageUtil.hasTranslation(descKey)) {
             return MessageUtil.localize(descKey);

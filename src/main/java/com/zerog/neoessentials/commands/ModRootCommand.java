@@ -740,7 +740,10 @@ public class ModRootCommand {
      * falls back to the registered English description if not found.
      */
     private static String getLocalizedDescription(CommandRegistry.CommandInfo cmd) {
-        String descKey = "commands.neoessentials.cmd." + cmd.getName().toLowerCase() + ".description";
+        // CommandRegistry can retain usage arguments in the display name ("bb <player>").
+        // Catalog translations are keyed by the root literal only.
+        String name = cmd.getName().split("\\s+", 2)[0].toLowerCase(java.util.Locale.ROOT);
+        String descKey = "commands.neoessentials.cmd." + name + ".description";
         if (com.zerog.neoessentials.util.MessageUtil.hasTranslation(descKey)) {
             return com.zerog.neoessentials.util.MessageUtil.localize(descKey);
         }
