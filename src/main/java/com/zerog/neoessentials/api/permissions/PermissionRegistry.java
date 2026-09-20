@@ -460,6 +460,7 @@ public class PermissionRegistry {
         register("neoessentials.teleport.top", "Teleport to highest block", PermissionCategory.TELEPORT, true);
         register("neoessentials.teleport.jump", "Teleport through walls", PermissionCategory.TELEPORT, true);
         register("neoessentials.teleport.jumpto", "Teleport to looking at", PermissionCategory.TELEPORT, true);
+        register("neoessentials.teleport.compass", "Use the staff compass teleport", PermissionCategory.TELEPORT, false);
         register("neoessentials.teleport.tpr", "Random teleportation", PermissionCategory.TELEPORT, true);
 
         // Global teleport bypass permissions (admin-level)

@@ -1140,6 +1140,8 @@
     "commands.neoessentials.teleport.misc.jumpto_success":  "§aTeleported to the block you were looking at.",
     "commands.neoessentials.teleport.misc.jumpto_failed":  "§cFailed to jump to target block: {0}",
     "commands.neoessentials.teleport.misc.jumpto_unsafe":  "§cCannot jump there: the target location is not safe.",
+    "commands.neoessentials.teleport.compass.success":  "§aTeleported with the staff compass.",
+    "commands.neoessentials.teleport.compass.no_destination":  "§cNo empty destination was found in that direction.",
     "commands.neoessentials.teleport.admin.tpo_failed":  "§cFailed to teleport to offline player: {0}",
     "_comment_warp":  "=== Warp System ===",
     "commands.neoessentials.teleport.warp.success":  "§aTeleported to warp §f{0}§a.",

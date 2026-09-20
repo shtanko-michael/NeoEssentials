@@ -185,6 +185,8 @@
     "commands.neoessentials.teleport.misc.jumpto_success":  "§aТелепортация к блоку, на который вы смотрели.",
     "commands.neoessentials.teleport.misc.jumpto_failed":  "§cНе удалось прыгнуть к целевому блоку: {0}",
     "commands.neoessentials.teleport.misc.jumpto_unsafe":  "§cНельзя прыгнуть туда: точка назначения небезопасна.",
+    "commands.neoessentials.teleport.compass.success":  "§aТелепортация служебным компасом.",
+    "commands.neoessentials.teleport.compass.no_destination":  "§cВ этом направлении не найдена свободная точка.",
     "commands.neoessentials.teleport.misc.jump_success":  "§aТелепортация к блоку на линии вашего взгляда.",
     "commands.neoessentials.teleport.misc.jump_failed":  "§cНе удалось прыгнуть к блоку: §f{0}",
     "commands.neoessentials.teleport.misc.no_open_space":  "§cУ этого блока не найдено открытого пространства для телепортации.",
