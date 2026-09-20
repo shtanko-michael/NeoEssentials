@@ -182,6 +182,7 @@ public class PlayerStateCommands {
         if (newState) {
             target.setHealth(target.getMaxHealth());
             target.getFoodData().setFoodLevel(20);
+            com.zerog.neoessentials.util.handlers.GodModeEventHandler.clearExistingMobTargets(target);
         }
         return newState;
     }

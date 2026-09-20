@@ -3,8 +3,10 @@ package com.zerog.neoessentials.util.handlers;
 import com.zerog.neoessentials.chat.AfkManager;
 import com.zerog.neoessentials.util.commands.PlayerStateCommands;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Mob;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.entity.living.LivingChangeTargetEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 
@@ -31,6 +33,29 @@ public class GodModeEventHandler {
         AfkManager afk = AfkManager.getInstance();
         if (afk.isInvulnerableWhenAfk() && afk.isAfk(player.getUUID())) {
             event.setNewDamage(0f);
+        }
+    }
+
+    /** Prevent mobs from acquiring players protected by /god as an AI target. */
+    @SubscribeEvent
+    public static void onMobChangeTarget(LivingChangeTargetEvent event) {
+        if (event.getEntity() instanceof Mob
+                && event.getNewAboutToBeSetTarget() instanceof ServerPlayer player
+                && PlayerStateCommands.isGodMode(player.getUUID())) {
+            event.setCanceled(true);
+        }
+    }
+
+    /**
+     * Stops nearby mobs that acquired this player before /god was enabled from continuing
+     * their attack. Future target acquisition is blocked by {@link #onMobChangeTarget}.
+     */
+    public static void clearExistingMobTargets(ServerPlayer player) {
+        if (!(player.level() instanceof net.minecraft.server.level.ServerLevel level)) return;
+        for (Mob mob : level.getEntitiesOfClass(Mob.class, player.getBoundingBox().inflate(64.0))) {
+            if (mob.getTarget() == player) {
+                mob.setTarget(null);
+            }
         }
     }
 
