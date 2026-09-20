@@ -1122,6 +1122,7 @@
     "_comment_world_interaction":  "=== Взаимодействие с миром и развлечения ===",
     "_comment_tpr":  "=== Система случайной телепортации ===",
     "_comment_cmd_descriptions":  "=== Описания команд (используются в /help) ===",
+    "commands.neoessentials.cmd.bb.description":  "Вернуть гостя текущего привата на спавн",
     "commands.neoessentials.cmd.tpahere.description":  "Запросить телепортацию игрока к вам",
     "commands.neoessentials.cmd.delhome.description":  "Удалить дом",
     "commands.neoessentials.cmd.unbanip.description":  "Разбанить IP-адрес",

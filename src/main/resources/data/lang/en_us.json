@@ -1171,6 +1171,7 @@
     "commands.neoessentials.general.player_only":  "§cOnly players can use this command.",
     "commands.neoessentials.general.no_permission":  "§cYou do not have permission to use this command.",
     "_comment_cmd_descriptions":  "=== Command Descriptions (used by /help) ===",
+    "commands.neoessentials.cmd.bb.description":  "Return a guest of the current claim to spawn",
     "commands.neoessentials.cmd.tpahere.description":  "Request a player to teleport to you",
     "commands.neoessentials.cmd.delhome.description":  "Delete your home",
     "commands.neoessentials.cmd.unbanip.description":  "Unban an IP address",
