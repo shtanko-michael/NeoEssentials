@@ -107,11 +107,11 @@
   "commandDetails": {
     "bb": {
       "syntax": "/bb <player>",
-      "notes": "Команда RegionGuard, а не NeoEssentials. Нужна базовая нода regionguard.command, а также статус owner или member обычного региона (не __global__) под игроком. Указанный игрок должен быть онлайн и находиться в том же регионе; owner/member этого же региона остаётся на месте, гость немедленно телепортируется на настроенный spawn NeoEssentials (если он установлен) либо на ванильный spawn и получает сообщение о возврате. Warmup и сообщения обычной /spawn не вызываются."
+      "notes": "Команда RegionGuard, а не NeoEssentials. Нужна базовая нода regionguard.command, а также статус owner или member обычного региона (не __global__) под игроком. Указанный игрок должен быть онлайн и находиться в том же регионе; owner/member этого же региона остаётся на месте, гость немедленно телепортируется на настроенный spawn NeoEssentials (если он установлен) либо на ванильный spawn и получает сообщение о возврате. Warmup и сообщения обычной /spawn не вызываются. В /help описание команды показывается по-русски: «Вернуть гостя текущего привата на спавн»."
     },
     "help": {
       "syntax": "/help | /help <page_or_command> | /help <command> <page>",
-      "notes": "Перед регистрацией рефлексией снимает ванильные узлы help и ?. Один word-аргумент: чистое число ≥ 1 — номер страницы (по 10 команд), иначе поиск по имени/описанию в каталоге CommandRegistry. Вторая страница только у /help <command> <page>, у /? её нет. Список фильтруется по реальному узлу из CommandPermissionRegistry; консоль и держатели neoessentials.admin / neoessentials.* видят всё. Узел — neoessentials.help (не neoessentials.?)."
+      "notes": "Перед регистрацией рефлексией снимает ванильные узлы help и ?. Один word-аргумент: чистое число ≥ 1 — номер страницы (по 10 команд), иначе поиск по имени/описанию в каталоге CommandRegistry. Вторая страница только у /help <command> <page>, у /? её нет. Список фильтруется по реальному узлу из CommandPermissionRegistry; консоль и держатели neoessentials.admin / neoessentials.* видят всё. Описание команды с аргументами локализуется по её корневому литералу: например, запись bb <player> использует ключ cmd.bb.description. Узел — neoessentials.help (не neoessentials.?)."
     },
     "?": {
       "syntax": "/? | /? <page_or_command>",
