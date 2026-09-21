@@ -525,24 +525,6 @@ public class ConfigManager {
             return "You cannot leave jail!";
         }
         /**
-         * Returns the configured jail wand item id from moderation.jailSettings.wandItem.
-         * Defaults to "minecraft:stick" if not set.
-         */
-        public static String getJailWandItem() {
-            JsonObject config = getInstance().getConfig(MAIN_CONFIG);
-            if (config.has("moderation")) {
-                JsonObject moderation = config.getAsJsonObject("moderation");
-                if (moderation.has("jailSettings")) {
-                    JsonObject jailSettings = moderation.getAsJsonObject("jailSettings");
-                    if (jailSettings.has("wandItem")) {
-                        String val = jailSettings.get("wandItem").getAsString();
-                        if (val != null && !val.trim().isEmpty()) return val;
-                    }
-                }
-            }
-            return "minecraft:stick";
-        }
-        /**
          * Returns the default sphere-jail radius (blocks) used when a jail is set as a sphere
          * without an explicit radius, from moderation.jailSettings.defaultSphereRadius.
          * Defaults to 10.0 if not set. Also used to fall back existing pre-shape-system jails

@@ -240,7 +240,7 @@ public class ModerationEndpoint implements HttpHandler {
             // as opposed to /jail above which sends a PLAYER to an already-defined one. Lets
             // the dashboard create a jail cell by typed-in coordinates without an admin needing
             // to physically stand there in-game first (still fully supported too, via
-            // /setjail and the jail wand — see JailCommand/JailWandHandler).
+            // /setjail — see JailCommand).
             } else if ("GET".equals(method) && path.endsWith("/jail-locations")) {
                 requireAdmin(exchange);
                 handleJailLocationsDetailed(exchange);

@@ -128,11 +128,11 @@ public class JailCommand {
         );
         }
 
-        // /setjail <name>                    — auto-detect: wand cuboid selection, else
-        //                                       WorldEdit selection, else sphere at current
+        // /setjail <name>                    — uses a WorldEdit cuboid selection when present,
+        //                                       otherwise a sphere at the current
         //                                       position with the configured default radius
         // /setjail <name> sphere <radius>     — sphere at current position, explicit radius
-        // /setjail <name> cuboid              — cuboid from the wand/WorldEdit selection
+        // /setjail <name> cuboid              — cuboid from the WorldEdit selection
         if (com.zerog.neoessentials.config.ConfigManager.getInstance().isCommandEnabled("setjail")) {
         dispatcher.register(Commands.literal("setjail")
             .requires(source -> PermissionValidator.validatePermission(source, "neoessentials.moderation.setjail").hasPermission())
@@ -146,15 +146,6 @@ public class JailCommand {
                 .then(Commands.literal("cuboid")
                     .executes(ctx -> executeSetJailCuboid(ctx, StringArgumentType.getString(ctx, "name"))))
             )
-        );
-        }
-
-        // /jailwand — give the jail-region selection wand (item configurable via
-        // moderation.jailSettings.wandItem). Right-click = corner 1, left-click = corner 2.
-        if (com.zerog.neoessentials.config.ConfigManager.getInstance().isCommandEnabled("jailwand")) {
-        dispatcher.register(Commands.literal("jailwand")
-            .requires(source -> PermissionValidator.validatePermission(source, "neoessentials.jail.wand").hasPermission())
-            .executes(JailCommand::executeJailWand)
         );
         }
 
@@ -480,11 +471,9 @@ public class JailCommand {
     }
     
     /**
-     * {@code /setjail <name>} — auto-detects the source: a completed NeoEssentials wand
-     * selection takes priority, then a WorldEdit cuboid selection (best-effort — see
-     * {@link com.zerog.neoessentials.moderation.WorldEditIntegration}), and only falls back to
-     * a sphere at the player's current position (configured default radius) if neither is
-     * present, preserving the exact old point-only behavior for anyone not using the wand.
+     * {@code /setjail <name>} uses a WorldEdit cuboid selection when present (best-effort — see
+     * {@link com.zerog.neoessentials.moderation.WorldEditIntegration}), otherwise it creates a
+     * sphere at the player's current position with the configured default radius.
      */
     private static int executeSetJailAuto(CommandContext<CommandSourceStack> ctx, String jailName) {
         CommandSourceStack source = ctx.getSource();
@@ -496,17 +485,6 @@ public class JailCommand {
 
             JailManager jailManager = JailManager.getInstance();
             String createdBy = player.getName().getString();
-            var selectionManager = com.zerog.neoessentials.moderation.JailSelectionManager.getInstance();
-
-            if (selectionManager.hasFullSelection(player.getUUID())) {
-                BlockPos pos1 = selectionManager.getPos1(player.getUUID());
-                BlockPos pos2 = selectionManager.getPos2(player.getUUID());
-                String dimension = selectionManager.getDimension(player.getUUID());
-                boolean success = jailManager.setJailLocationCuboid(jailName, pos1, pos2, dimension, createdBy);
-                selectionManager.clear(player.getUUID());
-                return reportSetJailResult(source, jailName, success);
-            }
-
             var weSelection = com.zerog.neoessentials.moderation.WorldEditIntegration.getSelection(player);
             if (weSelection != null) {
                 String dimension = player.level().dimension().location().toString();
@@ -546,24 +524,13 @@ public class JailCommand {
         }
     }
 
-    /** {@code /setjail <name> cuboid} — cuboid from the NeoEssentials wand or WorldEdit selection. */
+    /** {@code /setjail <name> cuboid} — cuboid from the WorldEdit selection. */
     private static int executeSetJailCuboid(CommandContext<CommandSourceStack> ctx, String jailName) {
         CommandSourceStack source = ctx.getSource();
         try {
             if (!(source.getEntity() instanceof ServerPlayer player)) {
                 source.sendFailure(MessageUtil.error("neoessentials.moderation.player_only_command"));
                 return 0;
-            }
-
-            var selectionManager = com.zerog.neoessentials.moderation.JailSelectionManager.getInstance();
-            if (selectionManager.hasFullSelection(player.getUUID())) {
-                BlockPos pos1 = selectionManager.getPos1(player.getUUID());
-                BlockPos pos2 = selectionManager.getPos2(player.getUUID());
-                String dimension = selectionManager.getDimension(player.getUUID());
-                boolean success = JailManager.getInstance().setJailLocationCuboid(
-                    jailName, pos1, pos2, dimension, player.getName().getString());
-                selectionManager.clear(player.getUUID());
-                return reportSetJailResult(source, jailName, success);
             }
 
             var weSelection = com.zerog.neoessentials.moderation.WorldEditIntegration.getSelection(player);
@@ -574,7 +541,7 @@ public class JailCommand {
                 return reportSetJailResult(source, jailName, success);
             }
 
-            source.sendFailure(MessageUtil.error("commands.neoessentials.jail.wand.no_selection"));
+            source.sendFailure(MessageUtil.error("commands.neoessentials.jail.worldedit.no_selection"));
             return 0;
         } catch (Exception e) {
             LOGGER.error("Error executing setjail cuboid command", e);
@@ -593,34 +560,6 @@ public class JailCommand {
         }
     }
 
-    /** {@code /jailwand} — gives the player the configured jail-region selection wand item. */
-    private static int executeJailWand(CommandContext<CommandSourceStack> ctx) {
-        CommandSourceStack source = ctx.getSource();
-        try {
-            if (!(source.getEntity() instanceof ServerPlayer player)) {
-                source.sendFailure(MessageUtil.error("neoessentials.moderation.player_only_command"));
-                return 0;
-            }
-            String wandItemId = com.zerog.neoessentials.config.ConfigManager.getJailWandItem();
-            var itemId = com.zerog.neoessentials.util.ResourceLocationHelper.parse(wandItemId);
-            var item = net.minecraft.core.registries.BuiltInRegistries.ITEM.getOptional(itemId).orElse(null);
-            if (item == null) {
-                source.sendFailure(MessageUtil.error("commands.neoessentials.jail.wand.invalid_item", wandItemId));
-                return 0;
-            }
-            net.minecraft.world.item.ItemStack wandStack = new net.minecraft.world.item.ItemStack(item);
-            if (!player.getInventory().add(wandStack)) {
-                player.drop(wandStack, false);
-            }
-            source.sendSuccess(() -> MessageUtil.success("commands.neoessentials.jail.wand.given"), false);
-            return 1;
-        } catch (Exception e) {
-            LOGGER.error("Error executing jailwand command", e);
-            source.sendFailure(MessageUtil.error("An error occurred while executing the jailwand command."));
-            return 0;
-        }
-    }
-    
     private static int executeJailList(CommandContext<CommandSourceStack> ctx) {
         CommandSourceStack source = ctx.getSource();
         

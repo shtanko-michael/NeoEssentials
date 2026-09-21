@@ -74,7 +74,7 @@
     },
     "setjail": {
       "syntax": "/setjail <name> [sphere <radius> | cuboid]",
-      "notes": "Только игрок. Голый /setjail <name>: полная палочная выделенка → иначе WorldEdit cuboid → иначе сфера в ногах с jailSettings.defaultSphereRadius. sphere <radius> — Double ≥ 1.0 в текущей позиции. cuboid требует палочную пару углов или выделенку WE. Право neoessentials.moderation.setjail. Палочка выдаётся /jailwand (neoessentials.jail.wand, wandItem)."
+      "notes": "Только игрок. Голый /setjail <name>: WorldEdit cuboid → иначе сфера в ногах с jailSettings.defaultSphereRadius. sphere <radius> — Double ≥ 1.0 в текущей позиции. cuboid требует выделение WE. Право neoessentials.moderation.setjail."
     },
     "deljail": {
       "syntax": "/deljail <name>",

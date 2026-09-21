@@ -322,7 +322,6 @@
     "freezelist": true,
     "jailfor": true,
     "jaillist": true,
-    "jailwand": true,
     "unvanish": true,
     "vanishlist": true,
     "warn": true,
@@ -898,9 +897,6 @@
       "preventJailEscape": true,
       // Log all jail / unjail actions
       "logJailActions": true,
-      // Item used as the jail-region selection wand (/jailwand) — right-click sets corner 1,
-      // left-click sets corner 2. Any valid item id works.
-      "wandItem": "minecraft:stick",
       // Default radius (blocks) for sphere-shaped jails when no explicit radius is given
       "defaultSphereRadius": 10.0,
       // Repeat-offender auto-escalation: jailing the same player this many times (tracked

@@ -11,13 +11,12 @@ import org.slf4j.LoggerFactory;
 /**
  * Best-effort, reflection-only soft integration with WorldEdit, used by {@code /setjail} so a
  * player who already has a WorldEdit cuboid selection can turn it directly into a cuboid jail
- * without needing to reselect with NeoEssentials' own wand.
+ * without any additional selection tool.
  *
  * <p>WorldEdit is never a compile-time dependency here — this class only touches it via
  * reflection, and every failure mode (not installed, API shape differs between WorldEdit
  * versions/forks, no active selection, non-cuboid selection) degrades to "no selection
- * available" rather than throwing. {@code /setjail}'s own wand-based selection always works
- * regardless of whether this integration succeeds.</p>
+ * available" rather than throwing.</p>
  */
 public final class WorldEditIntegration {
     private static final Logger LOGGER = LoggerFactory.getLogger(WorldEditIntegration.class);
@@ -72,7 +71,7 @@ public final class WorldEditIntegration {
         } catch (ReflectiveOperationException e) {
             // WorldEdit is installed but its API doesn't match what this integration was
             // written against (version/fork mismatch) — log once at debug, not an error, since
-            // this is a soft integration and NeoEssentials' own wand still works fine.
+            // this is a soft integration and normal sphere jail creation still works.
             NeoLog.debug(LOGGER, LogCategory.MODERATION, "WorldEdit selection lookup failed (API mismatch?): {}", e.toString());
             return null;
         } catch (Exception e) {
