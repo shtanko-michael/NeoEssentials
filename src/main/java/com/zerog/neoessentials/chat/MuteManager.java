@@ -10,6 +10,7 @@ import com.zerog.neoessentials.storage.DataStore;
 import com.zerog.neoessentials.storage.StorageManager;
 import com.zerog.neoessentials.logging.LogCategory;
 import com.zerog.neoessentials.logging.NeoLog;
+import com.zerog.neoessentials.moderation.StaffModerationLog;
 import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -146,6 +147,9 @@ public class MuteManager {
         entry.unmutedAt = entry.expireTime;
         history.add(entry);
         persist(collection, entry);
+        if (PLAYER_COLLECTION.equals(collection)) {
+            StaffModerationLog.expired(entry.target, "neoessentials.moderation.stafflog.punishment_mute");
+        }
         NeoLog.debug(LOGGER, LogCategory.MODERATION, "Mute expired and auto-archived: target={} expireTime={}", entry.target, entry.expireTime);
     }
 
@@ -193,6 +197,7 @@ public class MuteManager {
         entry.expireTime = durationMillis > 0 ? System.currentTimeMillis() + durationMillis : 0L;
         mutedPlayers.put(entry.target, entry);
         persist(PLAYER_COLLECTION, entry);
+        StaffModerationLog.mute(targetName, mutedBy, reason, entry.expireTime);
         NeoLog.debug(LOGGER, LogCategory.MODERATION, "Muted player {} (expire={}). Active mutes: {}", targetName, entry.expireTime, mutedPlayers.size());
     }
 
@@ -210,6 +215,7 @@ public class MuteManager {
             removed.unmutedAt = System.currentTimeMillis();
             muteHistory.add(removed);
             persist(PLAYER_COLLECTION, removed);
+            StaffModerationLog.unmute(targetName, unmutedBy);
         }
         NeoLog.debug(LOGGER, LogCategory.MODERATION, "Unmuted player {}. Active mutes: {}", targetName, mutedPlayers.size());
     }

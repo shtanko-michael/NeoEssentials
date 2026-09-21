@@ -5,7 +5,6 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
-import com.zerog.neoessentials.api.permissions.PermissionAPI;
 import com.zerog.neoessentials.util.MessageUtil;
 import com.zerog.neoessentials.logging.LogCategory;
 import com.zerog.neoessentials.logging.NeoLog;
@@ -174,6 +173,7 @@ public class BanManager {
         ban.unbannedAt = ban.expireTime;
         banHistory.add(ban);
         store.put(PLAYER_COLLECTION, ban.id, banToJson(ban));
+        StaffModerationLog.expired(ban.playerName, "neoessentials.moderation.stafflog.punishment_ban");
     }
 
     private void archiveExpiredIPBan(IPBanEntry ban) {
@@ -259,6 +259,7 @@ public class BanManager {
         BanEntry ban = new BanEntry(playerName, playerId, reason, bannedBy);
         playerBans.put(playerId, ban);
         store.put(PLAYER_COLLECTION, ban.id, banToJson(ban));
+        StaffModerationLog.ban(playerName, bannedBy, reason, 0L);
         NeoLog.debug(LOGGER, LogCategory.MODERATION, "Applying permanent ban: player={} ({}) reason={} by={}",
             playerName, playerId, reason, bannedBy);
         // Build the fully-localized/formatted ban message once, and store THAT (not the
@@ -280,18 +281,6 @@ public class BanManager {
             ServerPlayer player = server.getPlayerList().getPlayer(playerId);
             if (player != null) {
                 player.connection.disconnect(Component.literal(formattedMessage));
-            }
-            // Broadcast to staff if enabled
-            if (com.zerog.neoessentials.config.ConfigManager.getInstance().isBroadcastBansEnabled()) {
-                String staffPerm = com.zerog.neoessentials.config.ConfigManager.getInstance().getStaffNotificationPermission();
-                String staffMsg = (reason != null && !reason.isEmpty())
-                    ? MessageUtil.localize("neoessentials.moderation.staff_ban_permanent_reason", playerName, bannedBy, reason)
-                    : MessageUtil.localize("neoessentials.moderation.staff_ban_permanent", playerName, bannedBy);
-                for (ServerPlayer staff : server.getPlayerList().getPlayers()) {
-                    if (staff.hasPermissions(2) || PermissionAPI.hasPermission(staff.getUUID(), staffPerm)) {
-                        staff.sendSystemMessage(Component.literal(staffMsg));
-                    }
-                }
             }
         }
         if (com.zerog.neoessentials.config.ConfigManager.getInstance().isLogBanActionsEnabled()) {
@@ -323,6 +312,7 @@ public class BanManager {
         ban.expireTime = System.currentTimeMillis() + durationMillis;
         playerBans.put(playerId, ban);
         store.put(PLAYER_COLLECTION, ban.id, banToJson(ban));
+        StaffModerationLog.ban(playerName, bannedBy, reason, ban.expireTime);
         NeoLog.debug(LOGGER, LogCategory.MODERATION, "Applying temp ban: player={} ({}) reason={} by={} duration={}ms",
             playerName, playerId, reason, bannedBy, durationMillis);
         // Build the fully-localized/formatted ban message once (see banPlayer() for why this,
@@ -345,18 +335,6 @@ public class BanManager {
             ServerPlayer player = server.getPlayerList().getPlayer(playerId);
             if (player != null) {
                 player.connection.disconnect(Component.literal(formattedMessage));
-            }
-            // Broadcast to staff if enabled
-            if (com.zerog.neoessentials.config.ConfigManager.getInstance().isBroadcastBansEnabled()) {
-                String staffPerm = com.zerog.neoessentials.config.ConfigManager.getInstance().getStaffNotificationPermission();
-                String staffMsg = (reason != null && !reason.isEmpty())
-                    ? MessageUtil.localize("neoessentials.moderation.staff_ban_temp_reason", playerName, bannedBy, formatDuration(durationMillis), reason)
-                    : MessageUtil.localize("neoessentials.moderation.staff_ban_temp", playerName, bannedBy, formatDuration(durationMillis));
-                for (ServerPlayer staff : server.getPlayerList().getPlayers()) {
-                    if (staff.hasPermissions(2) || PermissionAPI.hasPermission(staff.getUUID(), staffPerm)) {
-                        staff.sendSystemMessage(Component.literal(staffMsg));
-                    }
-                }
             }
         }
 
@@ -471,18 +449,7 @@ public class BanManager {
                 removed.unbannedAt = System.currentTimeMillis();
                 banHistory.add(removed);
                 store.put(PLAYER_COLLECTION, removed.id, banToJson(removed));
-            }
-            // Broadcast to staff if enabled
-            MinecraftServer server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
-            if (server != null && com.zerog.neoessentials.config.ConfigManager.getInstance().isBroadcastBansEnabled()) {
-                String staffPerm = com.zerog.neoessentials.config.ConfigManager.getInstance().getStaffNotificationPermission();
-                String name = removed != null ? removed.playerName : playerId.toString();
-                String staffMsg = MessageUtil.localize("neoessentials.moderation.staff_unban", name);
-                for (ServerPlayer staff : server.getPlayerList().getPlayers()) {
-                    if (staff.hasPermissions(2) || PermissionAPI.hasPermission(staff.getUUID(), staffPerm)) {
-                        staff.sendSystemMessage(Component.literal(staffMsg));
-                    }
-                }
+                StaffModerationLog.unban(removed.playerName, unbannedBy);
             }
             if (com.zerog.neoessentials.config.ConfigManager.getInstance().isLogBanActionsEnabled()) {
                 String name = removed != null ? removed.playerName : playerId.toString();

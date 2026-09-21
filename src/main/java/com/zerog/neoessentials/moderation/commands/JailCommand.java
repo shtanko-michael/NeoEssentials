@@ -282,7 +282,7 @@ public class JailCommand {
 
         boolean isJailed = jailManager.isPlayerJailed(playerId);
         if (isJailed) {
-            boolean ok = jailManager.unjailPlayer(playerId);
+            boolean ok = jailManager.unjailPlayer(playerId, getCommandSender(source), false);
             if (ok) {
                 final String name = resolvedName;
                 source.sendSuccess(() -> MessageUtil.success("commands.neoessentials.jail.unjail_success", name), true);
@@ -445,7 +445,7 @@ public class JailCommand {
             }
 
             // Unjail the player
-            boolean success = jailManager.unjailPlayer(playerId);
+            boolean success = jailManager.unjailPlayer(playerId, unjailedBy, false);
 
             if (success) {
                 String confirmMessage = MessageUtil.localize("neoessentials.moderation.unjail_success", resolvedName, unjailedBy);

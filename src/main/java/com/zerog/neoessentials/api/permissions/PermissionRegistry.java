@@ -588,6 +588,7 @@ public class PermissionRegistry {
 
         // ── Moderation commands (actual permission nodes, not lang keys) ─────
         register("neoessentials.moderation.ban", "Ban players", PermissionCategory.MODERATION, false);
+        register("neoessentials.moderation.stafflog", "Receive the private in-game moderation log", PermissionCategory.MODERATION, false);
         register("neoessentials.moderation.banip", "Ban IP addresses", PermissionCategory.MODERATION, false);
         register("neoessentials.moderation.banlist", "View ban list", PermissionCategory.MODERATION, false);
         register("neoessentials.moderation.tempban", "Temporarily ban players", PermissionCategory.MODERATION, false);

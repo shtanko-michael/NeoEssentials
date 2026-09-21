@@ -322,6 +322,8 @@ public class JailManager {
                     reason, jailedBy, getJailDurationDescription(jail));
                 player.sendSystemMessage(MessageUtil.coloredText(message));
 
+                StaffModerationLog.jail(playerName, jailedBy, jailName, reason, jail.expireAt);
+
         if (com.zerog.neoessentials.config.ConfigManager.getInstance().isLogJailActionsEnabled()) {
             NeoLog.info(LOGGER, LogCategory.MODERATION, "Player {} ({}) jailed by {} in {} for: {}", 
                 playerName, playerId, jailedBy, jailName, reason);
@@ -333,6 +335,7 @@ public class JailManager {
         // Player offline - still record the jail
         jailedPlayers.put(playerId, jail);
         saveJailedPlayers();
+        StaffModerationLog.jail(playerName, jailedBy, jailName, reason, jail.expireAt);
 
     if (com.zerog.neoessentials.config.ConfigManager.getInstance().isLogJailActionsEnabled()) {
         NeoLog.info(LOGGER, LogCategory.MODERATION, "Player {} ({}) jailed while offline by {} in {} for: {}", 
@@ -345,11 +348,17 @@ public class JailManager {
      * Unjail a player
      */
     public boolean unjailPlayer(UUID playerId) {
+        return unjailPlayer(playerId, null, false);
+    }
+
+    /** Releases a prisoner and records whether it was an automatic expiry. */
+    public boolean unjailPlayer(UUID playerId, String releasedBy, boolean expired) {
         JailEntry jail = jailedPlayers.remove(playerId);
         if (jail != null) {
             NeoLog.debug(LOGGER, LogCategory.MODERATION, "Removing jail for player {} ({}) from jail={}",
                 jail.playerName, playerId, jail.jailName);
             saveJailedPlayers();
+            StaffModerationLog.unjail(jail.playerName, releasedBy, expired);
             
             // Teleport back to original location if online
             MinecraftServer server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
@@ -546,7 +555,7 @@ public class JailManager {
         NeoLog.debug(LOGGER, LogCategory.MODERATION, "Jail expiry check: player={} ({}) expireAt={} now={}",
             jail.playerName, playerId, jail.expireAt, System.currentTimeMillis());
         NeoLog.info(LOGGER, LogCategory.MODERATION, "Timed jail expired for player {} ({}). Auto-releasing.", jail.playerName, playerId);
-        unjailPlayer(playerId);
+        unjailPlayer(playerId, null, true);
         return true;
     }
 

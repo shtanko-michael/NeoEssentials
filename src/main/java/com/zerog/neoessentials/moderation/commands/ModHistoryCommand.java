@@ -15,7 +15,6 @@ import com.zerog.neoessentials.util.PermissionValidator;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,7 +34,7 @@ import java.util.UUID;
  */
 public class ModHistoryCommand {
     private static final Logger LOGGER = LoggerFactory.getLogger(ModHistoryCommand.class);
-    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")
         .withZone(ZoneId.systemDefault());
     private static final int ENTRIES_PER_SECTION = 5;
 
@@ -73,48 +72,59 @@ public class ModHistoryCommand {
         List<WarnEntry> warns = WarnManager.getInstance().getWarnings(playerId);
 
         int total = bans.size() + mutes.size() + kicks.size() + warns.size();
-        source.sendSuccess(() -> MessageUtil.prefixedLiteral("§fModeration history for §e" + playerName
-            + "§f (§7" + total + " total record" + (total == 1 ? "" : "s") + "§f):"), false);
+        source.sendSuccess(() -> MessageUtil.coloredText(MessageUtil.localize(
+            "neoessentials.moderation.history.header", playerName, total)), false);
 
         if (total == 0) {
-            source.sendSuccess(() -> Component.literal("§7  Clean record — nothing on file."), false);
+            source.sendSuccess(() -> MessageUtil.coloredText(
+                MessageUtil.localize("neoessentials.moderation.history.clean")), false);
             return 1;
         }
 
-        printSection(source, "Bans", bans, b ->
-            String.format("%s §7by §f%s§7 — %s §7(%s%s)",
-                b.active ? "§cACTIVE" : "§8expired", b.bannedBy, b.reason,
-                TIME_FORMAT.format(Instant.ofEpochMilli(b.banTime)),
-                b.expireTime == 0 ? ", permanent" : ""));
+        printSection(source, "neoessentials.moderation.history.section.bans", bans, b ->
+            formatTimedRecord(b.active, b.bannedBy, b.reason, b.banTime, b.expireTime == 0));
 
-        printSection(source, "Mutes", mutes, m ->
-            String.format("%s §7by §f%s§7 — %s §7(%s%s)",
-                m.active ? "§cACTIVE" : "§8expired", m.mutedBy, m.reason,
-                TIME_FORMAT.format(Instant.ofEpochMilli(m.muteTime)),
-                m.expireTime == 0 ? ", permanent" : ""));
+        printSection(source, "neoessentials.moderation.history.section.mutes", mutes, m ->
+            formatTimedRecord(m.active, m.mutedBy, m.reason, m.muteTime, m.expireTime == 0));
 
-        printSection(source, "Kicks", kicks, k ->
-            String.format("§7by §f%s§7 — %s §7(%s)",
-                k.kickedBy, k.reason, TIME_FORMAT.format(Instant.ofEpochMilli(k.kickTime))));
+        printSection(source, "neoessentials.moderation.history.section.kicks", kicks, k ->
+            formatRecord(k.kickedBy, k.reason, k.kickTime));
 
-        printSection(source, "Warns", warns, w ->
-            String.format("§7by §f%s§7 — %s §7(%s)",
-                w.getWarnedBy(), w.getReason(), TIME_FORMAT.format(Instant.ofEpochMilli(w.getTimestamp()))));
+        printSection(source, "neoessentials.moderation.history.section.warns", warns, w ->
+            formatRecord(w.getWarnedBy(), w.getReason(), w.getTimestamp()));
 
         return 1;
     }
 
-    private static <T> void printSection(CommandSourceStack source, String label, List<T> entries, java.util.function.Function<T, String> formatter) {
+    private static String formatTimedRecord(boolean active, String actor, String reason, long timestamp, boolean permanent) {
+        return MessageUtil.localize("neoessentials.moderation.history.timed_record",
+            MessageUtil.localize(active ? "neoessentials.moderation.history.status.active" : "neoessentials.moderation.history.status.finished"),
+            safe(reason), safe(actor), TIME_FORMAT.format(Instant.ofEpochMilli(timestamp)),
+            permanent ? MessageUtil.localize("neoessentials.moderation.history.permanent") : "");
+    }
+
+    private static String formatRecord(String actor, String reason, long timestamp) {
+        return MessageUtil.localize("neoessentials.moderation.history.record",
+            safe(reason), safe(actor), TIME_FORMAT.format(Instant.ofEpochMilli(timestamp)));
+    }
+
+    private static String safe(String value) {
+        return value == null || value.isBlank() ? "—" : value;
+    }
+
+    private static <T> void printSection(CommandSourceStack source, String labelKey, List<T> entries, java.util.function.Function<T, String> formatter) {
         if (entries.isEmpty()) return;
-        source.sendSuccess(() -> Component.literal("§7  " + label + " (§f" + entries.size() + "§7):"), false);
+        source.sendSuccess(() -> MessageUtil.coloredText(MessageUtil.localize(
+            "neoessentials.moderation.history.section", MessageUtil.localize(labelKey), entries.size())), false);
         int shown = Math.min(entries.size(), ENTRIES_PER_SECTION);
         for (int i = 0; i < shown; i++) {
             String line = formatter.apply(entries.get(i));
-            source.sendSuccess(() -> Component.literal("§7    - " + line), false);
+            source.sendSuccess(() -> MessageUtil.coloredText(line), false);
         }
         if (entries.size() > shown) {
             int more = entries.size() - shown;
-            source.sendSuccess(() -> Component.literal("§7    ... and " + more + " more"), false);
+            source.sendSuccess(() -> MessageUtil.coloredText(MessageUtil.localize(
+                "neoessentials.moderation.history.more", more)), false);
         }
     }
 

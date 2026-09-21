@@ -57,6 +57,10 @@ Farmstead NeoEssentials работает **только на сервере** �
 /lp group moderator permission set neoessentials.chat.mute true
 /lp group moderator permission set neoessentials.moderation.kick true
 /lp group moderator permission set neoessentials.moderation.jail true
+/lp group helper permission set neoessentials.moderation.stafflog true
+/lp group moderator permission set neoessentials.moderation.stafflog true
+/lp group headmoderator permission set neoessentials.moderation.stafflog true
+/lp group admin permission set neoessentials.moderation.stafflog true
 
 /lp group admin permission set neoessentials.* true
 ```

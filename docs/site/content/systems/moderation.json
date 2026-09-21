@@ -174,7 +174,7 @@
     },
     "modhistory": {
       "syntax": "/modhistory <player>",
-      "notes": "Онлайн, иначе кэш профилей — как PublicModerationEndpoint. Секции Bans / Mutes / Kicks / Warns, по 5 строк. Право neoessentials.moderation.history. Текст шапки захардкожен по-английски."
+      "notes": "Онлайн, иначе кэш профилей — как PublicModerationEndpoint. Секции банов, мутов, киков и предупреждений, по 5 строк. Показывает причину, выдавшего, дату, активность записи и бессрочный срок. Право neoessentials.moderation.history."
     },
     "history": {
       "syntax": "/history <player>",
@@ -292,9 +292,9 @@
       "fix": "Глушите имя через `/mute` или POST `/api/moderation/mute`. IP-бан (`/banip`) по-прежнему не пускает на сервер — это другой механизм."
     },
     {
-      "title": "/modhistory и штабной пинг /report не локализуются",
-      "body": "`ModHistoryCommand` собирает шапку и строки секций через `Component.literal` с английскими «Moderation history for», «Clean record», «ACTIVE/expired». После `/report` онлайн с `neoessentials.moderation.reports` получают сырую строку `[Report] <nick> reported <nick>: <reason>`, минуя lang. Остальные ответы модерации идут через ключи `commands.neoessentials.*` / `neoessentials.moderation.*`.",
-      "fix": "Для русскоязычного штаба смотрите те же данные в панели (JSON) или смиритесь с английским дампом `/modhistory`. Это не сломанный поиск — сломан только текст."
+      "title": "Штабной пинг /report не локализуется",
+      "body": "`/modhistory` использует локализованные строки и спокойный формат с причиной, выдавшим и датой. После `/report` онлайн с `neoessentials.moderation.reports` всё ещё получают сырую строку `[Report] <nick> reported <nick>: <reason>`, минуя lang.",
+      "fix": "Историю наказаний смотрите через `/modhistory <player>`. Для пинга новых жалоб используйте панель, если нужен русскоязычный интерфейс."
     }
   ]
 }
