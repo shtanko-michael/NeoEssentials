@@ -95,7 +95,7 @@ regionguard.command.flag.*
 | `regionguard.admin.remove` | Удалять регионы. |
 | `regionguard.admin.redefine` | Менять границы регионов через `/rg redefine`. |
 | `regionguard.admin.list` | Видеть все регионы текущего измерения через `/rg list`. |
-| `regionguard.admin.info` | Смотреть карточку любого региона через `/rg info <id>`. |
+| `regionguard.admin.info` | Смотреть карточку любого региона через `/rg info <id>`, выводить его сетку через `/rg s <id>` и видеть владельцев/участников палкой. |
 | `regionguard.admin.tp` | Телепортироваться в любой регион и видеть кнопки телепортации. |
 
 Полный набор для группы модераторов:
