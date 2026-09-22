@@ -16,6 +16,7 @@ import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+
 /**
  * Chat channel commands (/local, /global, /staff, etc.)
  * Allows players to switch between different chat channels.
@@ -57,6 +58,11 @@ public class ChannelCommands {
             for (String channelName : channelsConfig.keySet()) {
                 // Skip metadata fields
                 if (channelName.equals("enabled") || channelName.endsWith("-description")) {
+                    continue;
+                }
+                // Staff chat is now owned by Chatter (/s). Keep ignoring a legacy staff block
+                // in an existing NeoEssentials config so it can never register a competing command.
+                if (channelName.equals("staff")) {
                     continue;
                 }
 

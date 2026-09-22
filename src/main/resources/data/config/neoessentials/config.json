@@ -229,7 +229,6 @@
     "suicide": true,
     "whois": true,
     "invsee": true,
-    "invseeedit": true,
     "enderchest": true,
     "enderchestedit": true,
     "worth": true,
@@ -1221,20 +1220,6 @@
         "default": false,
         "discord": {
           "enabled": true,
-          "channelId": "",
-          "webhookUrl": ""
-        }
-      },
-      "staff": {
-        "enabled": true,
-        "command": "staff",
-        "aliases": ["mod", "admin", "s"],
-        "prefix": "@",
-        "permission": "neoessentials.chat.staff",
-        "default": false,
-        "discord": {
-          "enabled": true,
-          // Use a private staff-only Discord channel here (recommended)
           "channelId": "",
           "webhookUrl": ""
         }

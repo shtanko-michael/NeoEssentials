@@ -52,7 +52,6 @@
     "info",
     "inv",
     "invsee",
-    "invseeedit",
     "kill",
     "killme",
     "kittycannon",
@@ -63,6 +62,7 @@
     "mob",
     "more",
     "motd",
+    "n",
     "near",
     "nearby",
     "night",
@@ -353,6 +353,10 @@
       "syntax": "/announce <message>",
       "notes": "Алиас /broadcast, право neoessentials.broadcast."
     },
+    "n": {
+      "syntax": "/n <message>",
+      "notes": "Автоматически ставит перед текстом красный префикс §c[Объявление] §7>> §r. Аргумент — greedyString; поддерживаются цветовые коды & и плейсхолдеры PlaceholderAPI от отправителя, поэтому сам текст можно оформить любым цветом. Доступ: neoessentials.notice либо OP уровня 2; консоль также проходит. Сообщение рассылается напрямую как системное и не попадает в обработчики обычного чата."
+    },
     "broadcastworld": {
       "syntax": "/broadcastworld <message>",
       "notes": "Только игроки текущего src.getLevel() (у консоли это обычно overworld). Префикс §6[World] §e. Плейсхолдеры PlaceholderAPI."
@@ -407,15 +411,11 @@
     },
     "invsee": {
       "syntax": "/invsee <target>",
-      "notes": "Цель EntityArgument.player() обязательна. Консоль проходит requires, но execute — getPlayerOrException (нужен игрок). Аудит — neoessentials/inventory_audit.log. Read-only слоты mayPickup/mayPlace=false. Свою инвентарь смотреть нельзя (invsee.self). Право neoessentials.invsee. Включается commands.invsee."
+      "notes": "Цель EntityArgument.player() обязательна. Консоль проходит requires, но execute — getPlayerOrException (нужен игрок). Аудит — neoessentials/inventory_audit.log. С `neoessentials.invsee` открывается read-only окно (mayPickup/mayPlace=false); с `neoessentials.invsee.edit` — редактируемый живой инвентарь и замок «один редактор на цель». Нода `.edit` также даёт доступ к самой команде и имеет приоритет над просмотром. Свою инвентарь смотреть нельзя (invsee.self). Включается commands.invsee."
     },
     "inv": {
       "syntax": "/inv <target>",
-      "notes": "Алиас /invsee, не redirect: своё requires. Право neoessentials.invsee."
-    },
-    "invseeedit": {
-      "syntax": "/invseeedit <target>",
-      "notes": "Редактирование: один редактор на цель (concurrent_edit). Право neoessentials.invsee.edit, ключ commands.invseeedit. Замок снимается на PlayerContainerEvent.Close."
+      "notes": "Алиас /invsee, не redirect: своё requires. Режим определяется так же: `neoessentials.invsee` — просмотр, `neoessentials.invsee.edit` — редактирование."
     },
     "enderchest": {
       "syntax": "/enderchest <target>",

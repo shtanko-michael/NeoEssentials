@@ -14,23 +14,12 @@
       "result": "В поставке `local`: `command` `l`, алиасы `local`/`lc`, `radius` 100, `default` true, `prefix` пустой. `/l` без аргумента пишет channel.switched с ключом `local` и запоминает канал в ChatHandler до следующего переключения. Следующий обычный чат уходит только игрокам в том же измерении в радиусе 100. `/g <текст>` сначала переключает на `global` (алиас `global`; `gc` из поставки убрали — конфликтовал с диагностикой `/gc`), затем постит ServerChatEvent — сообщение уже идёт всем. Префикс `!` (у global) одноразовый: `!привет` уходит в global, постоянный канал не меняется."
     },
     {
-      "title": "Staff: право, префикс @ и одноразовое сообщение",
-      "goal": "Закрыть канал модерации так, чтобы обычные игроки не читали его и не слали в Discord, и не перепутать это с /ac.",
+      "title": "Staff-чат перенесён в Chatter",
+      "goal": "Понять, почему NeoEssentials не регистрирует /staff, /admin, /mod и /s.",
       "commands": [
-        "/staff",
-        "/staff Проверьте грифа у спавна",
-        "@срочный репорт"
+        "/s Проверьте грифа у спавна"
       ],
-      "result": "Поставка: `command` `staff`, алиасы `mod`/`admin`/`s`, `prefix` `@`, `permission` `neoessentials.chat.staff`. `/staff` без текста проверяет это право через PermissionValidator — без него switch не проходит. `/staff <текст>` после успешного switch постит чат-событие: видят только онлайн с тем же узлом (в том числе отправитель, если право есть). `@текст` не вызывает switch: ChatHandler снимает префикс и на этот пакет ставит канал `staff`, постоянный канал игрока не меняется. `/ac` сюда не относится — это алиас `/helpop`. Discord у staff в поставке `enabled: true` и пустой `channelId` — см. тонкие места про утечку в дефолтный канал моста."
-    },
-    {
-      "title": "Команда в канале и префикс в одной строке",
-      "goal": "Не удивиться, что `/staff !hello` ушло в global.",
-      "commands": [
-        "/staff",
-        "/staff !это уйдёт в global"
-      ],
-      "result": "`/staff !это уйдёт в global` сначала ставит persistent-канал `staff`, затем пост события отдаёт сырую строку ChatHandler. Там префиксы разбираются заново: `!` принадлежит `global`, `@` — `staff`. Побеждает префикс сообщения, не канал, в который вы только что переключились. Чтобы написать `!` именно в staff, уберите префикс-маркер или смените `chat.channels.global.prefix`."
+      "result": "Staff-чат принадлежит Chatter: `/s <текст>` проверяет `neoessentials.chat.staff` через LuckPerms и шлёт сообщение только онлайн-игрокам с той же нодой. NeoEssentials не содержит staff-канала и не регистрирует `/staff`, `/admin`, `/mod` или `/s`; это исключает конфликт обработчиков ServerChatEvent. `/ac` сюда не относится — это алиас `/helpop`."
     },
     {
       "title": "Team-канал без FTB Teams и с модом",
@@ -54,18 +43,13 @@
   "edgeCases": [
     {
       "title": "Команды каналов динамические и их нет в инвентаре",
-      "body": "`ChannelCommands.register` при старте обходит `chat.channels`, пропускает ключи `enabled` и `*-description`, выключенные каналы (`enabled: false`) и вешает `Commands.literal(command)` — если поля `command` нет, литерал = ключ канала — плюс каждый элемент `aliases`. В `_inventory.json` этих имён нет: генератор смотрит `registerCommand*`, не конфиг. Поэтому `commands` этой страницы пустой: ни `/local`, ни `/g`, ни `/staff` инвентарь не знает. `/ac` — helpop, не switch канала. Мастер-выключатель `chat.channels.enabled: false` (или `modules.chatEnabled`) пропускает регистрацию целиком; обычный чат тогда идёт как глобальная рассылка без радиуса.",
-      "fix": "Список слеш-команд берите из своего `chat.channels` (поставка: `/l`/`/local`/`/lc`, `/g`/`/global`, `/staff`/`/mod`/`/admin`/`/s`, `/team`/`/t`/`/teamchat`). Смена `command`/`aliases`/включение канала — рестарт. Prefix/radius/permission/discord — достаточно, чтобы конфиг перечитали (сообщения читают его живьём; дерево команд — нет)."
+      "body": "`ChannelCommands.register` при старте обходит `chat.channels`, пропускает ключи `enabled` и `*-description`, выключенные каналы (`enabled: false`) и вешает `Commands.literal(command)` — если поля `command` нет, литерал = ключ канала — плюс каждый элемент `aliases`. Ключ `staff` пропускается намеренно: его команда `/s` принадлежит Chatter. В `_inventory.json` этих имён нет: генератор смотрит `registerCommand*`, не конфиг. Поэтому `commands` этой страницы пустой: ни `/local`, ни `/g` инвентарь не знает. `/ac` — helpop, не switch канала. Мастер-выключатель `chat.channels.enabled: false` (или `modules.chatEnabled`) пропускает регистрацию целиком; обычный чат тогда идёт как глобальная рассылка без радиуса.",
+      "fix": "Список слеш-команд берите из своего `chat.channels` (поставка: `/l`/`/local`/`/lc`, `/g`/`/global`, `/team`/`/t`/`/teamchat`). Смена `command`/`aliases`/включение канала — рестарт. Prefix/radius/permission/discord — достаточно, чтобы конфиг перечитали (сообщения читают его живьём; дерево команд — нет)."
     },
     {
       "title": "Право канала: switch, доставка и Discord — три разных места",
-      "body": "Поле `permission` — произвольная строка. Switch (`/staff`, `/staff <текст>`) проверяет её у **отправителя** через PermissionValidator. Доставка в `ChatHandler` проверяет ту же строку у **каждого получателя** (для team — поверх членства в команде). Discord: если у отправителя строки нет, `broadcastPlayerChat` пропускается, даже когда игроки с правом уже увидели сообщение. Узлы `neoessentials.chat.channel.local` и `neoessentials.chat.channel.global` в PermissionRegistry есть, но поставка на local/global поля `permission` не ставит — эти узлы сами по себе ничего не закрывают. Отдельного `neoessentials.chat.bypass` нет.",
-      "fix": "Staff в поставке: выдайте `neoessentials.chat.staff` и на вход в канал, и на чтение. Не путайте с `neoessentials.staff` (другой узел, ChannelCommands его не читает). Хотите закрыть local — пропишите `permission` в объекте канала, не надейтесь на channel.local."
-    },
-    {
-      "title": "Префикс @ канала staff съедает упоминания @Ник",
-      "body": "ChatHandler ищет непустой `prefix` по ключам JSON **до** форматирования и mentions. В поставке staff.prefix = `@`, global = `!`, local = `\"\"` (пустой не матчится). Строка `@Steve привет` снимает `@`, канал становится `staff`, текст — `Steve привет`. Упоминание в local/global с такой поставкой не работает: `@` всегда уводит пакет в staff (если канал enabled). Порядок ключей в файле: первый совпавший префикс побеждает.",
-      "fix": "Смените staff.prefix на что-то вроде `#` или `s:` либо выключите mentions. Не ставьте префикс, который игроки уже используют как `@name`."
+      "body": "Поле `permission` — произвольная строка. Switch (`/local`, `/g`, команда или алиас кастомного канала) проверяет её у **отправителя** через PermissionValidator. Доставка в `ChatHandler` проверяет ту же строку у **каждого получателя** (для team — поверх членства в команде). Discord: если у отправителя строки нет, `broadcastPlayerChat` пропускается, даже когда игроки с правом уже увидели сообщение. Узлы `neoessentials.chat.channel.local` и `neoessentials.chat.channel.global` в PermissionRegistry есть, но поставка на local/global поля `permission` не ставит — эти узлы сами по себе ничего не закрывают. Отдельного `neoessentials.chat.bypass` нет.",
+      "fix": "Хотите закрыть local или donor-канал — пропишите `permission` в объекте канала, не надейтесь на channel.local. Staff-чат не является каналом NeoEssentials: его право `neoessentials.chat.staff` проверяет Chatter."
     },
     {
       "title": "Один сломанный канал больше не убивает остальные",
@@ -74,8 +58,8 @@
     },
     {
       "title": "Discord: enabled, пустой channelId, webhookUrl",
-      "body": "`ChatHandler` ретранслирует, только если `discord.enabled` true. Пустой `channelId` становится null — адаптер моста шлёт в **свой** дефолтный канал (у SDLink при native `playerMessages` NeoEssentials дефолтный маршрут ещё и пропускает, чтобы не двоить; override с непустым id шлется всегда). `WebhookAdapter` читает `chat.channels.<ключ>.discord.webhookUrl` сам, но до него очередь не доходит, пока handler не вызвал `broadcastPlayerChat` — то есть `enabled` всё равно нужен. В поставке у `global` и `staff` enabled true и пустой id: staff без своего Discord-канала утекает туда же, куда обычный чат моста, плюс нативная ретрансляция SDLink не знает каналов NeoEssentials.",
-      "fix": "Приватный staff: отдельный `channelId` и в `simple-discord-link.toml` `[chat] playerMessages = false` (и аналогичные подписки Mc2Discord). Только webhook: `enabled` true + URL, мост не обязателен, обратного Discord→MC нет."
+      "body": "`ChatHandler` ретранслирует, только если `discord.enabled` true. Пустой `channelId` становится null — адаптер моста шлёт в **свой** дефолтный канал (у SDLink при native `playerMessages` NeoEssentials дефолтный маршрут ещё и пропускает, чтобы не двоить; override с непустым id шлется всегда). `WebhookAdapter` читает `chat.channels.<ключ>.discord.webhookUrl` сам, но до него очередь не доходит, пока handler не вызвал `broadcastPlayerChat` — то есть `enabled` всё равно нужен.",
+      "fix": "Для отдельного Discord-канала задайте непустой `channelId`. Только webhook: `enabled` true + URL, мост не обязателен, обратного Discord→MC нет."
     },
     {
       "title": "Радиус, измерение, teamBased",
@@ -88,8 +72,8 @@
       "fix": "Нужна ванильная `/team` — смените `command`/`aliases` канала team (например `teamchat` только) и рестарт. Не возвращайте `gc` в aliases global."
     },
     {
-      "title": "/neoe reload не перерегистрирует /l /g /staff",
-      "body": "Дерево строится один раз из `NeoEssentials` → `ChannelCommands.register`. Reload перечитывает JSON для следующего сообщения (prefix, radius, discord, permission на доставку), но новые литералы не появляются и старые не снимаются. `modules.chatEnabled` / `chat.channels.enabled` тоже только на старте.",
+      "title": "/neoe reload не перерегистрирует команды каналов",
+      "body": "Дерево строится один раз из `NeoEssentials` → `ChannelCommands.register`. Reload перечитывает JSON для следующего сообщения (prefix, radius, discord, permission на доставку), но новые литералы не появляются и старые не снимаются. `modules.chatEnabled` / `chat.channels.enabled` тоже только на старте. Staff-команда `/s` регистрируется Chatter при запуске сервера.",
       "fix": "После добавления канала, смены command/aliases или выключателя системы — полный рестарт. После смены radius/prefix/discord — достаточно reload, без новых слеш-команд."
     }
   ],
@@ -98,16 +82,6 @@
       "title": "Поставочный command team ломает ванильную /team",
       "body": "`chat.channels.team.command` = `team`. `dispatcher.register(Commands.literal(\"team\"))` перехватывает имя ванильного scoreboard `/team`. Это не баг парсера — конфликт заложен в дефолтном конфиге. Алиасы `t` и `teamchat` от ванили свободны.",
       "fix": "Переименуйте `command` канала (оставьте `teamchat`) либо выставьте `team.enabled: false`, если FTB Teams не используете, и перезапустите."
-    },
-    {
-      "title": "Пустой discord.channelId у staff в поставке",
-      "body": "У `staff` `discord.enabled: true` и `channelId: \"\"`. Сообщения staff при наличии моста уходят в его дефолтный публичный канал, если не задан отдельный id. Native-relay SDLink (`playerMessages`) дополнительно постит **все** чат-пакеты, не разбирая каналы NeoEssentials — приват staff тогда течёт даже при выключенном нашем relay.",
-      "fix": "Впишите snowflake закрытого Discord-канала в `staff.discord.channelId` и выключите native chat relay моста. Либо `staff.discord.enabled: false`."
-    },
-    {
-      "title": "Префикс @ и @mention не живут вместе",
-      "body": "Поставочный staff.prefix `@` перехватывает любую строку, начинающуюся с `@`, раньше, чем ChatFormatter красит упоминания. `@Player` в local-чате становится staff-сообщением «Player…», а не пингом. Отдельного обхода в коде нет.",
-      "fix": "Смените prefix staff или смиритесь, что mentions работают только без ведущего `@` канала."
     },
     {
       "title": "Комментарий в ChatHandler про общий try/catch устарел",

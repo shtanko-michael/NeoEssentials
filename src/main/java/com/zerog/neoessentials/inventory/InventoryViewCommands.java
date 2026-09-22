@@ -26,8 +26,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Commands for viewing and editing other players' inventories
  * Commands:
- * - /invsee player    - View another player's inventory (read-only)
- * - /invseeedit player - View and edit another player's inventory
+ * - /invsee player    - View or edit another player's inventory, depending on permission
  * - /enderchest player - View another player's ender chest (read-only)
  * - /enderchestedit player - View and edit another player's ender chest
  * Permissions:
@@ -37,7 +36,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * - neoessentials.enderchest.edit - Edit other players' ender chests
  *
  * Anti-duplication: only one editor may hold an edit lock per target at a time.
- * Config: commands.invsee / invseeedit / enderchest / enderchestedit control enable/disable.
+ * Config: commands.invsee / enderchest / enderchestedit control enable/disable.
  * Audit: every view/edit action is written to neoessentials/inventory_audit.log.
  */
 @EventBusSubscriber(modid = "neoessentials")
@@ -58,21 +57,13 @@ public class InventoryViewCommands {
     // ── Command registration ────────────────────────────────────────────────
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        // /invsee <player> - View inventory (read-only)
+        // /invsee <player> - read-only with invsee; editable with invsee.edit.
         dispatcher.register(
             Commands.literal("invsee")
-                .requires(source -> isEnabled("invsee") && hasPermission(source, "neoessentials.invsee"))
+                .requires(source -> isEnabled("invsee") && hasInvseeAccess(source))
                 .then(Commands.argument("target", EntityArgument.player())
-                    .executes(ctx -> viewInventory(ctx, false))
-                )
-        );
-
-        // /invseeedit <player> - View and edit inventory
-        dispatcher.register(
-            Commands.literal("invseeedit")
-                .requires(source -> isEnabled("invseeedit") && hasPermission(source, "neoessentials.invsee.edit"))
-                .then(Commands.argument("target", EntityArgument.player())
-                    .executes(ctx -> viewInventory(ctx, true))
+                    .executes(ctx -> viewInventory(ctx,
+                        hasPermission(ctx.getSource(), "neoessentials.invsee.edit")))
                 )
         );
 
@@ -98,9 +89,10 @@ public class InventoryViewCommands {
         // Brigadier applies the requires() check before any dispatch occurs.
         dispatcher.register(
             Commands.literal("inv")
-                .requires(source -> isEnabled("invsee") && hasPermission(source, "neoessentials.invsee"))
+                .requires(source -> isEnabled("invsee") && hasInvseeAccess(source))
                 .then(Commands.argument("target", EntityArgument.player())
-                    .executes(ctx -> viewInventory(ctx, false))
+                    .executes(ctx -> viewInventory(ctx,
+                        hasPermission(ctx.getSource(), "neoessentials.invsee.edit")))
                 )
         );
         dispatcher.register(
@@ -118,7 +110,7 @@ public class InventoryViewCommands {
                 )
         );
 
-        NeoLog.info(LOGGER, LogCategory.GENERAL, "Registered inventory view commands: /invsee, /invseeedit, /enderchest, /enderchestedit (/inv, /ec, /ecedit)");
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "Registered inventory view commands: /invsee, /enderchest, /enderchestedit (/inv, /ec, /ecedit)");
     }
 
     // ── Edit-lock management ────────────────────────────────────────────────
@@ -210,6 +202,12 @@ public class InventoryViewCommands {
         }
         return com.zerog.neoessentials.api.permissions.PermissionAPI.hasPermission(
             player.getUUID(), permission);
+    }
+
+    /** Either inventory node may open /invsee; the edit node takes precedence. */
+    private static boolean hasInvseeAccess(CommandSourceStack source) {
+        return hasPermission(source, "neoessentials.invsee")
+            || hasPermission(source, "neoessentials.invsee.edit");
     }
 
     // ── Command executors ───────────────────────────────────────────────────

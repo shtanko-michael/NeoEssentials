@@ -204,9 +204,9 @@
       "fix": "В гайдах по предметам пишите `/item diamond 16`, не `/give`."
     },
     {
-      "title": "/invsee только смотрит, /invseeedit правит",
-      "body": "Команды живут в `InventoryViewCommands` (в инвентаре — likelySystem utility, права `neoessentials.invsee` / `.edit`). `/invsee` и `/inv` открывают снимок через `buildReadOnlyMenu`: слоты с `mayPickup`/`mayPlace` = false. `/invseeedit` открывает живой инвентарь цели и ставит lock «один редактор». Свою цель открыть нельзя. EntityArgument — только онлайн. Алиасы `inv`/`ec`/`ecedit` — полные литералы с `requires()`, не `redirect()`.",
-      "fix": "Модераторам — `invsee` (и при необходимости `enderchest`). Правка чужого инвентаря — отдельный узел `invsee.edit`."
+      "title": "/invsee: просмотр или правка по ноде",
+      "body": "Команды живут в `InventoryViewCommands` (в инвентаре — likelySystem utility, права `neoessentials.invsee` / `.edit`). `/invsee` и `/inv` при `neoessentials.invsee` открывают снимок через `buildReadOnlyMenu`: слоты с `mayPickup`/`mayPlace` = false. При `neoessentials.invsee.edit` та же команда открывает живой инвентарь цели и ставит lock «один редактор». Нода `.edit` также разрешает выполнить команду и имеет приоритет. Свою цель открыть нельзя. EntityArgument — только онлайн. Алиасы `inv`/`ec`/`ecedit` — полные литералы с `requires()`, не `redirect()`.",
+      "fix": "Модераторам выдавайте `invsee` (и при необходимости `enderchest`). Для редактирования чужого инвентаря выдавайте `invsee.edit`; отдельной команды больше нет."
     },
     {
       "title": "Powertool: тип предмета, память процесса, @p",
@@ -216,7 +216,7 @@
     {
       "title": "/repair всегда «успех», /clearinventory без цели и без confirm",
       "body": "Английская вики обещает `/repair [hand|all]` и `/clearinventory [player]`. В дереве `/repair`/`/fix` без аргументов, чинится только основная рука; сообщение success уходит даже если ничего не сломано. Очистка — только свой инвентарь (main+armor+offhand). `isCiConfirmDisabled` нигде, кроме самого тоггла, не вызывается.",
-      "fix": "Чтобы починить всё — берите предметы в руку по очереди или не рассчитывайте на `all`. Чужой инвентарь чистите через `/invseeedit`, не через `/ci`."
+      "fix": "Чтобы починить всё — берите предметы в руку по очереди или не рассчитывайте на `all`. Чужой инвентарь чистите через `/invsee` с правом `neoessentials.invsee.edit`, не через `/ci`."
     },
     {
       "title": "enchant перекрывает ваниль и путает первый аргумент",
@@ -233,7 +233,7 @@
     {
       "title": "Раньше /invsee копировал предметы в инвентарь смотрящего (исправлено)",
       "body": "До build.214 `/invsee`/`/inv`/`/ec`/`/enderchest` открывали `ChestMenu` над `SimpleContainer` с `.copy()` стака. Клиент мог вытащить копии, оригиналы оставались у цели. Сейчас read-only идёт через `buildReadOnlyMenu` (`mayPickup`/`mayPlace` = false). Правка шла через меню без слотов хотбара смотрящего — рассинхрон; слоты зрителя добавлены. Алиасы больше не `redirect()` без `requires()` (обход прав на `/inv`/`/ec` закрыт).",
-      "fix": "На текущей сборке дублирование через read-only окно не воспроизводится. Если игрок «вынес» вещи из /invsee — это либо старый билд, либо он был в `/invseeedit`."
+      "fix": "На текущей сборке дублирование через read-only окно не воспроизводится. Если игрок «вынес» вещи из /invsee — это либо старый билд, либо у него есть `neoessentials.invsee.edit`."
     },
     {
       "title": "/ciconfirmtoggle ни на что не влияет",

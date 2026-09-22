@@ -50,12 +50,40 @@ public class ServerAdminCommands {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         registerBroadcast(dispatcher);
+        registerNotice(dispatcher);
         registerTime(dispatcher);
         registerWeather(dispatcher);
         registerKill(dispatcher);
         registerGamemode(dispatcher);
         registerTpo(dispatcher);
         registerTpoffline(dispatcher);
+    }
+
+    // ── /n <message> ─────────────────────────────────────────────────────────
+    /** Sends a fully configurable server notice without invoking chat events. */
+    private static void registerNotice(CommandDispatcher<CommandSourceStack> d) {
+        d.register(Commands.literal("n")
+            .requires(src -> {
+                ServerPlayer player = src.getPlayer();
+                return player == null || player.hasPermissions(2)
+                    || PermissionAPI.hasPermission(player.getUUID(), "neoessentials.notice");
+            })
+            .then(Commands.argument("message", StringArgumentType.greedyString())
+                .executes(ctx -> {
+                    String message = StringArgumentType.getString(ctx, "message");
+                    ServerPlayer sender = ctx.getSource().getPlayer();
+                    String resolved = com.zerog.neoessentials.api.PlaceholderAPI.setPlaceholders(sender, message);
+                    Component notice = MessageUtil.coloredText("§c[Объявление] §7>> §r" + resolved);
+
+                    ctx.getSource().getServer().getPlayerList().getPlayers()
+                        .forEach(player -> player.sendSystemMessage(notice));
+                    ctx.getSource().getServer().sendSystemMessage(notice);
+                    NeoLog.info(LOGGER, LogCategory.GENERAL, "[Notice] {}: {}",
+                        sender != null ? sender.getName().getString() : "Console", resolved);
+                    return 1;
+                })
+            )
+        );
     }
 
     // ── /broadcast <message> ─────────────────────────────────────────────────

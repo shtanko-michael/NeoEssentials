@@ -1052,21 +1052,9 @@
       "extra_permissions": {},
       "file": "inventory/InventoryViewCommands.java",
       "category": "items",
-      "notes": "Нода invsee (НЕ item.invsee!). Консоль всегда допущена.",
-      "description_ru": "Посмотреть инвентарь другого игрока",
-      "description_en": "View another player''s inventory"
-    },
-    "invseeedit": {
-      "permission": "neoessentials.invsee.edit",
-      "aliases": [],
-      "op_level": null,
-      "sub_permissions": {},
-      "extra_permissions": {},
-      "file": "inventory/InventoryViewCommands.java",
-      "category": "items",
-      "notes": "",
-      "description_ru": "Посмотреть и изменить инвентарь другого игрока",
-      "description_en": "View and edit another player''s inventory"
+      "notes": "Нода invsee (НЕ item.invsee!) открывает просмотр; invsee.edit открывает редактирование. Консоль всегда допущена.",
+      "description_ru": "Посмотреть или изменить инвентарь другого игрока",
+      "description_en": "View or edit another player's inventory"
     },
     "item": {
       "permission": "neoessentials.item",
@@ -3166,9 +3154,6 @@
     ],
     "neoessentials.invsee": [
       "invsee"
-    ],
-    "neoessentials.invsee.edit": [
-      "invseeedit"
     ],
     "neoessentials.item": [
       "item"

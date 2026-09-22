@@ -309,6 +309,7 @@ public class PermissionRegistry {
         register("neoessentials.playtime.others", "View another player's playtime", PermissionCategory.PLAYER, false);
         // Server admin commands
         register("neoessentials.broadcast", "Broadcast a message to all players", PermissionCategory.ADMIN, false);
+        register("neoessentials.notice", "Send a configurable server notice with /n", PermissionCategory.ADMIN, false);
         register("neoessentials.time", "View current world time", PermissionCategory.ADMIN, false);
         register("neoessentials.time.set", "Set or add world time", PermissionCategory.ADMIN, false);
         register("neoessentials.weather", "Set world weather", PermissionCategory.ADMIN, false);

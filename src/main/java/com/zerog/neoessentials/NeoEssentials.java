@@ -1015,7 +1015,6 @@ public class NeoEssentials {
         registry.registerCommandWithPermission("clear", "Clear inventory (alias)", "neoessentials.item.clearinventory");
         registry.registerCommand("invsee", "View another player's inventory");
         registry.registerCommandWithPermission("inv", "View another player's inventory (alias)", "neoessentials.invsee");
-        registry.registerCommandWithPermission("invseeedit", "View and edit another player's inventory", "neoessentials.invsee.edit");
         registry.registerCommand("enderchest", "View another player's ender chest");
         registry.registerCommandWithPermission("ec", "View another player's ender chest (alias)", "neoessentials.enderchest");
         registry.registerCommandWithPermission("enderchestedit", "View and edit another player's ender chest", "neoessentials.enderchest.edit");
@@ -1069,6 +1068,7 @@ public class NeoEssentials {
         registry.registerCommand("broadcast", "Broadcast a message to all players");
         registry.registerCommandWithPermission("bc", "Broadcast a message (alias)", "neoessentials.broadcast");
         registry.registerCommandWithPermission("announce", "Broadcast a message (alias)", "neoessentials.broadcast");
+        registry.registerCommandWithPermission("n", "Send a configurable server notice", "neoessentials.notice");
         registry.registerCommand("time", "Get or set world time");
         registry.registerCommandWithPermission("day", "Set time to day", "neoessentials.time.set");
         registry.registerCommandWithPermission("night", "Set time to night", "neoessentials.time.set");
