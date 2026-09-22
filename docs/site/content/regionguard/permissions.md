@@ -9,7 +9,7 @@
 | `regionguard.command.redefine` | `/rg redefine`. |
 | `regionguard.command.remove` | `/rg remove` и `/rg delete`. |
 | `regionguard.command.list` | `/rg list`. |
-| `regionguard.command.info` | `/rg info`. |
+| `regionguard.command.info` | `/rg info` и `/rg size`. |
 | `regionguard.command.tp` | `/rg tp` и кнопка телепортации в списках. |
 | `regionguard.command.members` | Добавление, удаление и очистка владельцев и участников. |
 | `regionguard.command.flag` | Вход в ветку `/rg flag`. |
