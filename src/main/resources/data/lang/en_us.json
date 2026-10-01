@@ -1040,6 +1040,7 @@
     "commands.neoessentials.teleport.request.expired":  "§cThat teleport request has expired.",
     "commands.neoessentials.teleport.request.expired_received":  "§cThe teleport request from {0} has expired.",
     "commands.neoessentials.teleport.request.failed":  "§cTeleport failed: {0}",
+    "commands.neoessentials.teleport.restricted_destination": "§cThis region does not allow teleport access.",
     "commands.neoessentials.teleport.request.failed_other":  "§cFailed to accept the teleport of §f{0}§c.",
     "commands.neoessentials.teleport.request.instructions":  "§7Use §e/tpaccept§7 or §e/tpdeny§7 to respond.",
     "commands.neoessentials.teleport.request.no_pending":  "No pending teleport request.",

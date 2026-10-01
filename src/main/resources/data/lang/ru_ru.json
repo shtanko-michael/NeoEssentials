@@ -143,6 +143,7 @@
     "commands.neoessentials.teleport.request.expired":  "§cЭтот запрос телепортации истёк.",
     "commands.neoessentials.teleport.request.expired_received":  "§cЗапрос телепортации от {0} истёк.",
     "commands.neoessentials.teleport.request.failed":  "§cТелепортация не удалась: {0}",
+    "commands.neoessentials.teleport.restricted_destination": "§cВ этот регион запрещена телепортация.",
     "commands.neoessentials.teleport.request.failed_other":  "§cНе удалось принять телепортацию §f{0}§c.",
     "commands.neoessentials.teleport.request.instructions":  "§7Используйте §e/tpaccept§7 или §e/tpdeny§7 для ответа.",
     "commands.neoessentials.teleport.request.no_pending":  "Нет ожидающего запроса телепортации.",

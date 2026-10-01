@@ -248,6 +248,11 @@ public class HomeManager {
         // Create location
         TeleportLocation location = customLocation != null ? customLocation : new TeleportLocation(player);
 
+        if (!RegionGuardTeleportRestriction.allowsLandingAt(location)) {
+            player.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.restricted_destination"));
+            return false;
+        }
+
         // Check world restriction
         if (!allowCrossDimensionHomes && !isOverworld(location)) {
             player.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.home.overworld_only"));
