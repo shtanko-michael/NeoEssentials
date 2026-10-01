@@ -511,7 +511,7 @@
     },
     "rg": {
       "syntax": "/rg define <id> | /rg claim <id> | /rg redefine <id> | /rg remove <id> | /rg delete <id> | /rg list | /rg tp <id> | /rg clearowners <id> | /rg clearmembers <id> | /rg info [id] | /rg addowner <id> <player> | /rg addmember <id> <player> | /rg delowner <id> <player> | /rg delmember <id> <player> | /rg flag <id> list | /rg flag <id> <flag> <value> | /rg flag <id> clear <flag> [value]",
-      "notes": "helpCatalogOnly: NeoEssentials не строит Brigadier для /rg. Дерево принадлежит моду «regionguard»; эти 17 строк, а также /bb <player>, попадают в /help только если ModList.isLoaded(\"regionguard\") на старте. Без мода /rg и /bb в каталоге нет и NE их не регистрирует. Права и поведение — у RegionGuard, не у узлов neoessentials.rg."
+      "notes": "helpCatalogOnly: NeoEssentials не строит Brigadier для /rg. Дерево принадлежит моду «regionguard»; эти 17 строк, а также /bb <player>, попадают в /help только если ModList.isLoaded(\"regionguard\") на старте. В /help каждая ветка /rg получает своё переведённое описание (например, define, list и flag clear), а не общий текст для корня /rg. Без мода /rg и /bb в каталоге нет и NE их не регистрирует. Права и поведение — у RegionGuard, не у узлов neoessentials.rg."
     }
   },
   "examples": [
