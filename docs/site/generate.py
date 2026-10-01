@@ -1064,6 +1064,12 @@ def write_github_wiki(out_dir, cat):
                    'установка, первые настройки и выдача прав.'),
     ]
     updates = [
+        _wiki_link('Защита платных зон', 'systems/teleportation/',
+                   'если в RegionGuard у региона стоит `teleport-escape deny`, NeoEssentials не создаёт там `/sethome`, не выполняет TPA с посадкой в зоне и не даёт `/back` вернуться в неё. Настройка флага доступна только OP или с `regionguard.admin.flag.teleport-escape`.'),
+        _wiki_link('Команды без учёта регистра', 'systems/utility/',
+                   'корневые команды NeoEssentials и их алиасы можно вводить как /HOME, /Home или /home; аргументы и подкоманды не меняются.'),
+        _wiki_link('Русская справка RegionGuard', 'systems/utility/',
+                   'в /help каждая из 17 веток /rg показывает своё русское описание, включая claim, list и flag clear.'),
         _wiki_link('Личные сообщения и TAB', 'quickstart/',
                    '/me — алиас личного сообщения; ники в базовых командах подсказываются по Tab.'),
         _wiki_link('Сохранение /fly и /god', 'systems/utility/',

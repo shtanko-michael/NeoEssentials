@@ -111,7 +111,7 @@
     },
     "help": {
       "syntax": "/help | /help <page_or_command> | /help <command> <page>",
-      "notes": "Перед регистрацией рефлексией снимает ванильные узлы help и ?. Один word-аргумент: чистое число ≥ 1 — номер страницы (по 10 команд), иначе поиск по имени/описанию в каталоге CommandRegistry. Вторая страница только у /help <command> <page>, у /? её нет. Список фильтруется по реальному узлу из CommandPermissionRegistry; консоль и держатели neoessentials.admin / neoessentials.* видят всё. Описание команды с аргументами локализуется по её корневому литералу: например, запись bb <player> использует ключ cmd.bb.description. Узел — neoessentials.help (не neoessentials.?)."
+      "notes": "Перед регистрацией рефлексией снимает ванильные узлы help и ?. Один word-аргумент: чистое число ≥ 1 — номер страницы (по 10 команд), иначе поиск по имени/описанию в каталоге CommandRegistry. Вторая страница только у /help <command> <page>, у /? её нет. Список фильтруется по реальному узлу из CommandPermissionRegistry; консоль и держатели neoessentials.admin / neoessentials.* видят всё. Описание сначала ищется по полному синтаксису без плейсхолдеров (например, cmd.rg.flag.clear.description), затем по корню (cmd.bb.description); поэтому отдельные ветки /rg показываются с разными русскими описаниями. Игрок может набрать корень любой команды NeoEssentials или её алиаса в любом регистре (/HOME, /Home, /home); регистр аргументов и подкоманд не меняется. Узел — neoessentials.help (не neoessentials.?)."
     },
     "?": {
       "syntax": "/? | /? <page_or_command>",
