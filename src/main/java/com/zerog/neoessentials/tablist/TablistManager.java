@@ -441,9 +441,13 @@ public class TablistManager {
     public void updatePlayerTeam(ServerPlayer player, MinecraftServer server) {
         if (!enabled || server == null) return;
         try {
-            String prefix = getPermissionPrefix(player, server);
-            String suffix = getPermissionSuffix(player, server);
-            ChatFormatting nameColor = resolveNameColor(player);
+            // A row attached to another (TabAnchors — e.g. a player's AI companion) shows the anchor's prefix in place of
+            // a permission prefix, and sorts right under its parent's row.
+            TabAnchors.Anchor anchor = TabAnchors.of(player.getUUID());
+            ServerPlayer anchorParent = anchor != null ? server.getPlayerList().getPlayer(anchor.parent()) : null;
+            String prefix = anchor != null ? anchor.prefix() : getPermissionPrefix(player, server);
+            String suffix = anchor != null ? "" : getPermissionSuffix(player, server);
+            ChatFormatting nameColor = anchor != null ? null : resolveNameColor(player);
 
             // Append AFK suffix to the team suffix when AFK
             String effectiveSuffix = suffix;
@@ -457,7 +461,11 @@ public class TablistManager {
             // dirty-check's inputs, so this must run unconditionally every call, not just when
             // that check finds something to do. See updateNicknameOverridePacket()'s javadoc
             // for why this even needs to exist.
-            updateNicknameOverridePacket(player, server, prefix, effectiveSuffix, nameColor);
+            if (anchor != null) {
+                updateAnchoredRowPacket(player, server, anchor);
+            } else {
+                updateNicknameOverridePacket(player, server, prefix, effectiveSuffix, nameColor);
+            }
 
             // BTLP-style: encode group weight (or, with groupSections on, the exact column-grid
             // slot) into the team name for client-side sort order.
@@ -477,8 +485,13 @@ public class TablistManager {
             // text differs gets their own team instead of clobbering someone else's.
             String rawTeamName;
             String columnKey = TablistLayout.getInstance().getColumnTeamKey(player.getUUID());
+            boolean byWeight = TablistLayout.getInstance().isSortByGroupWeight();
             if (columnKey != null) {
                 rawTeamName = columnKey;
+            } else if (anchorParent != null) {
+                rawTeamName = TabAnchors.teamName(byWeight ? 9999 - Math.min(getGroupWeight(anchorParent), 9999) : 0, anchorParent, '1');
+            } else if (anchor == null && TabAnchors.hasChildOnline(player.getUUID(), server)) {
+                rawTeamName = TabAnchors.teamName(byWeight ? 9999 - Math.min(getGroupWeight(player), 9999) : 0, player, '0');
             } else {
                 // The colour is part of what makes two rows DIFFERENT, so it belongs in the hash
                 // beside the prefix and suffix. A team colour, like a team prefix, is one value
@@ -595,6 +608,19 @@ public class TablistManager {
      * change, AFK toggle, or config reload can change the prefix/suffix without anyone
      * re-running {@code /nick}.
      */
+    /**
+     * An attached row's tab-list text: indent + the anchor's prefix + the name, sent as the row's display name so the
+     * indent stays in the tab list (the team prefix, which also draws the above-head nametag, carries no indent).
+     * Re-sent when the text changes — and every time something else reset the row, since this runs each update.
+     */
+    private void updateAnchoredRowPacket(ServerPlayer player, MinecraftServer server, TabAnchors.Anchor anchor) {
+        UUID uuid = player.getUUID();
+        String raw = TabAnchors.INDENT + anchor.prefix() + player.getGameProfile().getName();
+        if (raw.equals(lastNicknameOverride.get(uuid))) return;
+        lastNicknameOverride.put(uuid, raw);
+        com.zerog.neoessentials.util.commands.NickCommand.sendTabListDisplayName(player, RichTextFormatter.processTablistText(raw), server);
+    }
+
     private void updateNicknameOverridePacket(ServerPlayer player, MinecraftServer server, String prefix, String effectiveSuffix, ChatFormatting nameColor) {
         UUID uuid = player.getUUID();
         String nickname = com.zerog.neoessentials.util.commands.NickCommand.getNickname(uuid);
