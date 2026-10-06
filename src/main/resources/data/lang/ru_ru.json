@@ -589,6 +589,7 @@
     "commands.neoessentials.ping.high_warning":  "§cОбнаружен высокий пинг - возможны лаги",
     "commands.neoessentials.ping.moderate_info":  "§eСредний пинг - соединение приемлемо",
     "commands.neoessentials.repair.success":  "Предмет починен!",
+    "commands.neoessentials.repair.all_success":  "Починено предметов: {0}.",
     "commands.neoessentials.rules.header":  "§6=== Правила сервера (Стр. {0}/{1}) ===",
     "commands.neoessentials.rules.no_rules":  "§eПравила ещё не настроены.",
     "commands.neoessentials.rules.footer":  "§7Используйте /rules <страница> для просмотра других страниц",
