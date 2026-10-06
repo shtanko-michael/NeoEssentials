@@ -18,6 +18,7 @@ import com.zerog.neoessentials.logging.NeoLog;
  * <p>Commands:</p>
  * <ul>
  *   <li>/repair - Repair the item in main hand</li>
+ *   <li>/repair all - Repair every damaged item in the inventory, armor, and offhand slots</li>
  *   <li>/fix - Alias for /repair</li>
  * </ul>
  * 
@@ -62,6 +63,20 @@ public class RepairCommand {
                     ctx.getSource().sendSuccess(() -> MessageUtil.success("commands.neoessentials.repair.success"), false);
                     return 1;
                 })
+                .then(Commands.literal("all")
+                    .executes(ctx -> {
+                        PermissionValidator.PermissionResult permResult =
+                            PermissionValidator.validatePermission(ctx.getSource(), "neoessentials.item.repair");
+                        if (!permResult.hasPermission()) {
+                            ctx.getSource().sendFailure(MessageUtil.error(permResult.getErrorMessage()));
+                            return 0;
+                        }
+                        int repaired = repairAllItems(permResult.getPlayer());
+                        ctx.getSource().sendSuccess(() -> MessageUtil.success(
+                            "commands.neoessentials.repair.all_success", repaired), false);
+                        return 1;
+                    })
+                )
         );
         }
         if (ConfigManager.getInstance().isCommandEnabled("fix")) {
@@ -103,5 +118,37 @@ public class RepairCommand {
                 itemName,
                 damageBefore);
         }
+    }
+
+    /**
+     * Repairs every damaged item in the player's main inventory, armor, and offhand slots.
+     *
+     * @param player The player whose inventory to repair
+     * @return Number of items whose damage was reset
+     */
+    public static int repairAllItems(ServerPlayer player) {
+        int repaired = 0;
+
+        for (var stack : player.getInventory().items) {
+            repaired += repairStack(stack);
+        }
+        for (var stack : player.getInventory().armor) {
+            repaired += repairStack(stack);
+        }
+        for (var stack : player.getInventory().offhand) {
+            repaired += repairStack(stack);
+        }
+
+        NeoLog.info(LOGGER, LogCategory.GENERAL, "Player {} repaired {} inventory item(s)",
+            player.getName().getString(), repaired);
+        return repaired;
+    }
+
+    private static int repairStack(net.minecraft.world.item.ItemStack stack) {
+        if (stack.isEmpty() || !stack.isDamageableItem() || stack.getDamageValue() == 0) {
+            return 0;
+        }
+        stack.setDamageValue(0);
+        return 1;
     }
 }

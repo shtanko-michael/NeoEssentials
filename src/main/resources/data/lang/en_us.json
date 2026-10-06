@@ -586,6 +586,7 @@
     "commands.neoessentials.realname.status":  "§7Status: {0}",
     "commands.neoessentials.realname.usage":  "§cUsage: /realname <player>",
     "commands.neoessentials.repair.success":  "Item repaired!",
+    "commands.neoessentials.repair.all_success":  "Repaired items: {0}.",
     "commands.neoessentials.root.command_simple":  "§e/{0} §7- §f{1}",
     "commands.neoessentials.root.command_with_aliases":  "§e/{0} §7(aliases: /{1}) - §f{2}",
     "commands.neoessentials.root.execution_failed":  "Failed to execute command: {0}",
