@@ -5,6 +5,7 @@ import com.zerog.neoessentials.config.ConfigManager;
 import com.zerog.neoessentials.logging.LogCategory;
 import com.zerog.neoessentials.logging.NeoLog;
 import com.zerog.neoessentials.teleportation.TeleportLocation;
+import com.zerog.neoessentials.teleportation.RegionGuardTeleportRestriction;
 import com.zerog.neoessentials.teleportation.TeleportUtil;
 import com.zerog.neoessentials.util.MessageUtil;
 import com.zerog.neoessentials.util.PlayerDataStore;
@@ -258,6 +259,11 @@ public class MiscTeleportManager {
         } else {
             NeoLog.debug(LOGGER, LogCategory.TELEPORTATION, "teleportBack: {} has no back or death location", player.getName().getString());
             player.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.misc.no_back_location"));
+            return false;
+        }
+
+        if (!RegionGuardTeleportRestriction.allowsLandingAt(targetLocation)) {
+            player.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.restricted_destination"));
             return false;
         }
 

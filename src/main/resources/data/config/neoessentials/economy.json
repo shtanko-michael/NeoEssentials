@@ -1,6 +1,6 @@
 {
   // DO NOT MODIFY: Used by NeoEssentials for automatic config updates.
-  "_configVersion": 3,
+  "_configVersion": 4,
 
   /* ================================================================
      NeoEssentials — Economy Database  (economy.json)
@@ -12,6 +12,8 @@
   "currencyName": "coins",
   // Plural currency name
   "currencyNamePlural": "coins",
+  // Coins awarded once when a genuinely new player completes the Farmstead onboarding route. Set to 0 to disable.
+  "onboardingCompletionReward": 25000,
   // Maximum balance a player can hold (999999999.99 = ~1 billion)
   "maxBalance": 999999999.99,
   // Global tax percentage on all transfers (0.0 = no tax)

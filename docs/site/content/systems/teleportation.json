@@ -47,7 +47,7 @@
     },
     "sethome": {
       "syntax": "/sethome <name> | /sethome confirm | /sethome deny",
-      "notes": "Голого /sethome нет, имя обязательно. confirm и deny — соседние литералы корня, имя живёт в pending-map, не в командной строке. Перезапись существующего дома всегда спрашивает подтверждение (это не ключ requireConfirmationForDelete). Алиас createhome — только без конфликтующего мода. Имя: ^[a-zA-Z0-9_-]+$, до 20 символов, регистр как ввели."
+      "notes": "Голого /sethome нет, имя обязательно. confirm и deny — соседние литералы корня, имя живёт в pending-map, не в командной строке. Перезапись существующего дома всегда спрашивает подтверждение (это не ключ requireConfirmationForDelete). Алиас createhome — только без конфликтующего мода. Имя: ^[a-zA-Z0-9_-]+$, до 20 символов, регистр как ввели. При RegionGuard-флаге teleport-escape deny дом в такой зоне не создаётся."
     },
     "delhome": {
       "syntax": "/delhome <name> | /delhome confirm | /delhome deny",
@@ -75,7 +75,7 @@
     },
     "tpa": {
       "syntax": "/tpa <player>",
-      "notes": "player — EntityArgument.player(), только онлайн. Себя отклоняет. Цель с выключенным tptoggle недоступна, если у отправителя нет neoessentials.teleport.tpo. У цели с tpauto запрос не создаётся — телепорт сразу. После /tpaccept запрос тоже переносит сразу, точно к текущей позиции цели: без warmup и без поиска соседней «безопасной» точки. Одновременно одна исходящая заявка (sentRequests)."
+      "notes": "player — EntityArgument.player(), только онлайн. Себя отклоняет. Цель с выключенным tptoggle недоступна, если у отправителя нет neoessentials.teleport.tpo. У цели с tpauto запрос не создаётся — телепорт сразу. После /tpaccept запрос тоже переносит сразу, точно к текущей позиции цели: без warmup и без поиска соседней «безопасной» точки. Если посадка попадает в RegionGuard с teleport-escape deny, перенос отменяется. Одновременно одна исходящая заявка (sentRequests)."
     },
     "tpahere": {
       "syntax": "/tpahere <player>",
@@ -127,7 +127,7 @@
     },
     "back": {
       "syntax": "/back",
-      "notes": "Точка пишется перед home/warp/spawn/tpa и перед /tp|/tphere|/tpall|/tppos|/top|/jump|/jumpto. /tpo и /tpoffline из ServerAdminCommands /back не пишут. Смерть — backSettings.enableDeathBack; точка сохраняется без уведомления в чат. Свой warmup: backSettings.teleportDelay, не generalSettings. enableBackSafety по умолчанию false."
+      "notes": "Точка пишется перед home/warp/spawn/tpa и перед /tp|/tphere|/tpall|/tppos|/top|/jump|/jumpto. /tpo и /tpoffline из ServerAdminCommands /back не пишут. Смерть — backSettings.enableDeathBack; точка сохраняется без уведомления в чат. Свой warmup: backSettings.teleportDelay, не generalSettings. enableBackSafety по умолчанию false. Возврат в RegionGuard с teleport-escape deny отменяется."
     },
     "top": {
       "syntax": "/top",

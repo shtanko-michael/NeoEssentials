@@ -4,6 +4,7 @@ import com.zerog.neoessentials.logging.LogCategory;
 import com.zerog.neoessentials.logging.NeoLog;
 import com.zerog.neoessentials.teleportation.TeleportLocation;
 import com.zerog.neoessentials.teleportation.TeleportUtil;
+import com.zerog.neoessentials.teleportation.RegionGuardTeleportRestriction;
 import com.zerog.neoessentials.util.MessageUtil;
 import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
@@ -422,6 +423,15 @@ private final ScheduledExecutorService scheduler = Executors.newScheduledThreadP
         } else {
             teleporter = target;
             destination = requester;
+        }
+
+        if (!RegionGuardTeleportRestriction.allowsLandingAt(destination)) {
+            teleporter.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.restricted_destination"));
+            destination.sendSystemMessage(MessageUtil.error("commands.neoessentials.teleport.restricted_destination"));
+            NeoLog.debug(LOGGER, LogCategory.TELEPORTATION,
+                "executeTeleportRequest: blocked teleport of {} into restricted region at {}",
+                teleporter.getName().getString(), destination.getName().getString());
+            return;
         }
 
         // Save current location for /back command

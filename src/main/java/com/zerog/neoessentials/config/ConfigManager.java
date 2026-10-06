@@ -1605,7 +1605,7 @@ public class ConfigManager {
                                        //        startingBalance (economy.json is authoritative), unread
                                        //        afk tablist-indicator keys, and webDashboard.serviceAccount
                                        //        (superseded by the /dashboard pair handshake)
-        put(ECONOMY_CONFIG, 3);        // v3  — removed _configVersion_comment
+        put(ECONOMY_CONFIG, 4);        // v4  — added onboardingCompletionReward
         put(PERMISSIONS_CONFIG, 7);    // v7  — removed _configVersion_comment
         put(KITS_CONFIG, 2);           // v2  — removed _configVersion_comment
         put(DISCORD_AUTH_CONFIG, 11);  // v11 — fixed dangling trailing comma after permissionMappings'
@@ -2852,6 +2852,23 @@ public class ConfigManager {
             }
         }
         return 100.0;
+    }
+
+    /**
+     * Returns the one-time coin reward for completing the Farmstead onboarding route from
+     * economy.json. Set {@code onboardingCompletionReward} to 0 to disable it.
+     */
+    public static double getOnboardingCompletionReward() {
+        JsonObject config = getInstance().getConfig(ECONOMY_CONFIG);
+        if (config.has("onboardingCompletionReward")) {
+            try {
+                return Math.max(0.0, config.get("onboardingCompletionReward").getAsDouble());
+            } catch (Exception e) {
+                NeoLog.debug(LOGGER, LogCategory.CONFIG,
+                        "Invalid value for economy.json onboardingCompletionReward, using default 25000.0", e);
+            }
+        }
+        return 25000.0;
     }
 
     /**

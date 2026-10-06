@@ -262,12 +262,26 @@ public class HelpCommand {
      * falls back to the registered English description if not found.
      */
     private static String getLocalizedDescription(CommandRegistry.CommandInfo cmd) {
-        // Registry entries may include their usage (for example, "bb <player>").
-        // Translation keys are named after the root command literal, not its arguments.
-        String name = cmd.getName().split("\\s+", 2)[0].toLowerCase(java.util.Locale.ROOT);
-        String descKey = "commands.neoessentials.cmd." + name + ".description";
-        if (MessageUtil.hasTranslation(descKey)) {
-            return MessageUtil.localize(descKey);
+        String fullName = cmd.getName().toLowerCase(Locale.ROOT);
+
+        // Prefer a key for the complete literal syntax. This lets /help distinguish
+        // entries such as /rg claim and /rg flag clear, while omitting placeholders
+        // like <id> and [value] from the stable translation key.
+        String detailedKey = "commands.neoessentials.cmd."
+            + fullName.replaceAll("\\s*(?:<[^>]+>|\\[[^]]+])", "")
+                .trim()
+                .replaceAll("\\s+", ".")
+            + ".description";
+        if (MessageUtil.hasTranslation(detailedKey)) {
+            return MessageUtil.localize(detailedKey);
+        }
+
+        // Existing descriptions are keyed by root command, so retain that fallback
+        // for every command that does not have a syntax-specific translation.
+        String rootName = fullName.split("\\s+", 2)[0];
+        String rootKey = "commands.neoessentials.cmd." + rootName + ".description";
+        if (MessageUtil.hasTranslation(rootKey)) {
+            return MessageUtil.localize(rootKey);
         }
         String fallback = cmd.getDescription();
         return (fallback != null && !fallback.isEmpty())
