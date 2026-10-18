@@ -345,6 +345,9 @@ public class NickCommand {
         String nickname = NICKNAMES.get(player.getUUID());
         net.minecraft.server.MinecraftServer server = player.getServer();
         if (server == null) return;
+        // An anchored row (TabAnchors — an AI companion under its owner) keeps its own override, which TablistManager
+        // sends; the "no nickname" reset below would wipe its indent and prefix on every join.
+        if (nickname == null && com.zerog.neoessentials.tablist.TabAnchors.of(player.getUUID()) != null) return;
 
         // Build the tab-list display name. IMPORTANT: this can't be just the bare nickname —
         // vanilla's tab-list rendering (PlayerTabOverlay.getNameForDisplay) only wraps a row

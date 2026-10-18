@@ -442,9 +442,10 @@ public class TablistManager {
         if (!enabled || server == null) return;
         try {
             // A row attached to another (TabAnchors — e.g. a player's AI companion) shows the anchor's prefix in place of
-            // a permission prefix, and sorts right under its parent's row.
+            // a permission prefix, and sorts right under its parent's row (or with its group, after everyone).
             TabAnchors.Anchor anchor = TabAnchors.of(player.getUUID());
-            ServerPlayer anchorParent = anchor != null ? server.getPlayerList().getPlayer(anchor.parent()) : null;
+            ServerPlayer anchorParent = anchor != null && anchor.parent() != null
+                    ? server.getPlayerList().getPlayer(anchor.parent()) : null;
             String prefix = anchor != null ? anchor.prefix() : getPermissionPrefix(player, server);
             String suffix = anchor != null ? "" : getPermissionSuffix(player, server);
             ChatFormatting nameColor = anchor != null ? null : resolveNameColor(player);
@@ -462,7 +463,7 @@ public class TablistManager {
             // that check finds something to do. See updateNicknameOverridePacket()'s javadoc
             // for why this even needs to exist.
             if (anchor != null) {
-                updateAnchoredRowPacket(player, server, anchor);
+                updateAnchoredRowPacket(player, server, anchor, anchorParent != null);
             } else {
                 updateNicknameOverridePacket(player, server, prefix, effectiveSuffix, nameColor);
             }
@@ -488,6 +489,8 @@ public class TablistManager {
             boolean byWeight = TablistLayout.getInstance().isSortByGroupWeight();
             if (columnKey != null) {
                 rawTeamName = columnKey;
+            } else if (anchor != null && anchor.group() != null) {
+                rawTeamName = TabAnchors.groupTeamName(anchor.group());
             } else if (anchorParent != null) {
                 rawTeamName = TabAnchors.teamName(byWeight ? 9999 - Math.min(getGroupWeight(anchorParent), 9999) : 0, anchorParent, '1');
             } else if (anchor == null && TabAnchors.hasChildOnline(player.getUUID(), server)) {
@@ -610,12 +613,14 @@ public class TablistManager {
      */
     /**
      * An attached row's tab-list text: indent + the anchor's prefix + the name, sent as the row's display name so the
-     * indent stays in the tab list (the team prefix, which also draws the above-head nametag, carries no indent).
-     * Re-sent when the text changes — and every time something else reset the row, since this runs each update.
+     * indent stays in the tab list (the team prefix, which also draws the above-head nametag, carries no indent). The
+     * indent only while the parent is online (it points at the row above); a group's rows have none.
+     * Re-sent when the text changes; a join re-sends them all ({@link #onPlayerJoin}) — the newcomer's client got the
+     * rows without it.
      */
-    private void updateAnchoredRowPacket(ServerPlayer player, MinecraftServer server, TabAnchors.Anchor anchor) {
+    private void updateAnchoredRowPacket(ServerPlayer player, MinecraftServer server, TabAnchors.Anchor anchor, boolean indent) {
         UUID uuid = player.getUUID();
-        String raw = TabAnchors.INDENT + anchor.prefix() + player.getGameProfile().getName();
+        String raw = (indent ? TabAnchors.INDENT : "") + anchor.prefix() + player.getGameProfile().getName();
         if (raw.equals(lastNicknameOverride.get(uuid))) return;
         lastNicknameOverride.put(uuid, raw);
         com.zerog.neoessentials.util.commands.NickCommand.sendTabListDisplayName(player, RichTextFormatter.processTablistText(raw), server);
@@ -1259,6 +1264,14 @@ public class TablistManager {
         server.execute(() -> {
             updatePlayer(player, server);
             updatePlayerTeam(player, server);
+            // Anchored rows live in a display-name override, sent once and then cached. The newcomer's client got
+            // every row from vanilla, without it — so send them all again (to everyone; harmless for the rest).
+            for (UUID child : TabAnchors.anchored()) {
+                ServerPlayer row = server.getPlayerList().getPlayer(child);
+                if (row == null || row == player) continue;
+                lastNicknameOverride.remove(child);
+                updatePlayerTeam(row, server);
+            }
         });
     }
 

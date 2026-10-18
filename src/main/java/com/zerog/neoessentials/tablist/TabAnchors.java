@@ -11,14 +11,20 @@ import java.util.concurrent.ConcurrentHashMap;
  * API for other mods (Farmstead): attach a tab-list row to another player's row. An attached player — e.g. a player's
  * AI companion — is listed right under its parent, indented, with its own prefix instead of a permission prefix; that
  * prefix is also its above-head nametag prefix (one scoreboard team drives both). With the parent offline the row
- * sorts like anyone else's, still with that prefix.
+ * sorts like anyone else's, still with that prefix and without the indent.
+ *
+ * <p>A row can instead join a named group ({@link #group}) — e.g. the server's AI residents, who belong to no player:
+ * the group's rows are listed together after everyone else, with the prefix and no indent.
  *
  * <p>Plain static calls; a mod that may run without NeoEssentials checks {@code ModList.isLoaded("neoessentials")}
  * before touching this class.
  */
 public final class TabAnchors {
-    /** {@code prefix} uses NeoEssentials text formatting (&amp; colour codes and tags), e.g. {@code "&b[ИИ]&r "}. */
-    public record Anchor(UUID parent, String prefix) {}
+    /**
+     * {@code prefix} uses NeoEssentials text formatting (&amp; colour codes and tags), e.g. {@code "&b[ИИ]&r "}.
+     * Exactly one of {@code parent} and {@code group} is set.
+     */
+    public record Anchor(UUID parent, String group, String prefix) {}
 
     /** What goes in front of an attached row in the tab list: the indent that shows it belongs to the row above. */
     public static final String INDENT = "  ↳ ";
@@ -28,7 +34,12 @@ public final class TabAnchors {
     private TabAnchors() {}
 
     public static void attach(UUID child, UUID parent, String prefix) {
-        ANCHORS.put(child, new Anchor(parent, prefix == null ? "" : prefix));
+        ANCHORS.put(child, new Anchor(parent, null, prefix == null ? "" : prefix));
+    }
+
+    /** List {@code child} in the group {@code group} (a short name, e.g. "residents") instead of under a player. */
+    public static void group(UUID child, String group, String prefix) {
+        ANCHORS.put(child, new Anchor(null, group, prefix == null ? "" : prefix));
     }
 
     public static void detach(UUID child) {
@@ -42,9 +53,27 @@ public final class TabAnchors {
     /** Whether any player attached to {@code parent} is online now. */
     static boolean hasChildOnline(UUID parent, MinecraftServer server) {
         for (Map.Entry<UUID, Anchor> e : ANCHORS.entrySet()) {
-            if (e.getValue().parent().equals(parent) && server.getPlayerList().getPlayer(e.getKey()) != null) return true;
+            if (parent.equals(e.getValue().parent()) && server.getPlayerList().getPlayer(e.getKey()) != null) return true;
         }
         return false;
+    }
+
+    /** Every anchored row, to re-send them all when someone joins (their client got none of them). */
+    static java.util.Set<UUID> anchored() {
+        return ANCHORS.keySet();
+    }
+
+    /**
+     * A group's team: "ne_zz" sorts after every other "ne_" team (weights are digits, content tags hex), so the group
+     * is listed after the players.
+     */
+    static String groupTeamName(String group) {
+        StringBuilder key = new StringBuilder("ne_zz");
+        for (char c : group.toLowerCase(java.util.Locale.ROOT).toCharArray()) {
+            if (key.length() == 16) break;
+            key.append((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ? c : '_');
+        }
+        return key.toString();
     }
 
     /**
