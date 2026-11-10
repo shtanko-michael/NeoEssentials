@@ -46,6 +46,37 @@
     });
   }
 
+  /* ── mobile navigation drawer and the "on this page" block ───────────────── */
+
+  var menu = document.getElementById('menu');
+  var scrim = document.querySelector('.scrim');
+  function setNav(open) {
+    document.body.classList.toggle('nav-open', open);
+    if (menu) menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (scrim) scrim.hidden = !open;
+  }
+  if (menu) {
+    menu.addEventListener('click', function () { setNav(!document.body.classList.contains('nav-open')); });
+    if (scrim) scrim.addEventListener('click', function () { setNav(false); });
+    document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') setNav(false); });
+    // Open the drawer at the current page, without scrolling the page itself.
+    var current = document.querySelector('.sidenav a.on');
+    var side = document.getElementById('sidenav');
+    if (current && side) side.scrollTop = Math.max(0, current.offsetTop - side.clientHeight / 2);
+  }
+
+  var toc = document.querySelector('details.toc');
+  if (toc) {
+    var wideToc = window.matchMedia('(min-width: 1280px)');
+    var syncToc = function () { if (wideToc.matches) toc.open = true; };
+    syncToc();
+    if (wideToc.addEventListener) wideToc.addEventListener('change', syncToc);
+    toc.addEventListener('click', function (ev) {
+      if (wideToc.matches && ev.target.tagName === 'SUMMARY') ev.preventDefault();
+      if (!wideToc.matches && ev.target.tagName === 'A') toc.open = false;
+    });
+  }
+
   /* ── site search ───────────────────────────────────────────────────────── */
 
   var q = document.getElementById('q');

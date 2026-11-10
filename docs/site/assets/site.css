@@ -447,3 +447,96 @@ td.num, .num { font-variant-numeric: tabular-nums; text-align: right; }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+/* ── mobile: drawer navigation, collapsible "on this page", tables as cards ── */
+
+#menu { display: none; }
+.scrim { display: none; }
+details.toc > summary { list-style: none; cursor: default; }
+details.toc > summary::-webkit-details-marker { display: none; }
+
+@media (max-width: 1279px) {
+  /* The rail becomes a collapsible block under the page title instead of disappearing. */
+  .toc {
+    display: block; margin: 0 0 22px; padding: 0;
+    border: 1px solid var(--rule); border-radius: 6px; background: var(--surface);
+  }
+  details.toc > summary {
+    cursor: pointer; padding: 11px 14px; margin: 0;
+    font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--muted); display: flex; justify-content: space-between; align-items: center;
+  }
+  details.toc > summary::after { content: "▾"; font-size: 13px; transition: transform .15s; }
+  details.toc[open] > summary::after { transform: rotate(180deg); }
+  .toc ul { list-style: none; margin: 0; padding: 4px 14px 12px; max-height: 50vh; overflow-y: auto; }
+  .toc li { margin: 0; }
+  .toc li.lv3 { padding-left: 14px; }
+  .toc a { display: block; padding: 7px 0; color: var(--ink); text-decoration: none; font-size: 14.5px;
+           line-height: 1.35; border-bottom: 1px solid var(--rule-soft); }
+}
+
+@media (max-width: 900px) {
+  #menu {
+    display: inline-flex; flex-shrink: 0; width: 38px; height: 38px; align-items: center; justify-content: center;
+    background: transparent; border: 1px solid var(--rule); border-radius: 5px; cursor: pointer; padding: 0;
+  }
+  #menu span, #menu span::before, #menu span::after {
+    display: block; width: 16px; height: 2px; background: var(--ink); border-radius: 1px; position: relative;
+  }
+  #menu span::before, #menu span::after { content: ""; position: absolute; left: 0; }
+  #menu span::before { top: -5px; }
+  #menu span::after { top: 5px; }
+
+  .sidenav {
+    position: fixed; top: 0; left: 0; bottom: 0; z-index: 60;
+    width: min(86vw, 320px); height: 100vh; height: 100dvh;
+    display: block; padding: 18px 10px 40px 16px;
+    background: var(--ground); border-right: 1px solid var(--rule); border-bottom: none;
+    transform: translateX(-102%); transition: transform .2s ease; overflow-y: auto;
+    box-shadow: 0 0 40px rgba(0,0,0,.25);
+  }
+  body.nav-open .sidenav { transform: none; }
+  body.nav-open { overflow: hidden; }
+  .scrim { display: block; position: fixed; inset: 0; z-index: 55; background: rgba(0,0,0,.4); }
+  .scrim[hidden] { display: none; }
+  .nav-group { margin-bottom: 18px; }
+  .sidenav a { padding-top: 9px; padding-bottom: 9px; }
+
+  #lang, #theme { width: 38px; height: 38px; }
+  .page-head h1 { font-size: 30px; line-height: 1.15; }
+
+  /* Tables → cards: one row per card, labelled cells, nothing hidden off-screen. */
+  .scroller { overflow: visible; }
+  table.grid, table.grid tbody, table.grid tr, table.grid td { display: block; width: 100%; }
+  table.grid thead { display: none; }
+  table.grid tr {
+    border: 1px solid var(--rule); border-radius: 6px; margin: 0 0 12px; padding: 10px 12px;
+    background: var(--surface);
+  }
+  table.grid tr:hover td { background: transparent; }
+  table.grid td { border: none; padding: 3px 0; overflow-wrap: anywhere; word-break: normal; }
+  table.grid td[data-label]::before {
+    content: attr(data-label); display: inline-block; min-width: 92px; margin-right: 6px;
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+  }
+  table.grid td.c-name, table.grid td.c-key { font-size: 16px; font-weight: 600; padding-bottom: 2px; }
+  table.grid td.c-syntax code { white-space: normal; }
+  table.grid td.c-desc { margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--rule-soft); }
+  table.grid tr.grp { background: transparent; border: none; padding: 14px 0 4px; }
+  table.grid code { overflow-wrap: anywhere; }
+  .filters { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 6px; -webkit-overflow-scrolling: touch; }
+  .filters .chip { flex-shrink: 0; }
+  .tablefilter input, #q { font-size: 16px; }  /* no iOS zoom-on-focus */
+  .cmd-table { min-width: 0; }
+  .cmd-table .c-syntax, .cmd-table .c-desc { white-space: normal; min-width: 0; }
+  table.grid tr { box-sizing: border-box; max-width: 100%; }
+  table.grid td { box-sizing: border-box; max-width: 100%; padding-right: 0; }
+  .prose table:not(.grid) { display: block; overflow-x: auto; }
+  pre { overflow-x: auto; }
+}
+
+@media (max-width: 560px) {
+  .brand { display: none; }
+  .topbar { flex-wrap: wrap; }
+  .product-switch { margin-right: auto; }
+}

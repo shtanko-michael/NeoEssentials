@@ -84,6 +84,7 @@ UI = {
     'skip': ('К содержимому', 'Skip to content'),
     'search_ph': ('Поиск по командам, правам и конфигу…', 'Search commands, permissions and config…'),
     'theme': ('Переключить тему', 'Toggle theme'),
+    'menu': ('Меню', 'Menu'),
     'lang_label': ('Read in English', 'Читать на русском'),
     'sections': ('Разделы', 'Sections'),
     'footer': ('— документация мода для сервера', '— mod documentation for the'),
@@ -599,8 +600,8 @@ def page(rel, title, subtitle, body, toc=None, active='', wide=False, extra_head
         items = ''.join('<li class="lv%d"><a href="#%s">%s</a></li>' % (t['level'], t['id'], e(t['text']))
                         for t in toc if t['level'] <= 3)
         if items:
-            toc_html = ('<aside class="toc"><p class="toc-title">%s</p>'
-                        '<ul>%s</ul></aside>' % (t('on_this_page'), items))
+            toc_html = ('<details class="toc"><summary class="toc-title">%s</summary>'
+                        '<ul>%s</ul></details>' % (t('on_this_page'), items))
 
     is_regionguard = product == 'regionguard'
     product_name = 'RegionGuard' if is_regionguard else 'NeoEssentials'
@@ -634,12 +635,13 @@ def page(rel, title, subtitle, body, toc=None, active='', wide=False, extra_head
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap">
 <link rel="alternate" hreflang="{alt_lang}" href="{alt}">
-<link rel="stylesheet" href="{up}assets/site.css?v=3">
+<link rel="stylesheet" href="{up}assets/site.css?v=4">
 {extra_head}
 </head>
 <body{bodycls}>
 <a class="skip" href="#main">{t_skip}</a>
 <header class="topbar">
+  <button id="menu" type="button" aria-label="{t_menu}" aria-controls="sidenav" aria-expanded="false"><span></span></button>
   <a class="brand" href="{up}{product_home}" aria-label="{site_name}">
     <img class="brand-logo" src="{up}assets/farmstead.png" alt="" width="36" height="36">
     <span class="brand-text">
@@ -656,7 +658,8 @@ def page(rel, title, subtitle, body, toc=None, active='', wide=False, extra_head
   <button id="theme" type="button" aria-label="{t_theme}">◐</button>
 </header>
 <div class="shell">
-  <nav class="sidenav" aria-label="{t_sections}">{nav}</nav>
+  <nav class="sidenav" id="sidenav" aria-label="{t_sections}">{nav}</nav>
+  <div class="scrim" hidden></div>
   <main id="main">
     <div class="page-head">
       <h1>{title}</h1>
@@ -670,7 +673,7 @@ def page(rel, title, subtitle, body, toc=None, active='', wide=False, extra_head
   <p><strong>{site_name}</strong> {t_footer}
   <a href="https://farmsteadminecraft.online">Farmstead Minecraft</a>{t_footer_server}.{footer_tail}</p>
 </footer>
-<script src="{up}assets/site.js" defer></script>
+<script src="{up}assets/site.js?v=4" defer></script>
 </body>
 </html>
 """.format(up=up, title=e(title), doc_title=e(doc_title), subtitle=e(subtitle),
@@ -680,7 +683,7 @@ def page(rel, title, subtitle, body, toc=None, active='', wide=False, extra_head
            product_name=product_name, site_name=site_name, product_switch=product_switch,
            lang=LANG, alt=ALT_HREF, alt_lang=('en' if LANG == 'ru' else 'ru'),
            alt_code=('EN' if LANG == 'ru' else 'RU'), early=EARLY_LANG_JS,
-           t_skip=t('skip'), t_search=t('search_ph'), t_theme=t('theme'), t_lang=t('lang_label'),
+           t_menu=t('menu'), t_skip=t('skip'), t_search=t('search_ph'), t_theme=t('theme'), t_lang=t('lang_label'),
            t_sections=t('sections'), t_footer=t('footer'), t_footer_server=t('footer_server'),
            footer_tail=(t('footer_upstream') +
                         '<a href="https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials">'
@@ -752,14 +755,14 @@ def command_row(cmd, curated):
     return ('<tr id="%s" data-search="%s">'
             '<td class="c-name"><code>/%s</code></td>'
             '<td class="c-syntax"><code>%s</code></td>'
-            '<td class="c-alias">%s</td>'
-            '<td class="c-perm">%s</td>'
+            '<td class="c-alias" data-label="%s">%s</td>'
+            '<td class="c-perm" data-label="%s">%s</td>'
             '<td class="c-desc">%s</td>'
             '</tr>') % (
         cmd_anchor(cmd['name']),
         e(' '.join([cmd['name'], syntax, perm or '', ' '.join(cmd.get('aliases', [])),
                     extra.get('description') or cmd['description']]).lower()),
-        e(cmd['name']), e(syntax), aliases, perm_cell, desc)
+        e(cmd['name']), e(syntax), t('th_aliases'), aliases, t('th_perm'), perm_cell, desc)
 
 
 def cmd_thead():
@@ -779,7 +782,7 @@ def permissions_table(nodes):
         default = ('<span class="tag tag-ok" title="%s">%s</span>' % (t('reg_yes_title'), t('reg_yes'))
                    if n['default']
                    else '<span class="tag tag-warn" title="%s">%s</span>' % (t('reg_no_title'), t('reg_no')))
-        rows.append('<tr data-search="%s"><td><code>%s</code></td><td>%s</td><td>%s</td></tr>'
+        rows.append('<tr data-search="%s"><td class="c-key"><code>%s</code></td><td class="c-meta">%s</td><td>%s</td></tr>'
                     % (e((n['node'] + ' ' + n['description']).lower()), e(n['node']), default,
                        e(n['description'])))
     return ('<div class="scroller"><table class="grid"><thead><tr><th>%s</th>'
@@ -796,10 +799,11 @@ def config_table(entries):
                            (' <span class="muted">— %s</span>' % e(c['description']))
                            if c['description'] else ''))
             continue
-        rows.append('<tr data-search="%s"><td><code>%s</code></td><td><code>%s</code></td>'
+        rows.append('<tr data-search="%s"><td class="c-key"><code>%s</code></td>'
+                    '<td class="c-meta" data-label="%s"><code>%s</code></td>'
                     '<td>%s</td></tr>'
                     % (e((c['key'] + ' ' + c['description']).lower()), e(c['key']),
-                       e(c['default']), e(c['description']) or '<span class="muted">—</span>'))
+                       t('th_default'), e(c['default']), e(c['description']) or '<span class="muted">—</span>'))
     return ('<div class="scroller"><table class="grid"><thead><tr><th>%s</th>'
             '<th>%s</th><th>%s</th></tr></thead><tbody>%s</tbody></table></div>'
             % (t('th_key'), t('th_default'), t('th_desc'), ''.join(rows)))
