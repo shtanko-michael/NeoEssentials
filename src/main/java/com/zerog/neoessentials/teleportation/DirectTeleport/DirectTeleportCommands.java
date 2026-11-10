@@ -281,8 +281,8 @@ public class DirectTeleportCommands {
                 return 0;
             }
             final int finalCount = count;
-            ctx.getSource().sendSuccess(() -> MessageUtil.success("commands.neoessentials.teleport.admin.tpall.teleported",
-                String.valueOf(finalCount), player.getName().getString()), true);
+            ctx.getSource().sendSuccess(() -> MessageUtil.success("commands.neoessentials.teleport.admin.tpall.completed",
+                String.valueOf(finalCount), "0"), true);
             return count;
         } catch (Exception e) {
             NeoLog.error(LOGGER, LogCategory.TELEPORTATION, "teleportAllPlayers command failed", e);
