@@ -750,7 +750,7 @@ public class NeoEssentials {
         // RegionGuard owns the /rg Brigadier tree. Register every usable syntax here only
         // when the optional mod is present, so /help lists the individual subcommands
         // without advertising commands unavailable on servers without RegionGuard.
-        if (ModList.get().isLoaded("regionguard")) {
+        if (ModList.get().isLoaded("farmstead_claims") || ModList.get().isLoaded("regionguard")) {
             registerRegionGuardHelpCommands(registry);
         }
         
