@@ -1,0 +1,26 @@
+{
+  "groups": ["Utilities"],
+  "pages": [
+    {
+      "title": "Farmstead utilities",
+      "navTitle": "Overview",
+      "group": "Utilities",
+      "lede": "Small Farmstead server mods for NeoForge 1.21.1: each one does one job and players do not need it on the client.",
+      "keywords": ["Farmstead utilities", "server mods"]
+    },
+    {
+      "title": "Farmstead Chunk Breeding Limit",
+      "navTitle": "Breeding limit",
+      "group": "Utilities",
+      "lede": "An animal cap per chunk or per Farmstead Claims region: no new baby appears once the cap is reached.",
+      "keywords": ["/chunkbreedlimit", "farmstead_chunkbreeding", "animal limit", "maxAnimalsPerChunk", "entityLimits", "farmstead-chunk-breeding.toml"]
+    },
+    {
+      "title": "Farmstead Trade Chat",
+      "navTitle": "Trade chat",
+      "group": "Utilities",
+      "lede": "A trade channel in the main chat: a message starting with @ goes to everyone with the channel tag ([Торговля] by default).",
+      "keywords": ["trade chat", "farmstead_tradechat", "channelPrefix", "cooldownSeconds", "farmstead_tradechat-server.toml"]
+    }
+  ]
+}

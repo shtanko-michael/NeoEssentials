@@ -1,0 +1,64 @@
+{
+  "groups": ["Getting started", "Reference", "Help"],
+  "pages": [
+    {
+      "title": "Farmstead AI Builder",
+      "navTitle": "Overview",
+      "group": "Getting started",
+      "lede": "A NeoForge 1.21.1 mod that builds from a text prompt: an aiming hologram, block-by-block placement and full undo.",
+      "keywords": ["AI Builder", "farmstead_aibuilder", "/aibuild", "build from a prompt", "AI"]
+    },
+    {
+      "title": "Installation and token",
+      "group": "Getting started",
+      "lede": "Requirements, the jar on the server and on clients, the token from the cabinet and the log check.",
+      "keywords": ["bearer_token", "api_base_url", "farmstead_aibuilder.toml", "AI Builder token", "install AI Builder"]
+    },
+    {
+      "title": "AI Builder commands",
+      "navTitle": "Commands",
+      "group": "Reference",
+      "lede": "Every /aibuild subcommand: what it does, what it costs and which node opens it.",
+      "keywords": ["/aibuild create", "/aibuild area", "/aibuild undo", "/aibuild list", "/aibuild get", "/aibuild placed", "/aibuild balance"]
+    },
+    {
+      "title": "Permissions and LuckPerms",
+      "group": "Reference",
+      "lede": "Two doors for every subcommand: a level from the config or an aibuilder.command.* node.",
+      "keywords": ["aibuilder.command.create", "aibuilder.command", "create_level", "LuckPerms AI Builder"]
+    },
+    {
+      "title": "AI Builder configuration",
+      "navTitle": "Configuration",
+      "group": "Reference",
+      "lede": "Every section of config/farmstead_aibuilder.toml, including the mod's language.",
+      "keywords": ["farmstead_aibuilder.toml", "[language]", "announce_builds", "max_blocks", "budget_ms"]
+    },
+    {
+      "title": "Limits and spend",
+      "group": "Reference",
+      "lede": "Who may spend how many tokens: server and player daily caps, bans and the report.",
+      "keywords": ["token limit", "daily limit", "AI token spend", "/aibuild status"]
+    },
+    {
+      "title": "Land protection",
+      "group": "Reference",
+      "lede": "How the mod checks claims in Farmstead Claims or the original RegionGuard.",
+      "keywords": ["AI Builder claims", "Farmstead Claims", "RegionGuard", "claim check failed"]
+    },
+    {
+      "title": "AI Builder troubleshooting",
+      "navTitle": "Troubleshooting",
+      "group": "Help",
+      "lede": "What the log lines and chat messages mean, and what to do about them.",
+      "keywords": ["rejected this server's token", "limit used up", "service is busy", "Not enough AI tokens"]
+    },
+    {
+      "title": "AI Builder version history",
+      "navTitle": "Version history",
+      "group": "Help",
+      "lede": "What changed in each release of the mod.",
+      "keywords": ["AI Builder changelog", "v1.1.0", "v1.0.0"]
+    }
+  ]
+}

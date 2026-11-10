@@ -1,0 +1,38 @@
+{
+  "site": {
+    "title": "Моды Farmstead",
+    "name": "Mods",
+    "lede": "Документация серверных модов Farmstead Minecraft для NeoForge 1.21.1: команды, права, конфигурация и разбор проблем."
+  },
+  "products": [
+    {
+      "id": "neoessentials",
+      "tab": "NeoEssentials",
+      "name": "NeoEssentials",
+      "home": "neoessentials/index.html",
+      "summary": "Форк ZeroG NeoEssentials: дома, телепорты, экономика, киты, модерация и права — справочник собирается из исходников."
+    },
+    {
+      "id": "claims",
+      "dir": "claims",
+      "tab": "Claims",
+      "name": "Claims",
+      "redirectFrom": "regionguard",
+      "summary": "Приваты в духе WorldGuard: регионы по выделению WorldEdit, владельцы, участники и флаги. Прямая замена RegionGuard."
+    },
+    {
+      "id": "aibuilder",
+      "dir": "aibuilder",
+      "tab": "AI Builder",
+      "name": "AI Builder",
+      "summary": "Постройки по текстовому описанию: голограмма-прицел, укладка блок за блоком, полная отмена и лимиты расходов."
+    },
+    {
+      "id": "utilities",
+      "dir": "utilities",
+      "tab": "Утилиты",
+      "name": "Утилиты",
+      "summary": "Маленькие серверные моды: лимит размножения животных в чанке или регионе и торговый чат."
+    }
+  ]
+}

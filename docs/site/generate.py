@@ -19,8 +19,13 @@ Sources
   docs/site/content/*.md ............... this fork's added guides / pitfalls / known issues
   docs/site/content/systems/*.json ..... verified syntax + examples per command
   docs/site/content/_meta.json ......... system taxonomy and navigation
-  docs/site/content/claims/ ............ curated Farmstead Claims reference pages
-                                         (old regionguard/** URLs get redirect stubs)
+  docs/site/content/_products.json ..... the mod tabs of the site (NeoEssentials, Claims,
+                                         AI Builder, Utilities) and the landing page
+  docs/site/content/<dir>/_meta.json ... a curated product (claims/, aibuilder/, utilities/):
+                                         pages, nav groups, titles, ledes, search keywords.
+                                         These are COPIES of each mod's own docs - the Pages
+                                         build runs from this repository alone, so nothing is
+                                         read from sibling mods at build time
 
 Usage:  python docs/site/generate.py [--out docs/site/_site]
 """
@@ -41,7 +46,6 @@ CONFIG_DIR = os.path.join(ROOT, 'src', 'main', 'resources', 'data', 'config', 'n
 LANG_DIR = os.path.join(ROOT, 'src', 'main', 'resources', 'data', 'lang')
 UPSTREAM_WIKI = os.path.join(ROOT, 'docs', 'Wiki')
 CONTENT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'content')
-CLAIMS_CONTENT_DIR = os.path.join(CONTENT_DIR, 'claims')
 ASSETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets')
 PUBLIC_SITE = 'https://shtanko-michael.github.io/NeoEssentials'
 
@@ -82,6 +86,8 @@ UI = {
     'anchor_label': ('Ссылка на раздел', 'Link to this section'),
     'on_this_page': ('На этой странице', 'On this page'),
     'product_switch': ('Выбор мода', 'Choose the mod'),
+    'mods_title': ('Моды', 'Mods'),
+    'open_docs': ('Открыть документацию', 'Open the docs'),
     'skip': ('К содержимому', 'Skip to content'),
     'search_ph': ('Поиск по командам, правам и конфигу…', 'Search commands, permissions and config…'),
     'theme': ('Переключить тему', 'Toggle theme'),
@@ -472,9 +478,9 @@ GITHUB_BLOB = 'https://github.com/shtanko-michael/NeoEssentials/blob/farmstead-m
 
 # Upstream GitHub-wiki pages that are not a system in _meta.json.
 WIKI_SPECIAL = {
-    'Home': '../../index.html',
+    'Home': '../../neoessentials/index.html',
     'CommandsReference': '../../commands/index.html',
-    'FAQ': '../../index.html',
+    'FAQ': '../../neoessentials/index.html',
 }
 
 WIKI_REPO_DOCS = {
@@ -604,19 +610,20 @@ def page(rel, title, subtitle, body, toc=None, active='', wide=False, extra_head
             toc_html = ('<details class="toc"><summary class="toc-title">%s</summary>'
                         '<ul>%s</ul></details>' % (t('on_this_page'), items))
 
-    is_claims = product == 'claims'
-    product_name = 'Claims' if is_claims else 'NeoEssentials'
-    product_home = 'claims/index.html' if is_claims else 'index.html'
-    site_name = 'Farmstead ' + product_name
-    doc_title = title if title == site_name else '%s · %s' % (title, site_name)
+    # The site documents several mods. `product` is the id of one of them (a tab in the switch),
+    # or 'site' for the landing page that lists them all.
+    current = PRODUCT_BY_ID.get(product)
+    site_title = SITE['title']
+    site_name = ('Farmstead ' + current['name']) if current else site_title
+    doc_title = title if title in (site_name, site_title) else '%s · %s' % (title, site_name)
 
-    product_switch = (
-        '<nav class="product-switch" aria-label="%s">'
-        '<a href="%sindex.html"%s>NeoEssentials</a>'
-        '<a href="%sclaims/index.html"%s>Farmstead Claims</a>'
-        '</nav>' % (
-            t('product_switch'), up, '' if is_claims else ' class="on" aria-current="page"',
-            up, ' class="on" aria-current="page"' if is_claims else ''))
+    tabs = []
+    for prod in PRODUCTS:
+        on = prod['id'] == product
+        tabs.append('<a href="%s%s"%s>%s</a>' % (
+            up, product_home(prod), ' class="on" aria-current="page"' if on else '', e(prod['tab'])))
+    product_switch = '<nav class="product-switch" aria-label="%s">%s</nav>' % (
+        t('product_switch'), ''.join(tabs))
 
     return """<!doctype html>
 <html lang="{lang}" data-base="{up}" data-alt="{alt}">
@@ -636,18 +643,18 @@ def page(rel, title, subtitle, body, toc=None, active='', wide=False, extra_head
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap">
 <link rel="alternate" hreflang="{alt_lang}" href="{alt}">
-<link rel="stylesheet" href="{up}assets/site.css?v=4">
+<link rel="stylesheet" href="{up}assets/site.css?v=5">
 {extra_head}
 </head>
 <body{bodycls}>
 <a class="skip" href="#main">{t_skip}</a>
 <header class="topbar">
   <button id="menu" type="button" aria-label="{t_menu}" aria-controls="sidenav" aria-expanded="false"><span></span></button>
-  <a class="brand" href="{up}{product_home}" aria-label="{site_name}">
+  <a class="brand" href="{up}index.html" aria-label="{site_title}">
     <img class="brand-logo" src="{up}assets/farmstead.png" alt="" width="36" height="36">
     <span class="brand-text">
       <span class="brand-kicker">Farmstead</span>
-      <span class="brand-name">{product_name}</span>
+      <span class="brand-name">{brand_name}</span>
     </span>
   </a>
   {product_switch}
@@ -674,21 +681,40 @@ def page(rel, title, subtitle, body, toc=None, active='', wide=False, extra_head
   <p><strong>{site_name}</strong> {t_footer}
   <a href="https://farmsteadminecraft.online">Farmstead Minecraft</a>{t_footer_server}.{footer_tail}</p>
 </footer>
-<script src="{up}assets/site.js?v=4" defer></script>
+<script src="{up}assets/site.js?v=5" defer></script>
 </body>
 </html>
 """.format(up=up, title=e(title), doc_title=e(doc_title), subtitle=e(subtitle),
            body=body, nav=''.join(nav_html),
            toc=toc_html, extra_head=extra_head,
-           bodycls=' class="wide"' if wide else '', product_home=product_home,
-           product_name=product_name, site_name=site_name, product_switch=product_switch,
+           bodycls=' class="wide"' if wide else '', site_title=e(site_title),
+           brand_name=e(SITE['name']), site_name=e(site_name), product_switch=product_switch,
            lang=LANG, alt=ALT_HREF, alt_lang=('en' if LANG == 'ru' else 'ru'),
            alt_code=('EN' if LANG == 'ru' else 'RU'), early=EARLY_LANG_JS,
            t_menu=t('menu'), t_skip=t('skip'), t_search=t('search_ph'), t_theme=t('theme'), t_lang=t('lang_label'),
            t_sections=t('sections'), t_footer=t('footer'), t_footer_server=t('footer_server'),
            footer_tail=(t('footer_upstream') +
                         '<a href="https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials">'
-                        'ZeroG NeoEssentials</a>.' if not is_claims else ''))
+                        'ZeroG NeoEssentials</a>.' if product == 'neoessentials' else ''))
+
+
+PRODUCTS = []        # content/_products.json, in the language being built; set by build()
+PRODUCT_BY_ID = {}
+SITE = {'title': 'Farmstead mods', 'name': 'Mods', 'lede': ''}
+
+
+def product_home(prod):
+    """Site-relative URL of a product's first page."""
+    return prod.get('home') or '%s/index.html' % prod['dir']
+
+
+RE_REL_HREF = re.compile(r'(\b(?:href|src)=")(?![a-z][a-z0-9+.-]*:|#|/|\.\./)')
+
+
+def push_down(body_html):
+    """Re-anchor the relative links of a page written one directory deeper than its Markdown
+    was authored for (the NeoEssentials overview moved from / to /neoessentials/)."""
+    return RE_REL_HREF.sub(r'\1../', body_html)
 
 
 ALT_HREF = '__ALT_HREF__'  # the same page in the other language; resolved per file in write()
@@ -952,8 +978,14 @@ def check_languages():
 
 
 def build(out_dir, base, wiki_out=None, lang='ru'):
-    global NAV, LANG
+    global NAV, LANG, PRODUCTS, PRODUCT_BY_ID, SITE
     LANG = lang
+    pmeta = read_content_json_file('_products.json', {}) or {}
+    SITE = dict(SITE, **(pmeta.get('site') or {}))
+    PRODUCTS = pmeta.get('products') or [
+        {'id': 'neoessentials', 'tab': 'NeoEssentials', 'name': 'NeoEssentials',
+         'home': 'neoessentials/index.html'}]
+    PRODUCT_BY_ID = {p['id']: p for p in PRODUCTS}
     if lang == 'ru':
         check_languages()
     cat = load_catalog()
@@ -968,7 +1000,7 @@ def build(out_dir, base, wiki_out=None, lang='ru'):
 
     NAV = [
         {'title': t('nav_start'), 'items': [
-            {'id': 'index', 'title': t('nav_overview'), 'href': 'index.html'},
+            {'id': 'index', 'title': t('nav_overview'), 'href': 'neoessentials/index.html'},
             {'id': 'quickstart', 'title': t('nav_quickstart'), 'href': 'quickstart/index.html'},
         ]},
         {'title': t('nav_reference'), 'items': [
@@ -1000,11 +1032,30 @@ def build(out_dir, base, wiki_out=None, lang='ru'):
     tiles = ''.join('<div class="tile"><p class="tile-n">%s</p><p class="tile-k">%s</p>'
                     '<p class="tile-s">%s</p></div>' % (v, e(k), e(s)) for k, v, s in stat_tiles)
 
-    intro = read_md_content('index.md')
+    # The NeoEssentials overview lives at neoessentials/ - the site root is the landing that
+    # lists every mod. index.md is written with root-relative links, so they are pushed down.
+    intro = push_down(read_md_content('index.md'))
     body = ('<section class="tiles">%s</section>' % tiles) + intro
-    write(out_dir, 'index.html', page(0, 'Farmstead NeoEssentials',
-                                      t('index_lede'),
-                                      body, active='index'))
+    write(out_dir, 'neoessentials/index.html', page(1, 'Farmstead NeoEssentials',
+                                                    t('index_lede'),
+                                                    body, active='index'))
+    search.append({'t': 'NeoEssentials', 'd': t('index_lede'), 'u': 'neoessentials/index.html',
+                   'k': 'NeoEssentials'})
+
+    # ---- landing -----------------------------------------------------------
+    cards = []
+    for prod in PRODUCTS:
+        cards.append('<a class="product-card" href="%s"><span class="product-card-kicker">Farmstead</span>'
+                     '<span class="product-card-name">%s</span><span class="product-card-text">%s</span>'
+                     '<span class="product-card-go">%s →</span></a>'
+                     % (product_home(prod), e(prod['name']), e(prod.get('summary', '')), t('open_docs')))
+    landing_nav = [{'title': t('mods_title'), 'items': [
+        {'id': 'p-' + prod['id'], 'title': 'Farmstead ' + prod['name'], 'href': product_home(prod)}
+        for prod in PRODUCTS]}]
+    write(out_dir, 'index.html',
+          page(0, SITE['title'], SITE.get('lede', ''),
+               '<section class="product-cards">%s</section>' % ''.join(cards) + read_md_content('landing.md'),
+               product='site', nav=landing_nav))
 
     # ---- quick start -------------------------------------------------------
     qs = read_md_content('quickstart.md')
@@ -1177,50 +1228,15 @@ def build(out_dir, base, wiki_out=None, lang='ru'):
           page(1, t('ts_title'), t('ts_lede'),
                b, toc, active='troubleshooting'))
 
-    # ---- Farmstead Claims --------------------------------------------------
-    # Farmstead Claims (game/claims-mod, the drop-in replacement for RegionGuard) is maintained in
-    # the parent Farmstead monorepo, while this site is built from the standalone NeoEssentials
-    # repository on GitHub Actions. Keep its curated documentation here so Pages builds are
-    # self-contained and do not depend on a sibling checkout. The section used to live at
-    # regionguard/; every old page gets a redirect stub to its claims/ twin.
-    rg_meta = read_content_json_file('claims/_meta.json', {}) or {}
-    rg_pages = rg_meta.get('pages', [])
-    rg_groups = []
-    for group_name in rg_meta.get('groups', []):
-        items = []
-        for item in rg_pages:
-            if item.get('group') != group_name:
-                continue
-            slug = item.get('slug', '')
-            items.append({
-                'id': 'rg-' + (slug or 'index'),
-                'title': item.get('navTitle') or item['title'],
-                'href': 'claims/%s' % (('%s/index.html' % slug) if slug else 'index.html'),
-            })
-        if items:
-            rg_groups.append({'title': group_name, 'items': items})
-
-    for item in rg_pages:
-        slug = item.get('slug', '')
-        source = item.get('source') or ((slug or 'index') + '.md')
-        source_path = content_path('claims/' + source)
-        if not os.path.exists(source_path):
-            warn('Farmstead Claims page "%s" points at missing content %s' % (slug or 'index', source))
-            continue
-        body, toc = add_heading_ids(md_to_html(read(source_path)))
-        out_path = 'claims/%s' % (('%s/index.html' % slug) if slug else 'index.html')
-        rel = 2 if slug else 1
-        write(out_dir, 'regionguard/%s' % (('%s/index.html' % slug) if slug else 'index.html'),
-              redirect_page(out_path, '../' * rel + out_path, item['title']))
-        write(out_dir, out_path,
-              page(rel, item['title'], item.get('lede', ''), body, toc,
-                   active='rg-' + (slug or 'index'), wide=item.get('wide', False),
-                   product='claims', nav=rg_groups))
-        search.append({'t': item['title'], 'd': item.get('lede', ''), 'u': out_path,
-                       'k': 'Claims'})
-        for keyword in item.get('keywords', []):
-            search.append({'t': keyword, 'd': item.get('lede', ''), 'u': out_path,
-                           'k': 'Claims'})
+    # ---- curated products (claims, aibuilder, utilities) ------------------
+    # Each one is a folder of Markdown pages plus a _meta.json (pages, nav groups, titles, ledes,
+    # search keywords). They are copies of the docs of mods maintained in the Farmstead monorepo:
+    # this site is built from the standalone NeoEssentials repository on GitHub Actions, so the
+    # content has to live here. A product may keep an old URL prefix alive with redirect stubs
+    # ("redirectFrom": claims/ used to be regionguard/).
+    for prod in PRODUCTS:
+        if prod.get('dir'):
+            build_curated_product(out_dir, prod, search)
 
     # ---- assets & search ---------------------------------------------------
     os.makedirs(os.path.join(out_dir, 'assets'), exist_ok=True)
@@ -1245,6 +1261,52 @@ def build(out_dir, base, wiki_out=None, lang='ru'):
         for w in WARNINGS:
             print('  - ' + w)
     return 0
+
+
+def build_curated_product(out_dir, prod, search):
+    pdir = prod['dir']
+    meta = read_content_json_file(pdir + '/_meta.json', None)
+    if meta is None:
+        warn('product "%s" has no content/%s/_meta.json' % (prod['id'], pdir))
+        return
+    pages = meta.get('pages', [])
+    group_names = meta.get('groups', [])
+
+    def out_path(slug):
+        return '%s/%s' % (pdir, ('%s/index.html' % slug) if slug else 'index.html')
+
+    for it in pages:
+        if it.get('group') not in group_names:
+            warn('%s page "%s" is in unknown nav group %r' % (pdir, it.get('slug') or 'index', it.get('group')))
+    groups = []
+    for group_name in group_names:
+        items = [{'id': '%s-%s' % (prod['id'], it.get('slug') or 'index'),
+                  'title': it.get('navTitle') or it['title'],
+                  'href': out_path(it.get('slug', ''))}
+                 for it in pages if it.get('group') == group_name]
+        if items:
+            groups.append({'title': group_name, 'items': items})
+
+    for item in pages:
+        slug = item.get('slug', '')
+        source = item.get('source') or ((slug or 'index') + '.md')
+        source_path = content_path(pdir + '/' + source)
+        if not os.path.exists(source_path):
+            warn('%s page "%s" points at missing content %s' % (prod['name'], slug or 'index', source))
+            continue
+        body, toc = add_heading_ids(md_to_html(read(source_path)))
+        target = out_path(slug)
+        rel = 2 if slug else 1
+        if prod.get('redirectFrom'):
+            old = '%s/%s' % (prod['redirectFrom'], ('%s/index.html' % slug) if slug else 'index.html')
+            write(out_dir, old, redirect_page(target, '../' * rel + target, item['title']))
+        write(out_dir, target,
+              page(rel, item['title'], item.get('lede', ''), body, toc,
+                   active='%s-%s' % (prod['id'], slug or 'index'), wide=item.get('wide', False),
+                   product=prod['id'], nav=groups))
+        search.append({'t': item['title'], 'd': item.get('lede', ''), 'u': target, 'k': prod['tab']})
+        for keyword in item.get('keywords', []):
+            search.append({'t': keyword, 'd': item.get('lede', ''), 'u': target, 'k': prod['tab']})
 
 
 def read_md_content(rel):
@@ -1279,7 +1341,7 @@ def write_github_wiki(out_dir, cat):
     n_lang = len(cat['lang_stats'])
 
     start = [
-        _wiki_link('Обзор', '',
+        _wiki_link('Обзор', 'neoessentials/',
                    'что это за форк и чем справочник отличается от апстрима ZeroG.'),
         _wiki_link('Быстрый старт', 'quickstart/',
                    'установка, первые настройки и выдача прав.'),
@@ -1367,7 +1429,7 @@ def write_github_wiki(out_dir, cat):
         'Полный справочник на сайте, не в этой вкладке.',
         '',
         '### Начало',
-        side_link('Обзор', ''),
+        side_link('Обзор', 'neoessentials/'),
         side_link('Быстрый старт', 'quickstart/'),
         '',
         '### Справочник',

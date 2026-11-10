@@ -1,0 +1,23 @@
+{
+  "site": {
+    "title": "Farmstead mods",
+    "name": "Mods",
+    "lede": "Documentation for the Farmstead Minecraft server mods for NeoForge 1.21.1: commands, permissions, configuration and troubleshooting."
+  },
+  "products": [
+    {
+      "summary": "A fork of ZeroG NeoEssentials: homes, teleports, economy, kits, moderation and permissions — the reference is built from the source."
+    },
+    {
+      "summary": "WorldGuard-style claims: regions from a WorldEdit selection, owners, members and flags. A drop-in replacement for RegionGuard."
+    },
+    {
+      "summary": "Builds from a text prompt: an aiming hologram, block-by-block placement, full undo and spend limits."
+    },
+    {
+      "tab": "Utilities",
+      "name": "Utilities",
+      "summary": "Small server mods: an animal breeding cap per chunk or region, and a trade chat."
+    }
+  ]
+}

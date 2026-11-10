@@ -62,6 +62,20 @@ python docs/site/generate.py --strict --wiki-out docs/site/_wiki
 иначе следующий синк с апстримом даст конфликты. Свой текст — только в `docs/site/content/`.
 Генератор живёт в `docs/site/`, а не в `docs/wiki/`: на Windows это одно и то же имя папки.
 
+### Сайт документирует несколько модов Farmstead
+
+Корень сайта — лендинг «Моды Farmstead», обзор NeoEssentials — `/neoessentials/`, остальные его
+страницы на прежних адресах. Вкладки в шапке задаёт `docs/site/content/_products.json`; разделы
+`claims/` (Farmstead Claims, со старых `/regionguard/` — редиректы), `aibuilder/` (Farmstead
+AI Builder) и `utilities/` (Chunk Breeding Limit, Trade Chat) рендерит один общий код по их
+`_meta.json` (страницы, группы навигации, заголовки, леды, ключевые слова поиска).
+
+**Эти разделы — копии собственной документации модов** (`game/claims-mod`, `game/ai-builder-mod/publish`,
+`game/chunk-breeding-limit-mod`, `game/trade-chat-mod` в монорепо). Pages собирается из одного
+этого репозитория, поэтому при сборке ничего не читается из соседних модов. Изменились команды,
+конфиг или тексты такого мода — обновите его раздел здесь **на двух языках в той же задаче**
+(`content/<раздел>/` и `content/en/<раздел>/`), сверив команды и ключи с исходниками мода.
+
 ## Локализация
 
 Русский — язык сервера Farmstead (`localization.language` в его `config.json`; в поставке — пусто,

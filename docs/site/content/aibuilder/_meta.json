@@ -1,0 +1,76 @@
+{
+  "groups": ["Начало", "Справочник", "Помощь"],
+  "pages": [
+    {
+      "slug": "",
+      "source": "index.md",
+      "title": "Farmstead AI Builder",
+      "navTitle": "Обзор",
+      "group": "Начало",
+      "lede": "Мод для NeoForge 1.21.1, который строит по текстовому описанию: голограмма-прицел, укладка блок за блоком и полная отмена.",
+      "keywords": ["AI Builder", "farmstead_aibuilder", "/aibuild", "постройка по описанию", "нейросеть"]
+    },
+    {
+      "slug": "installation",
+      "title": "Установка и токен",
+      "group": "Начало",
+      "lede": "Требования, установка jar на сервер и клиентам, токен из кабинета и проверка по логу.",
+      "keywords": ["bearer_token", "api_base_url", "farmstead_aibuilder.toml", "токен AI Builder", "установка AI Builder"]
+    },
+    {
+      "slug": "commands",
+      "title": "Команды AI Builder",
+      "navTitle": "Команды",
+      "group": "Справочник",
+      "lede": "Все подкоманды /aibuild: что делают, сколько стоят и какой нодой открываются.",
+      "keywords": ["/aibuild create", "/aibuild area", "/aibuild undo", "/aibuild list", "/aibuild get", "/aibuild placed", "/aibuild balance"],
+      "wide": true
+    },
+    {
+      "slug": "permissions",
+      "title": "Права и LuckPerms",
+      "group": "Справочник",
+      "lede": "Две двери у каждой подкоманды: уровень из конфига или нода aibuilder.command.*.",
+      "keywords": ["aibuilder.command.create", "aibuilder.command", "create_level", "LuckPerms AI Builder"]
+    },
+    {
+      "slug": "configuration",
+      "title": "Конфигурация AI Builder",
+      "navTitle": "Конфигурация",
+      "group": "Справочник",
+      "lede": "Все секции config/farmstead_aibuilder.toml, включая язык мода.",
+      "keywords": ["farmstead_aibuilder.toml", "[language]", "announce_builds", "max_blocks", "budget_ms"],
+      "wide": true
+    },
+    {
+      "slug": "limits",
+      "title": "Лимиты и расход",
+      "group": "Справочник",
+      "lede": "Кто и сколько токенов может тратить: дневные лимиты сервера и игрока, запреты и отчёт.",
+      "keywords": ["лимит токенов", "дневной лимит", "расход AI-токенов", "/aibuild status"]
+    },
+    {
+      "slug": "land-protection",
+      "title": "Защита территорий",
+      "group": "Справочник",
+      "lede": "Как мод сверяется с приватами Farmstead Claims или исходного RegionGuard.",
+      "keywords": ["приваты AI Builder", "Farmstead Claims", "RegionGuard", "claim check failed"]
+    },
+    {
+      "slug": "troubleshooting",
+      "title": "Решение проблем AI Builder",
+      "navTitle": "Решение проблем",
+      "group": "Помощь",
+      "lede": "Что значат строки в логе и сообщения в чате, и что с ними делать.",
+      "keywords": ["rejected this server's token", "лимит исчерпан", "Сервис занят", "Недостаточно токенов"]
+    },
+    {
+      "slug": "changelog",
+      "title": "История версий AI Builder",
+      "navTitle": "История версий",
+      "group": "Помощь",
+      "lede": "Что изменилось в каждом релизе мода.",
+      "keywords": ["changelog AI Builder", "v1.1.0", "v1.0.0"]
+    }
+  ]
+}

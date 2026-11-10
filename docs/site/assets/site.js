@@ -7,6 +7,12 @@
   var base = document.documentElement.getAttribute('data-base') || '';
   var en = document.documentElement.lang === 'en';
 
+  /* On a narrow screen the mod tabs scroll sideways: bring the current one into view. */
+  var tab = document.querySelector('.product-switch a.on');
+  if (tab && tab.parentNode.scrollWidth > tab.parentNode.clientWidth) {
+    tab.parentNode.scrollLeft = tab.offsetLeft - tab.parentNode.offsetLeft - 8;
+  }
+
   /* ── language ──────────────────────────────────────────────────────────────
      The switch is a plain link to this page in the other language; clicking it also remembers
      the choice (like the theme), and the inline script in <head> honours it on every page. */

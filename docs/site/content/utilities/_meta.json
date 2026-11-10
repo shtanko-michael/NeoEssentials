@@ -1,0 +1,30 @@
+{
+  "groups": ["Утилиты"],
+  "pages": [
+    {
+      "slug": "",
+      "source": "index.md",
+      "title": "Утилиты Farmstead",
+      "navTitle": "Обзор",
+      "group": "Утилиты",
+      "lede": "Небольшие серверные моды Farmstead для NeoForge 1.21.1: каждый решает одну задачу и не нужен игрокам на клиенте.",
+      "keywords": ["утилиты Farmstead", "серверные моды"]
+    },
+    {
+      "slug": "chunk-breeding-limit",
+      "title": "Farmstead Chunk Breeding Limit",
+      "navTitle": "Лимит размножения",
+      "group": "Утилиты",
+      "lede": "Лимит животных в чанке или в регионе Farmstead Claims: новый детёныш не появляется, когда предел достигнут.",
+      "keywords": ["/chunkbreedlimit", "farmstead_chunkbreeding", "лимит животных", "maxAnimalsPerChunk", "entityLimits", "farmstead-chunk-breeding.toml"]
+    },
+    {
+      "slug": "trade-chat",
+      "title": "Farmstead Trade Chat",
+      "navTitle": "Торговый чат",
+      "group": "Утилиты",
+      "lede": "Торговый канал в общем чате: сообщение, начатое с @, уходит всем с меткой [Торговля].",
+      "keywords": ["торговый чат", "farmstead_tradechat", "channelPrefix", "cooldownSeconds", "farmstead_tradechat-server.toml"]
+    }
+  ]
+}

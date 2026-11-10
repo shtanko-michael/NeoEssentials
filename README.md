@@ -19,7 +19,7 @@
 - **Optional region integration** — when the Farmstead Claims mod (or the original RegionGuard) is installed, `/home`, `/tpa` and `/back` refuse to land a player in a region that forbids teleporting in.
 - **Fixes** — immediate TPA acceptance, jail durations, mute message line breaks, fly speed, stale nicknames after a rename, config-split data loss, vanilla `/help` hijacking `/help <page>`, command-name case handling, permission details leaking in denial messages.
 - **One shaded jar** — bundled libraries are relocated, so the mod cannot clash with another mod's copy of HikariCP, SnakeYAML or Java-WebSocket.
-- **A generated reference site** — command, permission and config tables are rebuilt from the source on every push, so they never drift from the code.
+- **A generated reference site** — command, permission and config tables are rebuilt from the source on every push, so they never drift from the code. The same site also documents the other Farmstead server mods — Farmstead Claims, Farmstead AI Builder and the small utilities (chunk breeding limit, trade chat) — in Russian and English.
 
 ## Credits
 
