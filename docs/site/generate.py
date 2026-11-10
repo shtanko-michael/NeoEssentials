@@ -643,7 +643,7 @@ def page(rel, title, subtitle, body, toc=None, active='', wide=False, extra_head
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap">
 <link rel="alternate" hreflang="{alt_lang}" href="{alt}">
-<link rel="stylesheet" href="{up}assets/site.css?v=5">
+<link rel="stylesheet" href="{up}assets/site.css?v=6">
 {extra_head}
 </head>
 <body{bodycls}>
@@ -681,7 +681,7 @@ def page(rel, title, subtitle, body, toc=None, active='', wide=False, extra_head
   <p><strong>{site_name}</strong> {t_footer}
   <a href="https://farmsteadminecraft.online">Farmstead Minecraft</a>{t_footer_server}.{footer_tail}</p>
 </footer>
-<script src="{up}assets/site.js?v=5" defer></script>
+<script src="{up}assets/site.js?v=6" defer></script>
 </body>
 </html>
 """.format(up=up, title=e(title), doc_title=e(doc_title), subtitle=e(subtitle),
@@ -781,7 +781,7 @@ def command_row(cmd, curated):
         variants = cmd.get('syntaxVariants') or []
         syntax = ' | '.join(variants) if variants else ('/' + cmd['name'])
     perm = cmd.get('permission')
-    perm_cell = code(perm) if perm else '<span class="muted">%s</span>' % t('no_node')
+    perm_cell = ('<code>%s</code>' % e(perm).replace('.', '.<wbr>')) if perm else '<span class="muted">%s</span>' % t('no_node')
     if cmd.get('permissionInferred'):
         perm_cell += ' <span class="tag tag-soft" title="%s">%s</span>' % (t('inferred_title'), t('inferred'))
     if cmd.get('helpCatalogOnly'):

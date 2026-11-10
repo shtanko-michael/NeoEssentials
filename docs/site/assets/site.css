@@ -577,3 +577,21 @@ details.toc > summary::-webkit-details-marker { display: none; }
   .topbar { flex-wrap: wrap; }
   .product-switch { flex: 1 1 0; min-width: 0; }
 }
+
+/* ── desktop command table: fixed columns that wrap, no hidden overflow ──── */
+@media (min-width: 901px) {
+  .cmd-table { min-width: 0; table-layout: fixed; }
+  .cmd-table th:nth-child(1), .cmd-table td.c-name   { width: 13%; }
+  .cmd-table th:nth-child(2), .cmd-table td.c-syntax { width: 25%; }
+  .cmd-table th:nth-child(3), .cmd-table td.c-alias  { width: 10%; }
+  .cmd-table th:nth-child(4), .cmd-table td.c-perm   { width: 20%; }
+  .cmd-table .c-syntax { white-space: normal; }
+  .cmd-table .c-desc { min-width: 0; }
+  .cmd-table td code { white-space: normal; overflow-wrap: break-word; word-break: normal; }
+  .cmd-table td { overflow-wrap: anywhere; }
+  .cmd-table .c-name code { overflow-wrap: normal; word-break: keep-all; white-space: nowrap; }
+}
+/* the rail is fixed on the right: keep the text column clear of it */
+@media (min-width: 1280px) {
+  body:has(details.toc) main { margin-right: 250px; }
+}
