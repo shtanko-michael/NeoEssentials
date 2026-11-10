@@ -1,14 +1,31 @@
 # Farmstead NeoEssentials
 
-[![Documentation](https://img.shields.io/badge/%D0%94%D0%BE%D0%BA%D1%83%D0%BC%D0%B5%D0%BD%D1%82%D0%B0%D1%86%D0%B8%D1%8F-shtanko--michael.github.io-0f7b5f?style=for-the-badge&logo=readthedocs&logoColor=white)](https://shtanko-michael.github.io/NeoEssentials/)
+[![Documentation](https://img.shields.io/badge/Docs-shtanko--michael.github.io-0f7b5f?style=for-the-badge&logo=readthedocs&logoColor=white)](https://shtanko-michael.github.io/NeoEssentials/)
 
-> **📖 [Справочник Farmstead NeoEssentials: команды, права, конфигурация и разбор проблем](https://shtanko-michael.github.io/NeoEssentials/)**  
-> Форк для сервера [Farmstead Minecraft](https://farmsteadminecraft.online), не апстрим ZeroG.
-> Таблицы команд, узлов прав и ключей конфигурации генерируются из исходников при каждой
-> сборке, поэтому не расходятся с кодом. Поиск по всему справочнику — клавиша `/`.
+[![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-brightgreen.svg)](https://www.minecraft.net/) [![NeoForge](https://img.shields.io/badge/NeoForge-21.1-orange.svg)](https://neoforged.net/) [![License](https://img.shields.io/badge/License-MIT-lightgrey.svg)](LICENSE) [![Version](https://img.shields.io/github/v/release/shtanko-michael/NeoEssentials?filter=farmstead-v*&label=Version)](https://github.com/shtanko-michael/NeoEssentials/releases)
 
-[![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-brightgreen.svg)](https://www.minecraft.net/) [![NeoForge](https://img.shields.io/badge/NeoForge-orange.svg)](https://neoforged.net/) [![License](https://img.shields.io/badge/License-MIT-lightgrey.svg)](https://opensource.org/licenses/MIT) [![Version](https://img.shields.io/github/v/release/ZeroG-Network-PTY-LTD/NeoEssentials?label=Version)](https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials/releases) [![Discord](https://img.shields.io/discord/709351422088708196?color=7289da&label=Discord&logo=discord&logoColor=white)](https://discord.gg/dUGAQF2Mga)
-[![Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20Me-F16061?logo=ko-fi&logoColor=white)](https://ko-fi.com/mrwhiteflamesyt)
+**The essentials mod that runs the [Farmstead Minecraft](https://farmsteadminecraft.online) server**, released for every NeoForge 1.21.1 server, free. Server-side only: players join with a vanilla client.
+
+> **Fork notice.** Farmstead NeoEssentials is a fork of [NeoEssentials by ZeroG Network](https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials) (MIT), regularly synced with its `1.21.x` branch. It is **not** made, endorsed or supported by the original authors — please report problems with this build [here](https://github.com/shtanko-michael/NeoEssentials/issues), not upstream. It keeps the mod id `neoessentials`, so it **replaces** the original jar: never install both.
+>
+> Форк NeoEssentials для сервера Farmstead Minecraft. Полный справочник на русском: команды, права, конфигурация, разбор проблем — **[shtanko-michael.github.io/NeoEssentials](https://shtanko-michael.github.io/NeoEssentials/)**.
+
+## What this fork adds
+
+- **Complete Russian localization** — every message, `/help` entry and command hint, including 76 keys missing from the upstream language files; English remains the default.
+- **Staff tools** — staff chat, admin notices, a moderation chat log, a staff compass teleport.
+- **Tablist** — per-player name colour from a LuckPerms meta key, rank colours in `/list`, a row anchored under another player's row.
+- **Quality of life** — player-name tab completion in every command that takes a player, `/repair all`, fly and god mode survive relogs, mobs ignore god-mode players, configurable join and quit announcements.
+- **Optional region integration** — when the RegionGuard mod is installed, `/home`, `/tpa` and `/back` refuse to land a player in a region that forbids teleporting in.
+- **Fixes** — immediate TPA acceptance, jail durations, mute message line breaks, fly speed, stale nicknames after a rename, config-split data loss, vanilla `/help` hijacking `/help <page>`, command-name case handling, permission details leaking in denial messages.
+- **One shaded jar** — bundled libraries are relocated, so the mod cannot clash with another mod's copy of HikariCP, SnakeYAML or Java-WebSocket.
+- **A generated reference site** — command, permission and config tables are rebuilt from the source on every push, so they never drift from the code.
+
+## Credits
+
+NeoEssentials was created by **MrWhiteFlamesYT** and **ZeroG Network** — support the original work on [Ko-fi](https://ko-fi.com/mrwhiteflamesyt) and in their [Discord](https://discord.gg/dUGAQF2Mga). Everything below this line describes the mod as a whole and comes from the upstream README.
+
+---
 
 > NeoEssentials is a comprehensive, config-driven essentials mod for Minecraft NeoForge 1.21.1 servers (this is the primary development branch — see [`26.1.x`](https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials/tree/26.1.x) for the pinned Minecraft 26.1-26.1.2 build, or [`26.2.x`](https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials/tree/26.2.x) for the pinned Minecraft 26.2 build). It provides 100+ commands, GUI tools, advanced administration, a real-time web dashboard, animated tablist, full localization support, and a PlaceholderAPI system — all managed by modular JSON config files.
 
@@ -63,7 +80,7 @@ The original English upstream pages are embedded at the bottom of each system pa
 ## 🚀 Quick Start
 
 ### Installation
-1. Download the latest release [![Version](https://img.shields.io/github/v/release/ZeroG-Network-PTY-LTD/NeoEssentials?label=Version)](https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials/releases)
+1. Download the latest Farmstead NeoEssentials jar from [Modrinth](https://modrinth.com/mod/farmstead-neoessentials) or [GitHub Releases](https://github.com/shtanko-michael/NeoEssentials/releases) (remove the original NeoEssentials jar if you had it)
 2. Place the JAR file in your server's `mods` folder
 3. Start your server — config files are auto-generated
 4. Configure permissions and features as needed

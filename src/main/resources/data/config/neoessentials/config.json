@@ -393,7 +393,7 @@
   ---------------------------------------------------------------- */
   "localization": {
     // Language code (e.g. "fr_fr", "de_de"). Leave empty for "en_us". Change with /language <code>.
-    "language": "ru_ru",
+    "language": "",
 
     /* If true, the mod will never modify the on-disk language file after first
      * creation — not even to add newly translated keys or auto-fix legacy
