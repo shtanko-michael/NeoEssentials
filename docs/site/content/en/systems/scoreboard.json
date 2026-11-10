@@ -1,0 +1,132 @@
+{
+  "commands": [
+    "scoreboard"
+  ],
+  "commandDetails": {
+    "scoreboard": {
+      "syntax": "/scoreboard [toggle | reload | enable | disable | info | preview | board list | set title <board> <text> | set line <board> <index> <text> | player <target> title <text> | player <target> line <index> <text> | player <target> reset | group <group> title <text> | group <group> line <index> <text> | group <group> reset]",
+      "notes": "The root has no .requires — bare `/scoreboard` prints help to anyone; `toggle` is gated separately by neoessentials.scoreboard.toggle and is player-only; the other branches need neoessentials.scoreboard.admin (the console always passes); `<target>` — EntityArgument.player, online only; `<board>`/`<group>` — word; `<text>` greedy; `<index>` Integer 0–14. `set`/`player`/`group` and `enable`/`disable` live in memory: `/scoreboard reload` and `/neoe reload` restore everything from scoreboard.json."
+    }
+  },
+  "examples": [
+    {
+      "title": "First setup: tune the title live and then make it permanent",
+      "goal": "See what the sidebar looks like without restarting the server, and understand that command edits are temporary.",
+      "commands": [
+        "/scoreboard info",
+        "/scoreboard set title default &6&l{server_name}",
+        "/scoreboard preview",
+        "/scoreboard reload"
+      ],
+      "result": "`info` prints Enabled/Disabled, the board count, `refreshInterval` in ticks and board names. `set title` immediately changes the title for everyone currently shown the `default` board and collapses the title animation to a single frame. `preview` rebuilds the panel for you. `reload` re-reads scoreboard.json (and animations.json too) — the temporary title disappears and the screen shows what is in the file again."
+    },
+    {
+      "title": "A custom title and line for the vip group",
+      "goal": "Test a group's text before writing it into scoreboard.json → scoreboard.groups.",
+      "commands": [
+        "/scoreboard group vip title <gradient:FFD700-FF8C00>&lVIP",
+        "/scoreboard group vip line 2 &6Balance: &f${balance} &6[VIP]",
+        "/scoreboard info",
+        "/scoreboard group vip reset"
+      ],
+      "result": "Players whose primary group is `vip` immediately see the new title and the replaced line at index 2 (0-based, the third line of the selected board's `lines` array). Others are unaffected. `group vip reset` removes the title and all line overrides of that group at once. For the text to survive reload, move it into `scoreboard.json → scoreboard.groups.vip` (`titleOverride` / `lineOverrides`)."
+    },
+    {
+      "title": "A separate board in the Nether",
+      "goal": "Show a different set of lines in `the_nether` without touching the overworld. Conditions are an implicit AND; the first board with the highest `priority` whose `conditions` all pass wins.",
+      "commands": [
+        "/scoreboard reload",
+        "/scoreboard board list",
+        "/scoreboard preview"
+      ],
+      "result": "In `scoreboard.json → scoreboard.boards` add a board with a `priority` higher than `default` (shipped `default` has `0`) and `conditions: [\"world:the_nether\"]`. An empty `conditions` on `default` always matches — keep it lowest in priority as the fallback. After reload `board list` lists the names; in the Nether `preview` shows the new board, in the overworld — `default`. The dimension name is the path (`overworld`, `the_nether`, `the_end`), not `minecraft:the_nether`."
+    },
+    {
+      "title": "A player hides the panel for themselves",
+      "goal": "Give players a switch that survives restarts without turning off the whole system.",
+      "commands": [
+        "/scoreboard toggle",
+        "/scoreboard toggle"
+      ],
+      "result": "The first call hides the sidebar and writes the state to the DataStore collection `scoreboard_toggles` (key — UUID). The second brings the panel back. By default the panel is on for a player who has never pressed toggle. Requires the `neoessentials.scoreboard.toggle` node (the registry grants it to everyone by default). The branch does not run from the console: `.requires` needs a player."
+    },
+    {
+      "title": "A multi-frame title and slowing down one board",
+      "goal": "Make an animated title without hitting an expensive placeholder every global cycle.",
+      "commands": [
+        "/scoreboard reload",
+        "/scoreboard preview"
+      ],
+      "result": "Put a JSON array of strings in the board's `title` — those are the frames (the loader does not read a separate `titleFrames` key). Frames cycle by this board's `ownAnimFrame`. `refreshMultiplier` (integer ≥ 1, default 1) advances this board's frames once every N global `refreshInterval` cycles without changing the packet send tick itself. After reload `preview` shows the first frame; the animation then runs on its own."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "The tree merges with vanilla `/scoreboard`",
+      "body": "NeoEssentials registers the same `scoreboard` literal, and Brigadier **adds** child nodes to the vanilla command instead of replacing it. Vanilla `objectives` / `players` / `teams` remain. No name collisions: vanilla has `players` (plural), here it is `player`; vanilla `enable` lives under `players`, here it is at the root. Bare `/scoreboard` with no arguments runs the NeoEssentials `.executes` and prints the mod's help, not vanilla's.",
+      "fix": "Vanilla objectives work as before: `/scoreboard objectives add …`. The mod's help is bare `/scoreboard`. To remove the mod's command entirely, disable `commands.scoreboard` in `config.json` and restart — the vanilla tree remains."
+    },
+    {
+      "title": "Which board a player sees",
+      "body": "Boards are sorted by descending `priority`. For each viewer the **first** board whose `conditions` lines are all true (implicit AND) is used. An empty condition list always passes — such a board must have the lowest priority, otherwise it overrides the rest. If no board matches, the sidebar is hidden for that player. There is no separate OR — two adjacent priorities with different conditions give the same effect.",
+      "fix": "Keep the fallback board last with `priority: 0` and `conditions: []`. Check which board you currently see with `/scoreboard preview` in the right world and with the right permissions."
+    },
+    {
+      "title": "`conditions` grammar and the short `{balance}` in a condition",
+      "body": "Parsed in `ConditionEvaluator`, in order: `perm:<node>` (PermissionAPI), `world:<path>` (dimension path, no namespace), `{placeholder} == value` / `!= value` (case-insensitive comparison); otherwise the string is run through PlaceholderAPI and is true if the result is non-empty and not `false`.\n\nConditions do **not** go through the sidebar's shorthand replacements. In board lines `{balance}`, `{online}`, `{player}` are substituted by `ScoreboardManager` itself. In a condition, PlaceholderAPI looks for the identifier `balance` and does not find it (the default expansion is `{neoessentials_balance}`). An unresolved token stays as the text `{balance}`: an `==` comparison fails, and a lone unresolved `{token}` as a boolean is true because the string is non-empty.",
+      "fix": "Check world and permissions with the `world:` / `perm:` forms. For placeholders in a condition write `{neoessentials_balance}`, `{neoessentials_group}`, `{neoessentials_world}` and so on. Do not use a lone unknown `{token}` as a condition — it silently passes."
+    },
+    {
+      "title": "`lineOverrides` target the array index; hidden lines collapse",
+      "body": "A line can have its own `condition`. Lines that fail are **dropped**, and the rest shift up into slots 0…14 — there is no blank gap. An override (`lineOverrides` in the file or `/scoreboard group|player … line`) changes only the text and does **not** cancel the original line's `condition`: a hidden line stays hidden. The override key is the 0-based index in the selected board's `lines` array, not the visible slot number after collapsing.",
+      "fix": "Count indices by the JSON array, including lines with conditions. If line 2 is hidden by a condition, `lineOverrides[\"2\"]` still refers to it, not to what the player sees third."
+    },
+    {
+      "title": "Override precedence and what is lost on reload",
+      "body": "Text chain: **player (UUID) → group (PermissionAPI primary) → board value**. `/scoreboard set title|line` edits the board itself in memory (for title, the whole frame list is replaced with one frame). `/scoreboard player` / `group` write override maps in memory. `loadConfig()` on reload **fully** re-reads `boards`/`groups`/`players` from the file and clears these maps — temporary edits are lost. `enable`/`disable` are also memory-only: reload restores `scoreboard.enabled` from the file.",
+      "fix": "Permanent changes go only in `scoreboard.json`. The dashboard save (`saveConfig`) can flush the current memory to disk; the commands never write the file themselves."
+    },
+    {
+      "title": "`{online}` and `{displayname}` on the sidebar",
+      "body": "`{online}` is `server.getPlayerList().getPlayers().size()`, without a vanish filter (unlike the tablist). `{displayname}` is substituted as `player.getName()`, i.e. the real IGN, not `/nick`. `{max}` — server slots. `{time}` — `HH:mm` of the system clock, not the world's in-game time.",
+      "fix": "Vanished players are still counted in `{online}`. For a nickname in a line use the PlaceholderAPI nickname placeholder if one is registered, not `{displayname}`."
+    },
+    {
+      "title": "Two independent switches",
+      "body": "`modules.scoreboardEnabled: false` in `config.json` (restart): the tick/join/quit handler exits immediately, no packets are sent, `/scoreboard` is not registered.\n\n`commands.scoreboard: false` (restart): the command is not registered, but the sidebar tick runs as before — the panel stays, you just cannot reload it from the game.\n\n`scoreboard.enabled: false` + `/scoreboard reload` (or `/scoreboard disable`): a live switch-off, the command stays, `hideAll` is called for everyone (SIDEBAR slot, line teams `ne_sb*`, objective `ne_sidebar`).",
+      "fix": "To remove the system entirely — `modules.scoreboardEnabled`. To temporarily hide the panel while keeping the command — `enabled` in scoreboard.json or `/scoreboard disable`."
+    },
+    {
+      "title": "Join delay and anti-flicker",
+      "body": "`joinDelayTicks` is counted in **server ticks** (`globalTick`), not refresh cycles. Until the delay expires, `updatePlayer` calls `hidePlayer`. Packets are sent only if the title or the set of visible lines changed since the last send to that viewer. The slot score is fixed (`15 − index`) with `BlankFormat` so the client does not reorder lines by number.",
+      "fix": "If the panel \"flashes\" on join, increase `joinDelayTicks` (shipped 40). If a line does not update, the placeholder most likely returned the same value: the dirty check stays silent on purpose."
+    },
+    {
+      "title": "Command permissions",
+      "body": "Bare `/scoreboard` checks no nodes. `toggle` requires a player and `neoessentials.scoreboard.toggle`. Admin branches: `p == null || neoessentials.scoreboard.admin`. Plus the common `opsBypassPermissions` and PermissionAPI's vanilla OP fallback.",
+      "fix": "If `/scoreboard` \"does not exist\" even for an operator, check `modules.scoreboardEnabled` and `commands.scoreboard`, not permissions. If help works but `reload` is missing from completion, you lack `neoessentials.scoreboard.admin`."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "The `titleFrames` key from the original wiki is not read",
+      "body": "`ScoreboardManager.loadConfig()` takes title frames only from `title` (string or array). The loader has no `titleFrames` field. Title animation is defined by an array in `title`. The shipped comment and the ScoreboardSystem.md page disagree with the code.",
+      "fix": "Write frames like this: `\"title\": [\"frame1\", \"frame2\"]`. Do not add a separate `titleFrames` — it will be ignored."
+    },
+    {
+      "title": "`toggleCommandEnabled` has no effect",
+      "body": "The original wiki describes a `toggleCommandEnabled` key. The loader does not read it; the `/scoreboard toggle` branch is registered with the rest of the command as long as the module and `commands.scoreboard` are on.",
+      "fix": "To take toggle away from players, revoke the `neoessentials.scoreboard.toggle` node. To remove the whole command — `commands.scoreboard: false` and a restart."
+    },
+    {
+      "title": "Saving a board through the web panel drops `refreshMultiplier`",
+      "body": "`toConfigJson()` / `boardToJson()` serialize name, priority, conditions, title, lines — and do not write `refreshMultiplier`. The next save from the panel overwrites scoreboard.json without that field; after reload the multiplier is 1 again.",
+      "fix": "Set `refreshMultiplier` manually in the file and do not save that board with the panel button, or restore the field in the file after saving."
+    },
+    {
+      "title": "`{displayname}` on the sidebar is the IGN, not the nickname",
+      "body": "`resolveText` substitutes both `{player}` and `{displayname}` via `player.getName()`. `/nick` does not affect this line. The placeholder name promises a display name; the code returns the registry name.",
+      "fix": "Do not expect a nickname in `{displayname}` on the sidebar. For lines that need a nickname, use the nickname placeholder that PlaceholderAPI actually resolves and check it with `/scoreboard preview`."
+    }
+  ]
+}

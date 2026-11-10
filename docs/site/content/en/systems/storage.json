@@ -1,0 +1,32 @@
+{
+  "commands": [],
+  "commandDetails": {},
+  "examples": [
+    {
+      "title": "Move from JSON to MySQL for a server network",
+      "goal": "Bans, economy and permissions must be shared without copying files.",
+      "commands": [
+        "/neoe reload"
+      ],
+      "result": "Set `storage.type: mysql` and the `storage.mysql.*` block, then restart (not reload): the backend is chosen at startup. If a collection in MySQL is empty and `autoMigrate: true`, the mod imports the data once from the current JSON/legacy files. Old files are not deleted. If MySQL is unreachable at startup, the mod silently falls back to JSON and the server still starts."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "Mail is not in the DataStore",
+      "body": "`/mail` still lives in `config/neoessentials/mail_data.json` regardless of `storage.type`. Changing the backend does not move mail.",
+      "fix": "On a server network, do not expect shared mail through MySQL — it is not there. The other collections (including auction_listings) are."
+    },
+    {
+      "title": "Gradle runServer does not see the sqlite/mysql/yaml drivers",
+      "body": "The drivers are bundled via JarJar inside the built jar. The dev classloader of `runServer` cannot see them → ClassNotFoundException when type ≠ json. On an installed jar everything works normally.",
+      "fix": "Keep `storage.type: json` locally. Test MySQL on the built mod, not with `gradlew runServer`."
+    },
+    {
+      "title": "Permissions are written in full, not per record",
+      "body": "Most collections update a single document. `permission_groups` / `permission_users` replace the whole state on save(): otherwise deleting a group would leave a ghost in the backend.",
+      "fix": "Do not edit a single line in `permission_users.json` while the server is running — the next save overwrites your edit with a full dump."
+    }
+  ],
+  "knownIssues": []
+}

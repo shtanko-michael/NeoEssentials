@@ -1,0 +1,109 @@
+{
+  "commands": ["kit", "kits", "listkits", "createkit", "delkit", "kitreset", "showkit"],
+  "commandDetails": {
+    "kit": {
+      "syntax": "/kit [<kitname> [<player>]]",
+      "notes": "Without arguments — the list of kits you have a per-kit permission for. Giving to someone else requires neoessentials.kit.others on the <player> node (the target will not appear in completion without this permission). The console must specify <player>. The target is looked up among online players only. Cooldown and maxUses are checked on the recipient, the per-kit permission on the sender."
+    },
+    "kits": {
+      "syntax": "/kits [page]",
+      "notes": "The same implementation as /listkits: page ≥ 1, 10 kits per page. The tree is registered only if commands.listkits is enabled (the commands.kits flag on its own does not disable /kits). A player without neoessentials.kits.override sees only the kits available to them, not the full admin list."
+    },
+    "listkits": {
+      "syntax": "/listkits [page]",
+      "notes": "Identical to /kits. Permission neoessentials.kits.list. The economy price kits.commandCosts.listkits is charged on every call, including when paging."
+    },
+    "createkit": {
+      "syntax": "/createkit <kitname> [<displayname> [<cooldown> [<description>]]]",
+      "notes": "Player only (an inventory is needed). <kitname> is a word of [A-Za-z0-9_] up to 32 characters; in storage the name is lower-cased. <displayname> is a String (spaces only in quotes), <cooldown> is whole seconds ≥ 0 (stored as milliseconds in the record), <description> is greedy. The main inventory is copied without armor and the offhand. Repeating with the same name overwrites the kit. The tree also has the makekit and addkit literals; they are not in the help registry."
+    },
+    "delkit": {
+      "syntax": "/delkit <kitname> [confirm]",
+      "notes": "The first call only prints a warning; deletion is /delkit <kitname> confirm, with no stored \"pending\" state and no timeout. The kits.commandCosts.delkit price is charged on confirm. The extra literals deletekit, removekit, rkit exist in the tree but not in the help registry."
+    },
+    "kitreset": {
+      "syntax": "/kitreset <kitname> [<player>]",
+      "notes": "Resets both the cooldown and the usage counter. For another player — neoessentials.kitreset.others on the <player> node. The console must specify a target. Online targets only."
+    },
+    "showkit": {
+      "syntax": "/showkit <kit>",
+      "notes": "The argument is a word, so /showkit starter,vip (no spaces) is split on the comma and shows several kits. The per-kit permission is not checked: neoessentials.showkit is enough. Gives nothing. Registered from MiscItemCommands, not KitCommands."
+    }
+  },
+  "examples": [
+    {
+      "title": "Build a starter kit from your inventory",
+      "goal": "You need a set that a new player claims once a day, without editing files by hand.",
+      "commands": [
+        "/createkit starter \"Starter Kit\" 86400 Bread and a sword for the first day",
+        "/showkit starter",
+        "/kit starter"
+      ],
+      "result": "createkit takes copies of the items in the main inventory (slots 0…size-5: no armor or offhand); an empty inventory gives \"empty_inventory\". Chat shows created/updated, the item count, the cooldown and a hint with the neoessentials.kits.starter permission. showkit prints the displayName, description, \"24h\" and lines of count + item name. /kit starter gives the items to you and prints given; if there is no room, the excess drops at your feet."
+    },
+    {
+      "title": "Give a kit to another player and reset the limit",
+      "goal": "A player hit the cooldown or maxUses — you need to give the kit now and let them claim it again.",
+      "commands": [
+        "/kit starter Steve",
+        "/kitreset starter Steve"
+      ],
+      "result": "The first command requires neoessentials.kit.others; Steve must be online, otherwise \"player not found\". Cooldown and maxUses are checked on Steve, the kit permission on you. Steve gets \"received_from\". kitreset clears both the timer and the usage counter (without it maxUses would keep blocking the kit) and sends Steve a notify."
+    },
+    {
+      "title": "Browse the catalogue and delete a kit",
+      "goal": "Before deleting, make sure the kit contains what you think and do not wipe it with a single typo.",
+      "commands": [
+        "/listkits",
+        "/listkits 2",
+        "/delkit starter",
+        "/delkit starter confirm"
+      ],
+      "result": "listkits without an argument is page 1, 10 entries each: name, displayName, item count, cooldown if > 0. A non-existent page gives the invalid_page error. The first delkit deletes nothing, only confirm_prompt + instructions. The second removes the record from the kits DataStore collection; a repeated /kit starter gives not_found."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "Kit definitions live in the DataStore; kits.json is dead after import",
+      "body": "`KitManager` stores kits in the `kits` collection of the active `storage.type` (JSON in `neoessentials/store/` by default), cooldowns in `kit_cooldowns`, counters in `kit_usages`. The shipped `config/neoessentials/kits.json` is read **once**: only if all three collections are empty and `storage.autoMigrate` is on. After that the file is neither written nor re-read — edits to it are visible neither in `/kit` nor after `/neoe reload`. `/neoe reload` calls `KitManager.reload()` and re-reads the DataStore, not `kits.json`.",
+      "fix": "New kits — `/createkit`, deletion — `/delkit … confirm`. `/createkit` does not set the `commands` field or `maxUses`: edit them in the record of the `kits` collection (or keep the defaults: `maxUses` −1, `commands` empty)."
+    },
+    {
+      "title": "Commands on claim exist, but /createkit does not write them",
+      "body": "The English wiki claims kits are \"items only\". In code `Kit` has a `commands` array: after the items are given successfully, `runKitCommands` runs each line from the console with `{player}` substituted (a leading `/` is stripped). `/createkit` always creates a kit with an empty array and `maxUses: -1`. The template in `kits.json` does show `commands: [\"say Welcome…\"]` — that reaches the DataStore only on that very first import.",
+      "fix": "Add the console command you need to the kit's JSON record in storage and run `/neoe reload`. Commands cannot be added through `/createkit`."
+    },
+    {
+      "title": "skipUsedOneTimeKitsFromKitList also hides \"unlimited\" kits",
+      "body": "`canUseKit` treats `maxUses > 0` as a limit and −1 as unlimited. The `/listkits` filter with `kits.skipUsedOneTimeKitsFromKitList: true` hides a kit if `maxUses == 1` **or** `maxUses < 0` and the player has claimed it at least once. `/createkit` writes exactly `maxUses: -1`. Result: the kit can still be claimed with `/kit <name>`, but disappears from `/kits`/`/listkits` after the first claim.",
+      "fix": "For a one-time kit, set `maxUses: 1` in the record. Better not to enable the list filter until kits made with `/createkit` have an explicit `maxUses`."
+    },
+    {
+      "title": "/kit and /kits are different commands with different permissions",
+      "body": "`/kit` needs `neoessentials.kits.use` plus the per-kit `neoessentials.kits.<name>` (or the record's `permission` field). `/kits`/`/listkits` need `neoessentials.kits.list`. Without `neoessentials.kits.override` (and `kits.allowKitOverride` enabled), `/listkits` shows the same kits as `/kit` completion, not \"all kits on the server\". `neoessentials.kits.nocooldown` and `neoessentials.kits.<name>.nocooldown` bypass only the cooldown; `override` also bypasses enabled/maxUses/maxKitsPerPlayer. The console does not check the per-kit permission in `/kit`.",
+      "fix": "Give players `kits.use` + the `kits.<name>` they need. For staff to see all kits — `kits.list` together with `kits.override`."
+    },
+    {
+      "title": "Kit name and contents at creation",
+      "body": "The `Kit` constructor keeps only lower-case `[a-z0-9_]` in the name. `/createkit` rejects a hyphen up front (otherwise `vip-kit` would silently become `vipkit` and not match what was typed). Armor and the offhand do not go into the kit: the loop is `0 … containerSize-5`. Repeating `/createkit` with the same name updates the items, displayName, cooldown and description, but does not keep the existing record's `commands`/`maxUses` — `createKit` builds a new object with empty commands and −1.",
+      "fix": "Do not use hyphens in ids. For armor, put it in the main inventory before `/createkit`. When updating a kit via the command, re-enter `commands`/`maxUses` in storage if they were set."
+    },
+    {
+      "title": "pastebinCreatekit does not save the kit",
+      "body": "With `kits.pastebinCreatekit: true`, `/createkit` does **not** call `kitManager.createKit`. Instead it serializes JSON and returns a URL like `https://pastebin.com/mock/<hash>` — there is no upload to Pastebin in the code. The kit does not appear on the server.",
+      "fix": "Keep `pastebinCreatekit` at `false` (the default). To export, copy the record from the `kits` collection."
+    },
+    {
+      "title": "Online targets only, prices and newPlayerKit",
+      "body": "`/kit <name> <player>` and `/kitreset <kit> <player>` look the player up via `getPlayerByName` — offline players are not found and there is no queue. `kits.commandCosts.<command>` is charged to the **sender** before the kit is given (`kit`, `createkit`, `listkits`, `delkit` on confirm). `kits.newPlayerKit.enabled` + `kitName` give a kit on first join; a kit with that name may not exist at join time — this is a separate path, not `/kit`.",
+      "fix": "Give offline players their kit when they join. Check prices if the economy is enabled. The name in `newPlayerKit.kitName` must match the kit id after sanitization."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "kits.pastebinCreatekit returns a fake URL and does not create the kit",
+      "body": "`uploadToPastebin` in `CreateKitCommand` is a stub: it always returns `https://pastebin.com/mock/…`, with no HTTP call. With the flag on, the branch that saves to the DataStore is skipped entirely, so `/kit` does not see this kit.",
+      "fix": "Keep `kits.pastebinCreatekit: false`. If you need the JSON, take it from the `kits` collection in storage."
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "commands": [],
+  "commandDetails": {},
+  "examples": [
+    {
+      "title": "Turn on a detailed trace for teleportation only",
+      "goal": "A warp is broken, but you do not want to flood latest.log with the whole mod.",
+      "commands": [
+        "/neoe reload"
+      ],
+      "result": "In `config.json` (or `main.json` in split mode) set `logging.categories.teleportation.debug` to true, then reload. The category's routine output still goes to the console/`latest.log` with `normal: true`; debug goes only to `logs/debug.log`. Warnings and errors are never silenced by either key."
+    },
+    {
+      "title": "Remove the \"Player issued command\" line from the console",
+      "goal": "On a busy server the commands.normal category prints every player command.",
+      "commands": [
+        "/neoe reload"
+      ],
+      "result": "`logging.categories.commands.normal: false` stops writing these lines after a reload. The commands themselves work as before. Command registration errors are still visible."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "There is no separate mod log file",
+      "body": "Debug goes to the platform's standard `logs/debug.log` (Log4j2), not to `logs/neoessentials/`. The `auctionHouse` category in the config is camelCase; the enum in code may look different, but the JSON key is exactly `auctionHouse`.",
+      "fix": "Look for the trace in `logs/debug.log`. Do not create an empty `logs/neoessentials/debug.log` by hand — the mod does not write debug there (that folder gets, for example, the economy's transactions.log)."
+    },
+    {
+      "title": "12 categories, not a single switch",
+      "body": "Keys: chat, economy, permissions, teleportation, moderation, auctionHouse, kits, webDashboard, discord, config, commands, general. `general` covers everything without its own category (storage, holograms, shop, localization, vault).",
+      "fix": "If \"nothing is logged\" after enabling debug, you enabled the wrong category. For a warp that is teleportation, for /pay it is economy."
+    }
+  ],
+  "knownIssues": []
+}

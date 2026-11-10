@@ -1,0 +1,164 @@
+{
+  "commands": [
+    "tablist"
+  ],
+  "commandDetails": {
+    "tablist": {
+      "syntax": "/tablist [reload | enable | disable | preview | info | animations list | independent [on|off] | layout [info|sort] | set <header|footer> <text> | player <target> <header|footer> <text> | player <target> nametag <prefix|suffix> <text> | player <target> reset | group <group> <header|footer> <text> | group <group> nametag <prefix|suffix> <text> | group <group> reset | proxy status | proxy setserver <server> <count> | fakeplayer <list|refresh> | fakeplayer add <id> <display> | fakeplayer remove <id>]",
+      "notes": "The whole command is gated by a single node, neoessentials.tablist.admin (the console always passes); `<target>` — an online player only; `<text>` and `<display>` are greedy arguments, i.e. they take the rest of the line; everything set via `set`, `player`, `group` and `fakeplayer add` lives only in memory and is lost on `/tablist reload`, `/neoe reload` and restart."
+    }
+  },
+  "examples": [
+    {
+      "title": "First setup: tune the header live and then make it permanent",
+      "goal": "Quickly see what your header looks like without restarting the server, and understand that command edits are temporary while permanent ones live in tablist.json.",
+      "commands": [
+        "/tablist info",
+        "/tablist set header &6&l{server_name} &8| &e{online}&8/&e{max} &7players",
+        "/tablist preview",
+        "/tablist reload"
+      ],
+      "result": "`/tablist info` prints the status, mode, number of header and footer frames, refreshInterval, sorting settings and the list of groups with overrides. `set header` instantly changes the header for all online players and collapses the animation to a single frame. `preview` redraws the header and footer for you. `reload` re-reads tablist.json from disk and restores everything from the file — the temporary header disappears without a trace."
+    },
+    {
+      "title": "A custom header for the vip group",
+      "goal": "Test a group's text before writing it into tablist.json — a group override is seen only by players in that group; everyone else keeps seeing the global header.",
+      "commands": [
+        "/tablist group vip header <gradient:00CFFF-0080FF>&l★ VIP ★&r &8| &e{online}&8/&e{max}",
+        "/tablist group vip footer &#00CFFF{player}&7 — &aBalance: &f{balance}",
+        "/tablist info",
+        "/tablist group vip reset"
+      ],
+      "result": "Players in the vip group immediately see the new header and footer, others the old ones. `/tablist info` shows `vip` in the line of groups with overrides. `group vip reset` removes the header, footer and nametag prefix/suffix overrides at once. For the text to survive a reload, move it into `tablist.json → tablist.groups.vip`."
+    },
+    {
+      "title": "Decorative separator lines in the player list",
+      "goal": "Frame the block of players with lines above and below and label it — a common BungeeTabListPlus trick; here these are fakePlayers entries.",
+      "commands": [
+        "/tablist fakeplayer add sep1 &8&m──────────────────────",
+        "/tablist fakeplayer add title1 &6&l★ Our server ★",
+        "/tablist fakeplayer list",
+        "/tablist fakeplayer refresh"
+      ],
+      "result": "Two lines appear in the tab with no real player behind them. `fakeplayer list` prints their id, display, `latency` and `listed`. Entries created by the command always get `latency=0` (green ping) and `listed=true`, without a skin — `latency: -1`, `listed`, `skinOwner`, `skinTexture` can be set only in `tablist.json → tablist.fakePlayers`. `fakeplayer refresh` removes all entries from all clients and inserts them again — this also fixes stuck lines after editing the config."
+    },
+    {
+      "title": "Columns by group (BTLP grid)",
+      "goal": "Lay out players in columns: each group gets its own column with its own heading. In `tablist.json → tablist.layout` set `groupSections: true`, `columns: 4`, `maxSlotsPerColumn: 20`, `fillEmptySlots: true` and fill `sectionHeaders` with one text per group.",
+      "commands": [
+        "/tablist reload",
+        "/tablist layout info",
+        "/tablist fakeplayer refresh"
+      ],
+      "result": "`layout info` prints `columns`, the total slot count (`columns × maxSlotsPerColumn`), sorting state, groupSections, playersByServer and the server lists. In the tab, groups go by descending weight, each starts a new column with a heading from `sectionHeaders` inserted before it, and the rest of the grid is padded with invisible lines — so the client keeps exactly 4 columns regardless of how many players are online. A group with nobody in it right now is skipped together with its heading."
+    },
+    {
+      "title": "A running animation in the footer",
+      "goal": "Put a frame animation from animations.json into the footer — its frames cycle by their own `frameDuration` in milliseconds, independently of the tablist's `refreshInterval`.",
+      "commands": [
+        "/tablist animations list",
+        "/tablist set footer &7Status: {animation:StatusDot} &8| &7TPS: {tps} &8| &7Ping: &a{ping}&7ms",
+        "/tablist reload"
+      ],
+      "result": "`animations list` lists the loaded animations (shipped: Rainbow, PulseStar, StatusDot, LoadingDots, GoldBanner, Spinner, HeartBeat) with their frame count and frame duration. The footer starts blinking with the indicator. `/tablist reload` re-reads both `tablist.json` and `animations.json` — it is the only tablist command that updates animations — and also wipes the temporary footer, so move the line into `tablist.json → tablist.footer`."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "Header/footer precedence and the shared frame counter",
+      "body": "The frame is chosen strictly along the chain **player override → group override → global value**, and each level has its own frame list. There is a single frame counter for the whole server: it advances once every `refreshInterval` ticks based on the **longest** list among the global one and all overrides, and each list is indexed by remainder (`frame % list length`). Practical effect: a static single-frame global header does not prevent animation for the `vip` group — the counter keeps running. The global list, however, does not loop but sticks at its last frame (`min(frame, size-1)`) if it is shorter than the longest override.",
+      "fix": "Frame lists of equal (or multiple) length animate in sync; if you need different speeds for different groups — the tablist does not have that, use `{animation:NAME}` from `animations.json`; each animation has its own `frameDuration` in milliseconds."
+    },
+    {
+      "title": "`columns` without `groupSections` does nothing",
+      "body": "The vanilla 1.21.1 client computes the number of columns itself from the number of lines in the tab — there is no server-side \"make N columns\" field. So `columns`, `maxSlotsPerColumn` and `fillEmptySlots` take part only in the grid calculation inside `recomputeColumnLayout`, and that calculation is skipped entirely when `groupSections: false`. With `groupSections` off, `columns: 4` is visible in `/tablist info` and `/tablist layout info` but has no effect on display at all.",
+      "fix": "Columns work only with the combination `groupSections: true` + `columns` + `maxSlotsPerColumn` + (optionally) `sectionHeaders`. Filler lines are added as invisible tab entries — this is exactly the BungeeTabListPlus fixed-grid trick."
+    },
+    {
+      "title": "`hideVanished` affects only the `{online}` counter",
+      "body": "In the tablist code `hideVanished` is used in exactly one place — the filter that counts `{online}` (chat reuses the same counter). The tablist does not remove vanished players' lines from the tab. A player with `neoessentials.vanish.see` sees the full count.",
+      "fix": "Removing the line from the tab is the vanish system's job: `vanishSettings.hideFromTabList` in `config.json`. `hideVanished` in `tablist.json` is needed in addition so that a vanished player is not counted in the `{online}`/`{max}` line."
+    },
+    {
+      "title": "The AFK suffix attaches to the scoreboard team suffix, not the tab line",
+      "body": "With `showAfkIndicator: true`, `afkSuffix` is appended to the suffix of the same scoreboard team that gives the player their prefix/suffix. In Minecraft a team's prefix/suffix is one property for both the tab line and the nametag, so `[AFK]` appears in both places at once; they cannot be separated. The `{afk}` placeholder in the header/footer is the state of the **viewing** player (the header is built per viewer), not someone else's line.",
+      "fix": "If you do not want `[AFK]` above heads, the only way is `showAfkIndicator: false`; there is no separate \"tab only\" switch. The old AFK indicator keys in `config.json` (`enableTablistIndicator`, `tablistAfkPrefix/Suffix`) have been removed from the shipped config and have no effect — the handler that read them sends nothing."
+    },
+    {
+      "title": "`playerFormat` cannot reorder `{prefix}`, `{player}` and `{suffix}`",
+      "body": "A player's line is drawn by the vanilla `prefix + real name + suffix` mechanism, which has no other order. So `playerFormat` is split into four pieces of text — before `{prefix}`, between `{prefix}` and `{player}`, between `{player}` and `{suffix}`, after `{suffix}` — and these pieces are attached to the prefix and suffix. The space in `\"{prefix} {player} {suffix}\"` moves to the end of the prefix and the start of the suffix. If the template has no `{player}` token at all, all four pieces are treated as empty and the template is simply ignored.",
+      "fix": "You cannot put the name before the prefix or insert text \"inside\" the name. For text that must follow the name, use the tail after `{suffix}` or set `nametagSuffix` for the group/player."
+    },
+    {
+      "title": "`sortByGroupWeight: false` is not alphabetical order",
+      "body": "Line order in the tab is set by the scoreboard team name: with sorting on the name looks like `ne_<weight sort key>_<prefix+suffix hash>`, with it off — just `ne_<hash>`. The client sorts by team name, then by player name. So with `sortByGroupWeight: false` players with different prefixes are still split into clusters by hash, and the order of those clusters is arbitrary (stable within a session, but unrelated to the alphabet or group).",
+      "fix": "A truly alphabetical list happens only when all players have the same prefix and suffix. The hash in the team name exists so that players with different text do not share one team and overwrite each other's prefix."
+    },
+    {
+      "title": "Removing a section from tablist.json does not restore defaults",
+      "body": "The `layout` and `proxy` loaders work as \"no section — return\", so if you cut the `layout` or `proxy` block from the file and run `/tablist reload`, the previous values remain in memory until a server restart. The `fakePlayers` section behaves differently: the entry list is cleared **before** the check, so removing it really turns off the fake lines.",
+      "fix": "Do not delete the section; edit the values inside it (`\"groupSections\": false`, `\"enabled\": false`). Or restart the server."
+    },
+    {
+      "title": "Nickname (`/nick`) and the prefix in the tab",
+      "body": "The vanilla client wraps a tab line with the team prefix/suffix only when the entry has **no** explicit display name. `/nick` sends a display name, so the tablist builds the `prefix + nickname + suffix` text itself (from the same `playerFormat` pieces) and resends it whenever the built line changes — after a group promotion, going AFK or a config reload, without a repeat `/nick`.",
+      "fix": "Nothing to configure. If the nickname shows in the tab without a prefix, that is the behaviour of builds before the fix — update the mod."
+    },
+    {
+      "title": "Placeholders in nametag overrides and recursion protection",
+      "body": "`nametagPrefix`/`nametagSuffix` (in `tablist.json` and via `/tablist ... nametag ...`) go through the same placeholder pipeline as the header and footer: `{balance}`, `{group}`, `{ping}`, `{animation:NAME}` work there. The exception is `{prefix}` and `{suffix}` inside the override itself: that is a reference to its own value, so instead of infinite recursion the text is returned unresolved and a WARN goes to the log.",
+      "fix": "Do not use `{prefix}`/`{suffix}` inside `nametagPrefix`/`nametagSuffix`. If no override is set, exactly the same prefix/suffix as in chat is used (via PermissionAPI — i.e. including LuckPerms/FTB Ranks)."
+    },
+    {
+      "title": "Permissions and access to the command",
+      "body": "The system's only node is `neoessentials.tablist.admin`; it gates the `/tablist` root, so for a player without it the command does not even appear in the tree. The console (a source without a player) always passes. The common permission mechanisms also apply: the operator bypass with `opsBypassPermissions` and the vanilla OP fallback. Separately from permissions, the command can be disabled entirely: `modules.tablistEnabled: false` in `config.json` — then `/tablist` is not registered at all and the tablist tick does not run.",
+      "fix": "If `/tablist` \"does not exist\" even for an operator, check `modules.tablistEnabled` and `commands.tablist` in `config.json`, not permissions."
+    },
+    {
+      "title": "The name colour in the tab and above the head is set only by the team colour",
+      "body": "The vanilla client draws the tab line and the nametag as `team prefix + <bare name> + team suffix`, and the name is a component without its own style. The adjacent prefix does not pass its style to it, so a colour code before `{player}` in `playerFormat` has no effect on the name: it ends up at the end of the team prefix and colours nothing. The only thing that reaches the name is the **team's own colour**, and that can only be one of the sixteen vanilla colours, no hex.",
+      "fix": "A personal name colour is set by the meta key from `tablist.nameColorMeta` (default `farmstead-namecolor`): `/lp user <name> meta set farmstead-namecolor b`. The value is a single vanilla code, with or without `&`; the tablist turns it into the team colour, so it is visible both in the tab and above the head. An empty string in `nameColorMeta` disables the mechanism entirely. Players with the same prefix but different name colours go into different teams — the colour is part of the team name hash, otherwise one would overwrite the other's name."
+    },
+    {
+      "title": "Lines anchored to another player (TabAnchors API)",
+      "body": "Another mod can attach a player to a \"parent\": `TabAnchors.attach(child, parent, prefix)`. This is how Farmstead shows a player's AI agent: its line sits **right below the owner's line**, indented with `↳`, and instead of the permissions prefix it has its own — `prefix` (which is also the nametag prefix and the prefix in join, quit and death messages, because it is the scoreboard team prefix). The order relies on the team name: the parent and its attached entries have the team `ne_<weight><parent name><role>`, everyone else keeps `ne_<weight>_<hash>`, so within one group weight players with attached lines come after the others. If the parent is offline, the attached entry sorts as a regular player, but with its own prefix. With column layout (`groupSections`) the attachment does not change the order."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "`{network_online}`, `{server_online:X}` and `{current_server}` always show local data; `/tablist proxy status` is forever `detected=false`",
+      "body": "The proxy integration does not work in either direction. Outgoing messages: `sendBungeeMessage` is a stub; its javadoc says outright that encoding via `StreamCodec` on NeoForge 1.21.1 is not done and postponed; it only writes a debug line to the log and sends nothing. Incoming: the `onPluginMessage` handler that parses `GetServer`/`GetServers`/`PlayerCount` replies is not called from anywhere — the plugin message channel is never subscribed (the `onServerStarted` handler in `TablistEventHandler` is empty, just a comment). So `serverPlayerCounts` stays empty, `{network_online}` falls back to the local counter, `{server_online:ANYTHING}` gives `0`, and `{current_server}` gives the `proxy.serverLabel` value.",
+      "fix": "Do not rely on network placeholders. If you need to show a number right now, set it manually: `/tablist proxy setserver Lobby 12` (this is the only working data source for `{server_online:Lobby}` and the `{network_online}` sum). `proxy.enabled: false` is the shipped default for a reason."
+    },
+    {
+      "title": "`excludeServers`, `hiddenServers`, `playersByServer` and `showNetworkPlayers` have no effect",
+      "body": "The values are read from `tablist.json` and printed in `/tablist layout info`, but the methods that should apply them (`isHiddenByServer`, `isExcludedServer`, `groupedByServer`, `isShowNetworkPlayers`) are not called from anywhere in the mod. Layout by proxy server is not wired into rendering, and since there is no data from the proxy anyway (see above), filters by server name are doubly pointless.",
+      "fix": "Treat these four keys as declared for the future. Group players via `layout.groupSections` by permission groups — that branch is fully implemented."
+    },
+    {
+      "title": "A removed or renamed `fakePlayers` line keeps hanging in the tab after `/tablist reload`",
+      "body": "On reload the in-memory entry list is cleared and re-read from the config, after which only **new** entries are sent to players. No removal packet (`ClientboundPlayerInfoRemovePacket`) is sent, and the per-viewer set of already inserted UUIDs is not cleared, so the client keeps drawing an entry that is no longer in the config. Changing the `id` of an existing entry has the same effect: the UUID is derived from `id`, the old one stays and a new one appears next to it. The `/tablist fakeplayer remove <id>` command does not have this problem — it properly sends the removal packet to all online players.",
+      "fix": "After any edit to the `fakePlayers` section run `/tablist fakeplayer refresh` — it removes all entries for everyone and inserts them again. A player rejoining the server also clears their tab."
+    },
+    {
+      "title": "`/tablist layout sort` toggles nothing",
+      "body": "In the command tree the `layout sort` branch has no `on|off` argument — the node simply runs and prints an informational message. The class's own header javadoc and the original wiki page claim `/tablist layout sort [on|off]`, but no such branch is registered, and typing `on`/`off` is rejected as an unknown argument.",
+      "fix": "Change `layout.sortByGroupWeight` in `tablist.json` and run `/tablist reload`. You can check the current state with `/tablist layout info` or `/tablist info`."
+    },
+    {
+      "title": "Manual `/tablist proxy setserver` counters survive `/tablist reload`",
+      "body": "`ProxyIntegration` has a `reset()` method with the comment \"called on reload\", but it has no callers at all. `loadConfig()` re-reads only the `proxy` section settings, while the accumulated `serverPlayerCounts`, the `networkOnline` sum and the \"player → server\" map stay in memory.",
+      "fix": "Overwrite the value with the same `/tablist proxy setserver <server> 0` or restart the server — there is no other way to reset them."
+    },
+    {
+      "title": "The prefix/suffix disappeared for all players after a reload or after a new player joined",
+      "body": "Historically this was caused by two independent bugs, both already fixed and described in detail in code comments. First: before the main team update, a separate sorting pass ran that moved players to a `neL_...` team without a prefix; the \"already sent\" cache did not notice and did not resend the prefix, so after the very first update cycle everyone was left with an empty prefix until `/tablist reload`. Second: the team was named just by group, so all players in a group shared one team object with one shared prefix/suffix — whoever's update ran last, that text was seen by everyone else (new connections are processed last, so it looked like \"a player joined and everyone's suffix reset\"). Now the team name includes a hash of the actually built prefix+suffix, and the extra sorting pass is gone.",
+      "fix": "If the symptom reproduces, you have a build from before the fix — update. If prefixes still drop on a fresh build, check whether another mod manages scoreboard teams: a player can be in only one team, and any third-party `/team join` overwrites what the tablist set."
+    },
+    {
+      "title": "`/tablist disable` does not turn off everything, and not permanently",
+      "body": "The `disable` branch sets a flag in memory and sends an empty header/footer packet. It does not remove fake lines or grid filler lines, does not dismantle scoreboard teams and does not touch `tablist.json`. From then on `updatePlayer` exits on its first line, so nobody will remove the leftover entries. Any `/tablist reload`, `/neoe reload` or restart restores the `enabled` value from the config.",
+      "fix": "Before `/tablist disable` run `/tablist fakeplayer refresh`… or rather, to really turn the system off, set `\"enabled\": false` in `tablist.json` (or `modules.tablistEnabled: false` in `config.json`) and restart the server. Leftover decorative lines disappear for a player when they rejoin."
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+{
+  "commands": [],
+  "commandDetails": {},
+  "examples": [
+    {
+      "title": "Switching the shipped channels: local and global",
+      "goal": "Understand which slash commands will appear at all: they are not in the mod's registry; ChannelCommands.java reads chat.channels at startup.",
+      "commands": [
+        "/l",
+        "a plain message without a prefix",
+        "/g Everyone: event at spawn in 5 minutes",
+        "/global"
+      ],
+      "result": "As shipped, `local` has `command` `l`, aliases `local`/`lc`, `radius` 100, `default` true and an empty `prefix`. `/l` without an argument prints channel.switched with the key `local` and remembers the channel in ChatHandler until the next switch. The next plain chat goes only to players in the same dimension within a radius of 100. `/g <text>` first switches to `global` (alias `global`; `gc` was removed from the shipped config because it clashed with the `/gc` diagnostic), then posts a ServerChatEvent — the message goes to everyone. The `!` prefix (on global) is one-off: `!hello` goes to global, and the persistent channel does not change."
+    },
+    {
+      "title": "Staff chat moved to Chatter",
+      "goal": "Understand why NeoEssentials does not register /staff, /admin, /mod and /s.",
+      "commands": [
+        "/s Check the griefer near spawn"
+      ],
+      "result": "Staff chat belongs to Chatter: `/s <text>` checks `neoessentials.chat.staff` via LuckPerms and sends the message only to online players with the same node. NeoEssentials has no staff channel and does not register `/staff`, `/admin`, `/mod` or `/s`; this rules out conflicting ServerChatEvent handlers. `/ac` is unrelated — it is an alias of `/helpop`."
+    },
+    {
+      "title": "Team channel without FTB Teams and with it",
+      "goal": "The shipped config enables team with teamBased: true — understand what a player sees on a pack without FTB Teams, and what keeps vanilla /team from breaking.",
+      "commands": [
+        "/team",
+        "/t",
+        "/teamchat Hello, team"
+      ],
+      "result": "`ChannelCommands` attaches the literals `team`, `t`, `teamchat` from the config. If FTB Teams (ftbteams) is not loaded, sending gives `commands.neoessentials.channel.no_team_provider` and nothing is delivered. If the mod is there but the player is not in a team — `channel.no_team`. Otherwise online teammates see it; if the channel also has a `permission`, only teammates with that node do. `radius` does not combine with `teamBased`. Important: the `team` literal matches vanilla `/team` (scoreboard). The channel registration takes over that name — the vanilla create/add/join subcommands disappear while the config's `command`/`aliases` contain `team`."
+    },
+    {
+      "title": "A custom channel and Discord without a bot",
+      "goal": "Add a donor channel with its own permission and a one-way webhook, without waiting for SDLink.",
+      "commands": [
+        "/donor Thanks for the subscription"
+      ],
+      "result": "In `chat.channels`, add an object with a safe key (`donor`, no colours or emoji): `command` `donor`, `permission` any string (for example `neoessentials.chat.donor`), `discord.enabled` true, `webhookUrl` the Discord webhook URL; `channelId` can stay empty. Channel commands are registered only at startup — after editing the JSON you need a restart; `/neoe reload` does not rebuild the tree. Routing (prefix, radius, permission, discord.enabled, webhookUrl) is read from disk by ChatHandler and WebhookAdapter on every message: the radius and webhook are picked up after reload, a new `/donor` is not. `broadcastPlayerChat` is called only if `discord.enabled` is true; an empty `channelId` hands the bridge its default channel, and the webhook still goes out if the URL is set."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "Channel commands are dynamic and not in the inventory",
+      "body": "At startup `ChannelCommands.register` walks `chat.channels`, skips the `enabled` and `*-description` keys and disabled channels (`enabled: false`), and attaches `Commands.literal(command)` — if there is no `command` field, the literal is the channel key — plus every element of `aliases`. The `staff` key is skipped deliberately: its `/s` command belongs to Chatter. These names are not in `_inventory.json`: the generator looks at `registerCommand*`, not the config. That is why `commands` on this page is empty: the inventory knows neither `/local` nor `/g`. `/ac` is helpop, not a channel switch. The master switch `chat.channels.enabled: false` (or `modules.chatEnabled`) skips registration entirely; plain chat then goes out as a global broadcast with no radius.",
+      "fix": "Take the list of slash commands from your own `chat.channels` (as shipped: `/l`/`/local`/`/lc`, `/g`/`/global`, `/team`/`/t`/`/teamchat`). Changing `command`/`aliases` or enabling a channel needs a restart. For prefix/radius/permission/discord it is enough for the config to be re-read (messages read it live; the command tree does not)."
+    },
+    {
+      "title": "Channel permission: switch, delivery and Discord are three different places",
+      "body": "The `permission` field is an arbitrary string. The switch (`/local`, `/g`, a custom channel's command or alias) checks it on the **sender** via PermissionValidator. Delivery in `ChatHandler` checks the same string on **every recipient** (for team — on top of team membership). Discord: if the sender lacks the string, `broadcastPlayerChat` is skipped even when players with the permission have already seen the message. The nodes `neoessentials.chat.channel.local` and `neoessentials.chat.channel.global` exist in PermissionRegistry, but the shipped config sets no `permission` field on local/global — these nodes close nothing by themselves. There is no separate `neoessentials.chat.bypass`.",
+      "fix": "To close local or a donor channel, set `permission` in the channel object; do not rely on channel.local. Staff chat is not a NeoEssentials channel: its permission `neoessentials.chat.staff` is checked by Chatter."
+    },
+    {
+      "title": "One broken channel no longer kills the others",
+      "body": "Each channel is in its own try/catch: a colour/emoji in the key or in `command` logs an error and skips only that channel. Previously a shared catch aborted the loop. The channel key is the identifier for routing, Discord and the fallback literal; a coloured name belongs only in `displayName` for `{channel}`/`{neoessentials_channel}`.",
+      "fix": "Use keys like `local`/`staff`/`donor`, not `§cStaff`. After fixing a broken `command`, restart so the literal appears."
+    },
+    {
+      "title": "Discord: enabled, empty channelId, webhookUrl",
+      "body": "`ChatHandler` relays only if `discord.enabled` is true. An empty `channelId` becomes null — the bridge adapter sends to **its own** default channel (with SDLink native `playerMessages`, NeoEssentials also skips the default route to avoid doubling; an override with a non-empty id is always sent). `WebhookAdapter` reads `chat.channels.<key>.discord.webhookUrl` itself, but the queue never reaches it until the handler has called `broadcastPlayerChat` — so `enabled` is still required.",
+      "fix": "For a separate Discord channel, set a non-empty `channelId`. Webhook only: `enabled` true + URL; a bridge is not required, and there is no Discord→MC direction."
+    },
+    {
+      "title": "Radius, dimension, teamBased",
+      "body": "A channel with `radius` sends to those in the same `dimension` with `distanceTo <= radius`. A permission on such a channel additionally filters recipients. `teamBased: true` ignores the radius. With no radius, permission or teamBased — a global broadcast. `default: true` is used when there is no persistent channel and no prefix matched; if no channel is default, `getEffectiveChannel` returns the string `global` even if that key does not exist.",
+      "fix": "As shipped, the default is local, not global. For \"proximity only\", turn off global.enabled or do not give players `/g`."
+    },
+    {
+      "title": "The gc alias and vanilla /team",
+      "body": "A comment in config.json: the former `gc` alias on global silently lost to the diagnostic `/gc`. It is no longer in the shipped config. The `team` literal of the team channel **overrides** the vanilla scoreboard command `/team` — ChannelCommands does not check whether the name is taken. The short aliases `s`, `t`, `admin`, `mod` can clash with other mods the same way; registration runs without isCommandRegistered.",
+      "fix": "Need vanilla `/team`? Change the team channel's `command`/`aliases` (for example, `teamchat` only) and restart. Do not put `gc` back into global's aliases."
+    },
+    {
+      "title": "/neoe reload does not re-register channel commands",
+      "body": "The tree is built once from `NeoEssentials` → `ChannelCommands.register`. Reload re-reads the JSON for the next message (prefix, radius, discord, delivery permission), but new literals do not appear and old ones are not removed. `modules.chatEnabled` / `chat.channels.enabled` are also startup-only. The staff command `/s` is registered by Chatter at server start.",
+      "fix": "After adding a channel, changing command/aliases or the system switch — a full restart. After changing radius/prefix/discord — a reload is enough, with no new slash commands."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "The shipped team command breaks vanilla /team",
+      "body": "`chat.channels.team.command` = `team`. `dispatcher.register(Commands.literal(\"team\"))` takes over the name of the vanilla scoreboard `/team`. This is not a parser bug — the conflict is built into the default config. The aliases `t` and `teamchat` do not clash with vanilla.",
+      "fix": "Rename the channel's `command` (keep `teamchat`) or set `team.enabled: false` if you do not use FTB Teams, then restart."
+    },
+    {
+      "title": "The ChatHandler comment about a shared try/catch is outdated",
+      "body": "The Javadoc of `getChannelDisplayName` still claims that one broken literal aborts registration of all channels after it. `ChannelCommands` already has a per-channel try/catch. This does not affect behaviour, only reading the sources.",
+      "fix": "Go by ChannelCommands.java, not by that comment."
+    }
+  ]
+}

@@ -1,0 +1,244 @@
+{
+  "commands": [
+    "book",
+    "cartography",
+    "cartographytable",
+    "ci",
+    "ciconfirmtoggle",
+    "clear",
+    "clearinventory",
+    "clearinventoryconfirmtoggle",
+    "condense",
+    "ctext",
+    "customtext",
+    "dispose",
+    "enchant",
+    "fix",
+    "i",
+    "item",
+    "itemdb",
+    "itemlore",
+    "itemname",
+    "loom",
+    "powertool",
+    "powertoollist",
+    "ptlist",
+    "rename",
+    "repair",
+    "sign",
+    "skull",
+    "smithing",
+    "trash"
+  ],
+  "commandDetails": {
+    "repair": {
+      "syntax": "/repair [all]",
+      "notes": "Player only, permission neoessentials.item.repair. Without an argument it repairs the item in the main hand (setDamageValue(0)) and always reports success, even if the hand is empty or the item has no durability. /repair all repairs all damaged items in the main inventory, armor and offhand; the reply contains the number of items actually repaired."
+    },
+    "fix": {
+      "syntax": "/fix",
+      "notes": "Same code as /repair. Enabled by the commands.fix flag, separately from commands.repair."
+    },
+    "enchant": {
+      "syntax": "/enchant <enchantment> [<level>] | /enchant <player> <enchantment> [<level>]",
+      "notes": "Overrides vanilla /enchant. <enchantment> — a ResourceLocation from the registry, <level> an integer 1–32767 (default 1). The player branch requires neoessentials.item.enchant.others (or OP 2). unsafe — neoessentials.item.enchant.unsafe or the global unsafe-enchantments; any — neoessentials.item.enchant.any. The item is the target's main hand. The ench and enchanthand literals exist in the tree under their own flags but are not in the help registry."
+    },
+    "item": {
+      "syntax": "/item <item> [<amount>]",
+      "notes": "Give yourself an item by id. <item> — word (the minecraft: prefix can be omitted), <amount> 1–64; without an amount — defaultMaxStackSize. Player only, neoessentials.item. Not to be confused with /give from PlayerStateCommands (utility commands)."
+    },
+    "i": {
+      "syntax": "/i <item> [<amount>]",
+      "notes": "Alias of /item, same argument tree and same permission neoessentials.item."
+    },
+    "powertool": {
+      "syntax": "/powertool list | /powertool remove | /powertool <command>",
+      "notes": "Binds by the type of the item in the main hand, not by slot. list/remove/<command> require neoessentials.item.powertool inside executes. A string starting with \"@p \" is not bound but immediately runs the command for everyone online except you (requires neoessentials.command.target). There is no root executes. The tree also has ptool (commands.ptool) and powertooltoggle/ptt — they are not in the help registry. Bindings live in an in-process HashMap and are lost on restart."
+    },
+    "powertoollist": {
+      "syntax": "/powertoollist",
+      "notes": "Only your own bindings, permission neoessentials.powertoollist (not item.powertool). An empty list is an empty error."
+    },
+    "ptlist": {
+      "syntax": "/ptlist",
+      "notes": "Alias of /powertoollist, same permission."
+    },
+    "clearinventory": {
+      "syntax": "/clearinventory",
+      "notes": "Self only, there is no <player> argument. Clears main + armor + offhand and prints three numbers. neoessentials.item.clearinventory. The command code has no confirmation."
+    },
+    "ci": {
+      "syntax": "/ci",
+      "notes": "Alias of /clearinventory, separate flag commands.ci."
+    },
+    "clear": {
+      "syntax": "/clear",
+      "notes": "The help registry declares it as an inventory-clear alias, but ClearInventoryCommand registers only clearinventory, ci and clearinv. This system has no root Commands.literal(\"clear\") — the game keeps vanilla /clear."
+    },
+    "ciconfirmtoggle": {
+      "syntax": "/ciconfirmtoggle",
+      "notes": "Toggles the in-memory ciConfirmDisabled flag. /clearinventory does not read this flag — there is no confirmation anyway."
+    },
+    "clearinventoryconfirmtoggle": {
+      "syntax": "/clearinventoryconfirmtoggle",
+      "notes": "Alias of /ciconfirmtoggle, same permission neoessentials.ciconfirmtoggle."
+    },
+    "dispose": {
+      "syntax": "/dispose [confirm|cancel]",
+      "notes": "Without an argument it opens a 27-slot chest. Items put there are held in pendingDisposals until confirm (destroy), cancel (return) or leaving the server (return). Closing the GUI by itself destroys nothing."
+    },
+    "trash": {
+      "syntax": "/trash",
+      "notes": "Opens the GUI only, no confirm|cancel branches. Permission neoessentials.item.dispose."
+    },
+    "condense": {
+      "syntax": "/condense [<item>]",
+      "notes": "Compresses by a fixed table (nuggets→ingots→blocks etc.). Without an argument — all eligible types in the inventory; <item> — word, compared to the full id. Leftovers that do not fit drop at your feet."
+    },
+    "itemname": {
+      "syntax": "/itemname [<name>]",
+      "notes": "Without an argument or with the name `-` it removes CUSTOM_NAME. Otherwise a greedy string with `&` colours applied to the item in hand. neoessentials.itemname."
+    },
+    "rename": {
+      "syntax": "/rename [<name>]",
+      "notes": "Alias of /itemname."
+    },
+    "itemlore": {
+      "syntax": "/itemlore add <text> | /itemlore set <line> <text> | /itemlore remove <line> | /itemlore clear",
+      "notes": "<line> is 1-based. add/set take greedy text. The item in the main hand."
+    },
+    "skull": {
+      "syntax": "/skull [<player>]",
+      "notes": "A head with a profile: without an argument — your own, otherwise a word name (offline works if it is in the profile cache; otherwise a GameProfile with a random UUID and that name). Into your own inventory only."
+    },
+    "itemdb": {
+      "syntax": "/itemdb [<item>]",
+      "notes": "Without an argument — the item in hand; otherwise a word id. Prints the registry id, max stack, durability."
+    },
+    "book": {
+      "syntax": "/book | /book unlock | /book title <title> | /book author <author>",
+      "notes": "Without an argument it gives a writable book. unlock / title / author work on the book in hand and require neoessentials.book.unlock / .title / .author."
+    },
+    "sign": {
+      "syntax": "/sign | /sign <line> <text> | /sign clear [<line>]",
+      "notes": "The sign you are looking at. Without arguments — show the 4 lines. <line> 1–4. clear without a number clears all lines."
+    },
+    "customtext": {
+      "syntax": "/customtext [<chapter> [<page>]]",
+      "notes": "File config/neoessentials/text/<chapter>.txt, 10 lines per page. Without arguments — chapter info, page 1. The chapter name is trimmed to [a-zA-Z0-9_-]. `{player}` and `&` are replaced on output."
+    },
+    "ctext": {
+      "syntax": "/ctext [<chapter> [<page>]]",
+      "notes": "Alias of /customtext."
+    },
+    "loom": {
+      "syntax": "/loom",
+      "notes": "Portable loom, neoessentials.loom."
+    },
+    "cartography": {
+      "syntax": "/cartography",
+      "notes": "Portable cartography table."
+    },
+    "cartographytable": {
+      "syntax": "/cartographytable",
+      "notes": "Alias of /cartography."
+    },
+    "smithing": {
+      "syntax": "/smithing",
+      "notes": "Portable smithing table, neoessentials.smithing."
+    }
+  },
+  "examples": [
+    {
+      "title": "Give yourself an item, enchant it and name it",
+      "goal": "Make a named sword without vanilla /give and without an NBT editor.",
+      "commands": [
+        "/item minecraft:diamond_sword",
+        "/enchant minecraft:sharpness 5",
+        "/itemname &bBlade",
+        "/itemlore add &7The server's first blade"
+      ],
+      "result": "item without an amount gives a full stack by defaultMaxStackSize (1 for a sword). enchant applies the enchantment to the main hand; level 5 passes if unsafe-enchantments is on or you have neoessentials.item.enchant.unsafe, otherwise the validator rejects it. itemname sets a coloured name; itemlore add appends a line. /give is not used here: it is a different command among the utility commands."
+    },
+    {
+      "title": "Bind a command to an item type",
+      "goal": "Right-clicking with a stick teleports you home without permanently occupying a hotbar slot.",
+      "commands": [
+        "/item minecraft:stick 1",
+        "/powertool spawn",
+        "/powertool list",
+        "/powertoollist"
+      ],
+      "result": "The binding is keyed by type id (`minecraft:stick`): any stick in either hand triggers the command, and the vanilla right-click on a block is cancelled. list and powertoollist show the same thing but need different permissions (item.powertool vs powertoollist). A server restart clears the HashMap — set the binding again. Do not use `/pt` for binding: without arguments it is paytoggle (see edgeCases)."
+    },
+    {
+      "title": "Repair a tool and throw away junk",
+      "goal": "Repair the pickaxe in hand and safely destroy junk, with the option to undo.",
+      "commands": [
+        "/repair",
+        "/dispose",
+        "/dispose cancel"
+      ],
+      "result": "repair resets the main hand's damage and always reports success; /repair all repairs all damaged items in the inventory, armor and offhand. dispose opens 27 slots; items put there leave your inventory but are not destroyed yet — they are pending. cancel returns them; confirm destroys them; leaving the server also returns them. Just closing the window is not enough to erase items for good."
+    },
+    {
+      "title": "Compress ore and look up an item id",
+      "goal": "Turn 9 diamonds into a block and find the exact registry id for kits/crates.",
+      "commands": [
+        "/condense diamond",
+        "/itemdb",
+        "/itemdb minecraft:diamond_block"
+      ],
+      "result": "condense diamond looks for minecraft:diamond (9→diamond_block). itemdb without an argument describes what is in your hand after compressing; with an argument it is for reference only and does not put the item in your inventory."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "/pt is paytoggle; powertool subcommands hang off it on the side",
+      "body": "Economy registers `Commands.literal(\"pt\").executes(paytoggle)` first. Powertool then adds children `list`, `remove` and greedy `<command>` to the same literal and does **not** set its own root executes — Brigadier merges the nodes. Result: `/pt` without arguments toggles receiving /pay (`neoessentials.economy.paytoggle`). `/pt list`, `/pt remove`, `/pt spawn` are powertool (`neoessentials.item.powertool`). The mod's help lists `/pt` as a powertool alias — that refers to the catalog, not the root executes.",
+      "fix": "Set bindings with `/powertool <command>`. For paytoggle use `/paytoggle` or bare `/pt`. Do not document `/pt` as a replacement for `/powertool`."
+    },
+    {
+      "title": "/give does not belong to this system",
+      "body": "`/give` is registered by `PlayerStateCommands` (utility commands), vanilla-like, for giving to another player. Giving yourself an item by short id is `/item` / `/i` (`MiscItemCommands`, amount 1–64). Do not mix them up: different tree, different permission (`neoessentials.give` vs `neoessentials.item`).",
+      "fix": "In item guides write `/item diamond 16`, not `/give`."
+    },
+    {
+      "title": "/invsee: view or edit depending on the node",
+      "body": "The commands live in `InventoryViewCommands` (in the inventory — likelySystem utility, permissions `neoessentials.invsee` / `.edit`). With `neoessentials.invsee`, `/invsee` and `/inv` open a snapshot via `buildReadOnlyMenu`: slots with `mayPickup`/`mayPlace` = false. With `neoessentials.invsee.edit` the same command opens the target's live inventory and sets a \"single editor\" lock. The `.edit` node also allows running the command and takes precedence. You cannot open yourself. EntityArgument — online only. The aliases `inv`/`ec`/`ecedit` are full literals with `requires()`, not `redirect()`.",
+      "fix": "Give moderators `invsee` (and `enderchest` if needed). To edit someone else's inventory grant `invsee.edit`; there is no longer a separate command."
+    },
+    {
+      "title": "Powertool: item type, process memory, @p",
+      "body": "The `UUID → itemId → command` map is a static HashMap and is not written to disk. Right-click runs the command **as the player** (`performPrefixedCommand` with their source) and cancels the vanilla action (you cannot eat/place this type at the same time). The `@p ` prefix in `/powertool` is not a binding but an immediate run for all other online players with the `neoessentials.command.target` permission and `{player}` substitution. `allowUnsafeCommands` is true by default; with false, `@`, `~`, `{` etc. are stripped.",
+      "fix": "Set bindings again after a restart. Bind a command with a selector as an ordinary string, not via `@p ` — that prefix fires immediately."
+    },
+    {
+      "title": "/repair without an argument always \"succeeds\"; /clearinventory has no target and no confirm",
+      "body": "`/repair all` repairs all damaged items in your own main inventory, armor and offhand. But `/repair` and `/fix` without arguments repair only the main hand, and the success message is sent even if nothing was damaged. Clearing is your own inventory only (main+armor+offhand). `isCiConfirmDisabled` is never called except by the toggle itself.",
+      "fix": "For all equipment and the inventory use `/repair all`. Clear someone else's inventory via `/invsee` with `neoessentials.invsee.edit`, not via `/ci`."
+    },
+    {
+      "title": "enchant overrides vanilla and confuses the first argument",
+      "body": "Two sibling branches: ResourceLocation and EntityArgument.player(). A name that matches an enchantment path may go to the wrong branch. Brigadier does not allow a level below 1. Item compatibility is coarse (`isEnchantable`); books are allowed. With unsafe off, `applyEnchantment` additionally checks `getMaxLevel()`.",
+      "fix": "For another player always use `/enchant <name> <enchantment id> [level]`. Unsafe levels need the `.unsafe` node or the config."
+    },
+    {
+      "title": "dispose: GUI ≠ destruction",
+      "body": "The code comment says \"removed on close\", but the implementation differs: closing leaves the `SimpleContainer` in `pendingDisposals`. Destruction happens only with `/dispose confirm`. `/trash` has no confirm branch — confirm with `/dispose confirm` anyway.",
+      "fix": "After sorting junk in the window run `/dispose confirm`. Changed your mind — `/dispose cancel` or rejoin."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "/invsee used to copy items into the viewer's inventory (fixed)",
+      "body": "Before build.214 `/invsee`/`/inv`/`/ec`/`/enderchest` opened a `ChestMenu` over a `SimpleContainer` with `.copy()` of the stack. The client could pull out copies while the originals stayed with the target. Now read-only goes through `buildReadOnlyMenu` (`mayPickup`/`mayPlace` = false). Editing went through a menu without the viewer's hotbar slots — a desync; viewer slots have been added. The aliases are no longer `redirect()` without `requires()` (the permission bypass on `/inv`/`/ec` is closed).",
+      "fix": "On the current build duplication through the read-only window does not reproduce. If a player \"took\" items out of /invsee, it is either an old build or they have `neoessentials.invsee.edit`."
+    },
+    {
+      "title": "/ciconfirmtoggle has no effect",
+      "body": "`MiscItemCommands.isCiConfirmDisabled` is not read by any `/clearinventory`/`/ci` call: there is no confirmation, the toggle only prints \"enabled/disabled\" in chat. The state is in memory, without DataStore.",
+      "fix": "Do not promise players a preview before clearing. If you need a safeguard, do not grant `neoessentials.item.clearinventory`."
+    }
+  ]
+}

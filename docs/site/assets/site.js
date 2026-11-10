@@ -5,6 +5,20 @@
   'use strict';
 
   var base = document.documentElement.getAttribute('data-base') || '';
+  var en = document.documentElement.lang === 'en';
+
+  /* ── language ──────────────────────────────────────────────────────────────
+     The switch is a plain link to this page in the other language; clicking it also remembers
+     the choice (like the theme), and the inline script in <head> honours it on every page. */
+
+  var langLink = document.getElementById('lang');
+  if (langLink) {
+    langLink.addEventListener('click', function (ev) {
+      try { localStorage.setItem('ne-docs-lang', langLink.getAttribute('data-lang')); } catch (e) { /* private mode */ }
+      ev.preventDefault();
+      window.location.href = langLink.getAttribute('href') + window.location.hash;
+    });
+  }
 
   /* ── theme ─────────────────────────────────────────────────────────────── */
 
@@ -60,7 +74,8 @@
 
   function render(items, needle) {
     if (!items.length) {
-      box.innerHTML = '<p class="empty">Ничего не найдено по запросу «' + esc(needle) + '»</p>';
+      box.innerHTML = '<p class="empty">' + (en ? 'Nothing found for “' + esc(needle) + '”'
+        : 'Ничего не найдено по запросу «' + esc(needle) + '»') + '</p>';
       box.hidden = false;
       return;
     }
@@ -152,7 +167,7 @@
       if (!row.hidden) shown++;
     }
     var tally = document.getElementById('tally');
-    if (tally) tally.textContent = shown + ' стр.';
+    if (tally) tally.textContent = shown + (en ? ' rows' : ' стр.');
   }
 
   if (tq) tq.addEventListener('input', applyFilter);

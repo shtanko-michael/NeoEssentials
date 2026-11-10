@@ -170,6 +170,14 @@ a:focus-visible, button:focus-visible, input:focus-visible {
 }
 #theme:hover { color: var(--ink); border-color: var(--muted); }
 
+#lang {
+  flex-shrink: 0; height: 34px; min-width: 40px; padding: 0 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--muted); border: 1px solid var(--rule); border-radius: 5px;
+  font: 600 13px/1 "JetBrains Mono", monospace; letter-spacing: .04em; text-decoration: none;
+}
+#lang:hover { color: var(--ink); border-color: var(--muted); }
+
 /* ── shell ───────────────────────────────────────────────────────────────── */
 
 .shell { display: flex; align-items: flex-start; }

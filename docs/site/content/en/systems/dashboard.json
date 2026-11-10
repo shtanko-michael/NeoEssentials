@@ -1,0 +1,111 @@
+{
+  "commands": ["dashboard", "dashboardregister", "linkaccount", "apikey"],
+  "commandDetails": {
+    "dashboard": {
+      "syntax": "/dashboard [start | stop | restart | status | url | pair <dashboardUrl> <code> | unpair]",
+      "notes": "The root is gated by neoessentials.admin.dashboard via validateAdminPermission (the console and OP level 2 always pass). Bare /dashboard equals status. pair/unpair additionally require neoessentials.dashboard.pair (validatePermission, no admin bypass). <dashboardUrl> is StringArgumentType.string(): a URL with : and / must be quoted, otherwise Brigadier splits the token. start looks at webDashboard.enabled and modules.webDashboardEnabled; autoStart ships as false — HTTP does not come up on its own. The command is registered only if commands.dashboard is enabled."
+    },
+    "dashboardregister": {
+      "syntax": "/dashboardregister [start | complete <username> <password> | discord | status]",
+      "notes": "A player needs neoessentials.dashboard.access; the console is allowed with OP 2, but every branch except help replies players_only. A bare call prints help. <password> is greedy (spaces allowed), at least 8 characters; <username> is a word of 3–20 characters. The start token lives for 5 minutes in memory and is not written to the DataStore. discord requires a ready SDLink / Mc2Discord / DCIntegration and an already linked Discord account."
+    },
+    "linkaccount": {
+      "syntax": "/linkaccount <code>",
+      "notes": "Without neoessentials.dashboard.linkaccount the command is not in the tree. The console passes .requires, but execute replies players_only. The code comes from POST /api/auth/link-minecraft/start: 8 characters from ABCDEFGHJKLMNPQRSTUVWXYZ23456789, TTL 5 minutes; input is upper-cased. This is the reverse direction of /dashboardregister: it links an existing dashboard account to a player name instead of creating a new one."
+    },
+    "apikey": {
+      "syntax": "/apikey <create <label> [role] | list | revoke <id>>",
+      "notes": "The root requires neoessentials.dashboard.apikeys (validatePermission). Bare /apikey is incomplete — there is no .executes on the root. <label> and <id> are words. [role] defaults to ADMIN; completion offers ADMIN, OPERATOR, MODERATOR, VIEWER. The full token is printed once (a copyable component) and is never stored in plain form again. list shows id/label/role/enabled/last used, not the secret. Unlike /dashboard, isCommandEnabled(\"apikey\") is not checked — the command is always registered."
+    }
+  },
+  "examples": [
+    {
+      "title": "Start the API by hand and get the address",
+      "goal": "The build ships with webDashboard.autoStart: false and port: 8080 — after server start HTTP stays silent until you run start.",
+      "commands": [
+        "/dashboard status",
+        "/dashboard start",
+        "/dashboard url"
+      ],
+      "result": "status prints running/offline, whether the config is enabled and, if it was stopped by command, a manually disabled mark. start brings up REST and WebSocket (websocketPort, 8081 as shipped). url repeats the base http://<bind>:<port> and refuses if the server is not running. With enabled: false, start replies disabled_in_config and listens on nothing."
+    },
+    {
+      "title": "A key for an external panel",
+      "goal": "A Laravel/external backend calls /api/* with Authorization: Bearer. No human login is needed for that.",
+      "commands": [
+        "/apikey create farmstead-dash ADMIN",
+        "/apikey list",
+        "/dashboard status"
+      ],
+      "result": "create prints the token once — put it in the panel's server-side config, not in a browser. list shows the id (needed for revoke) and last used: never until the key is used. GET /api/ping without a header should return 200 and {\"success\":true,\"mod\":\"neoessentials\",\"mode\":\"external|internal\"} — this checks the port, not the key."
+    },
+    {
+      "title": "A player registers their own panel account",
+      "goal": "Not an API key but a login/password for a person. Two steps: a token, then complete.",
+      "commands": [
+        "/dashboardregister start",
+        "/dashboardregister complete steve_admin S3cretPass",
+        "/dashboardregister status"
+      ],
+      "result": "start issues a one-time token for 5 minutes. complete looks up the pending entry by UUID (no need to paste the token into chat again), checks the name/password length and creates a dashboard user linked to this Minecraft account. If the player already has Discord linked through a companion mod, complete also auto-links it. A repeated start for an already registered player gives already_registered. status shows the panel name, player name, time and Discord."
+    },
+    {
+      "title": "Registration via a linked Discord account",
+      "goal": "No password is set: later you log in with the Discord button on the panel side, if the companion mod provides the link.",
+      "commands": [
+        "/dashboardregister discord",
+        "/dashboardregister status"
+      ],
+      "result": "Requires an installed and ready Simple Discord Link, Mc2Discord or DCIntegration, plus a Discord account already linked to this UUID. Success creates an account with dashboard name = Minecraft name. Without a companion mod — discord_unavailable and a suggestion to use start/complete. DiscordSRV is not supported (it is a Bukkit plugin). NeoEssentials itself never calls discord.com."
+    },
+    {
+      "title": "Pair with an external panel and link a player name",
+      "goal": "The panel shows a code on its Configuration/Settings page; the mod gives it an API key and remembers the return token.",
+      "commands": [
+        "/dashboard pair \"https://dash.example.com\" ABCD1234",
+        "/linkaccount K7MNPQ2R",
+        "/dashboard unpair"
+      ],
+      "result": "pair (quotes are required) POSTs to {url}/api/pair/complete with code, modToken (a new key labelled dashboard-pairing, role ADMIN), serverName and websocketPort. On 200 + dashboardToken, url/token/keyId are written to webDashboard.externalDashboard. The player takes the linkaccount code from the Settings page (POST /api/auth/link-minecraft/start); success links that player name to that dashboard account. unpair revokes the pairing key and clears externalDashboard."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "internal vs external is a separate page",
+      "body": "How the port listens, what `/` serves, and how `webDashboard.mode` (`external` as shipped, `internal`/`both`) matters when diagnosing \"the panel does not connect\" is covered on the dashboard connectivity page. Here it is enough to know: `mode` is read when HTTP starts, `/neoe reload` does not change it; `/api/ping` is alive in every mode and without a Bearer token.",
+      "fix": "Changing the mode needs a restart of the mod's HTTP (`/dashboard restart` or a server restart). Bind/firewall/key troubleshooting is on the \"Dashboard connectivity\" page."
+    },
+    {
+      "title": "`/dashboard stop` sets a flag until the JVM restarts",
+      "body": "`stopDashboard` raises the static `manuallyDisabled`. In the current session auto-start has already happened (it runs only on ServerStartedEvent), so the flag is mostly for status (\"override manually disabled\"). After a full process restart the flag is false again: if `autoStart: true`, HTTP comes up by itself even if it was stopped by command in the previous session. `start` clears the flag. `restart` cannot bring up a server that is already down — it first prints not_running and suggests start.",
+      "fix": "The build ships with `autoStart: false` — after a server restart you need `/dashboard start` again, regardless of stop. Do not confuse stop with `webDashboard.enabled: false`."
+    },
+    {
+      "title": "pair needs a second node; the URL only in quotes",
+      "body": "The `/dashboard` root lets OP 2 through via validateAdminPermission. The pair/unpair branch additionally runs validatePermission(`neoessentials.dashboard.pair`). With `opsBypassPermissions: false`, an operator without this node can start HTTP, but pair is denied. An unquoted string in Brigadier is `[0-9A-Za-z_\\-+.]`; colon and slash are not allowed, so `http://127.0.0.1:3000` without quotes does not parse. A trailing `/` is stripped from the URL. A non-200 or a body without dashboardToken immediately revokes the dashboard-pairing key.",
+      "fix": "Always use `/dashboard pair \"https://host\" CODE`. For pair, grant `neoessentials.dashboard.pair` (or keep the OP bypass on)."
+    },
+    {
+      "title": "Two different \"link account\" commands",
+      "body": "`/dashboardregister` creates a **new** dashboard user from an online player (token 5 min, username 3–20, password ≥ 8). `/linkaccount` confirms ownership of a player name for an **already existing** dashboard user (8-character code, 5 min, no password; needs `neoessentials.dashboard.linkaccount`). A repeated link while the UUID is already linked is rejected — unlink through the API first. The registration token is lost on server restart (RAM only). The first HTTP start with an empty users collection creates `admin` with a random password written to the log (`Temporary password: …`, change it on first login) — this is not `/dashboardregister`.",
+      "fix": "A player without an account — register. An account created in the panel/by an admin — Settings → code → `/linkaccount`. Lost the admin password — check the boot log or reset via `/api/users/{id}/password`."
+    },
+    {
+      "title": "WebSocket can die separately from REST",
+      "body": "Both start and auto-start catch Throwable around WebSocket (a NoClassDefFoundError from a missing Java-WebSocket must not crash the server). HTTP may then be running while live events on websocketPort are not. status/url show only the HTTP URL, not WS.",
+      "fix": "If REST is alive but the panel \"does not stream\", look in the WEB_DASHBOARD log for Failed to start WebSocket server and check that port 8081 is free and differs from the HTTP port."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "An unknown role in /apikey create still creates an ADMIN key",
+      "body": "On garbage like `admins`, `parseRole` sends sendFailure \"expected ADMIN, OPERATOR, MODERATOR, or VIEWER. Defaulting to ADMIN\" and **returns** `User.Role.ADMIN`. Brigadier then calls `create` anyway — the key appears and the token is printed. The failure does not roll back the branch.",
+      "fix": "Run `/apikey list` right away: if the role is ADMIN and you wanted VIEWER, `/apikey revoke <id>` and create it again. Do not take the red line in chat as a sign that no key exists."
+    },
+    {
+      "title": "/apikey cannot be disabled through the commands section",
+      "body": "The neighbouring dashboard commands check `isCommandEnabled`. `ApiKeyCommand.register` does not: with the mod loaded, `/apikey` is always in the tree, gated only by the `neoessentials.dashboard.apikeys` node (plus the PermissionAPI OP bypass for players and OP 2 for the console).",
+      "fix": "Remove the node from non-admins. The current build cannot disable the command with `commands.apikey: false`."
+    }
+  ]
+}

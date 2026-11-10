@@ -1,0 +1,48 @@
+{
+  "commands": ["neoe"],
+  "commandDetails": {
+    "neoe": {
+      "syntax": "/neoe | /neoe reload | /neoe config split|validate|repair|status | /neoe <command> [args]",
+      "notes": "The long form /neoessentials is registered separately when commands.neoessentials is enabled and mirrors the same tree. The root requires neoessentials.use (the console always passes). reload and the whole config branch need neoessentials.admin.reload. The greedy argument after the root routes to the mod's other commands. The help catalogue also lists /neoe tpr|randomtp|randomteleport as random-teleport aliases — these are not separate slash commands."
+    }
+  },
+  "examples": [
+    {
+      "title": "Turn on split configs on a running server",
+      "goal": "Move away from a single 800+ line config.json without cutting it up by hand.",
+      "commands": [
+        "/neoe config status",
+        "/neoe config split",
+        "/neoe config validate"
+      ],
+      "result": "status tells you whether you are split or not. split creates main.json, commands.json, chat.json and the rest, plus the `.split_configs` marker, and turns config.json into a stub. validate checks that all expected files are present. Requires neoessentials.admin.reload. After the split, edit the small files; the old monolith is no longer read."
+    },
+    {
+      "title": "Fix a broken split after a file was deleted by hand",
+      "goal": "Someone deleted chat.json and the server complains on load.",
+      "commands": [
+        "/neoe config repair",
+        "/neoe config validate"
+      ],
+      "result": "repair writes the missing split files with defaults and does not overwrite anything that exists. validate should pass. A restart is needed only if you repaired modules/commands — the values themselves are picked up by /neoe reload."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "A marker, not a JSON key",
+      "body": "Split mode is enabled by the file `config/neoessentials/.split_configs`, not by a field in config.json. While the marker is absent, the mod reads the monolith. templates/discord_embed.json is the only split file in the templates/ subfolder.",
+      "fix": "Do not look for `splitConfigs: true` in JSON. To enable it on a live server, use `/neoe config split`, not empty files created by hand."
+    },
+    {
+      "title": "kits.json in split mode is not the kits",
+      "body": "Kit definitions live in the DataStore (the kits collection). `kits.json` is read once for migration. Kit cooldown/price settings are the `kits` key in main.json.",
+      "fix": "Change a kit's contents via /createkit or the store, not through the kits.json split file."
+    },
+    {
+      "title": "reload does not add commands",
+      "body": "`/neoe reload` re-reads values, translations, permissions and chat. The modules and commands sections are a snapshot taken at startup. Split/repair of the file layout does not need a restart; a new command appearing in commands.json does.",
+      "fix": "After editing modules.*Enabled or commands.<name>, do a full restart."
+    }
+  ],
+  "knownIssues": []
+}

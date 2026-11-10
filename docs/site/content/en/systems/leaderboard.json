@@ -1,0 +1,118 @@
+{
+  "commands": [
+    "leaderboard"
+  ],
+  "commandDetails": {
+    "leaderboard": {
+      "syntax": "/leaderboard [<board> [page | gui] | reload | admin set <board> <player> <value> | admin add <board> <player> <delta> | admin reset <board> <player> | admin create <id> <displayName> | admin delete <board> | hologram create <board> <id> [lines]]",
+      "notes": "The `/lb` alias is registered by the same tree. Root — neoessentials.leaderboard.view (console passes); `reload` / `admin` / `hologram` — neoessentials.leaderboard.admin. `<board>`/`<id>`/`<player>` — word; `<displayName>` greedy; `<value>`/`<delta>` — long; `<page>` ≥ 1; chat pages hold 10 lines, the GUI 45. `gui` and `hologram create` are player-only. set/add/reset/delete work only on type `custom`. The shipped config has no separate `modules.leaderboardEnabled` or `commands.leaderboard` key — the command is always registered. `/baltop` does not use this system."
+    }
+  },
+  "examples": [
+    {
+      "title": "View the balance top in chat and in a chest",
+      "goal": "Check that the shipped `money` board is alive and that the GUI is the same ranking, just a different view.",
+      "commands": [
+        "/leaderboard",
+        "/leaderboard money",
+        "/leaderboard money 2",
+        "/leaderboard money gui"
+      ],
+      "result": "Bare `/leaderboard` prints the ids of registered boards (the shipped set includes at least `money`, `kills`, `mob_kills`, `playtime`, `shop_sales`; boards disabled in JSON are not registered). `/leaderboard money` — the first page of 10 lines, with a header showing the page number and cache age in seconds. If the cache is still building, you get a building message instead of \"empty\" — wait and retry. `gui` opens a 6×9 chest: player heads, navigation on slots 48–50. `gui` cannot be opened from the console."
+    },
+    {
+      "title": "Enable the shipped \"diamond ore\" board",
+      "goal": "leaderboard.json already contains `diamonds_mined` with `enabled: false`. Enable it without touching Java.",
+      "commands": [
+        "/leaderboard reload",
+        "/leaderboard",
+        "/leaderboard diamonds_mined"
+      ],
+      "result": "Set `enabled: true` on the `diamonds_mined` entry and run reload (or `/neoe reload` — it also calls `LeaderboardConfigLoader.load()`). The board appears in the list. `stat` is the vanilla criteria string `minecraft.mined:minecraft.diamond_ore`: only regular diamond ore counts, not deepslate. Offline players are read from `<world>/stats/<uuid>.json`; anyone with a file is in the table, even with zero."
+    },
+    {
+      "title": "Custom event points",
+      "goal": "Create a board that vanilla statistics do not have and award points to an offline player.",
+      "commands": [
+        "/leaderboard admin create event_points Event Points",
+        "/leaderboard admin set event_points Steve 50",
+        "/leaderboard admin add event_points Steve 10",
+        "/leaderboard event_points",
+        "/leaderboard admin reset event_points Steve"
+      ],
+      "result": "If the id is taken — board_exists error. `create` appends a `type: custom` object to leaderboard.json and registers the board immediately. `set`/`add`/`reset` resolve the UUID among online players first, then via the profile cache — an offline name with a known profile works; completion suggestions show online players only. Values are written to the DataStore collection `leaderboard_custom` (key `<boardId>:<uuid>`) and invalidate that board's cache immediately. `reset` is `set … 0`. Economy or vanilla_stat boards are rejected by these branches: not_custom_board."
+    },
+    {
+      "title": "Balance top hologram",
+      "goal": "Avoid typing 10 lines of `/hologram addline` by hand — the generator places a title + N placeholders `{leaderboard_<board>:<rank>:name|value}`.",
+      "commands": [
+        "/leaderboard hologram create money top_balances 5",
+        "/hologram setrefresh top_balances 30"
+      ],
+      "result": "You need the holograms module, a player (not the console) and a free id. The hologram spawns at your feet +1.5 on Y, `id` is lowercased, the generator's `refreshInterval` is 5 seconds. `lines` defaults to 10, max 15 (Brigadier 1–15). It is an ordinary hologram: from then on manage it with `/hologram`. If the holograms module is off — holograms_disabled. If the id is taken — hologram_exists."
+    },
+    {
+      "title": "Top shops, not players",
+      "goal": "The `shop_sales` board ranks chest and NPC shops by `totalRevenueCents`, not player UUIDs.",
+      "commands": [
+        "/leaderboard shop_sales",
+        "/leaderboard shop_sales gui"
+      ],
+      "result": "In chat, lines use the shipped `entryFormat` (`{rankColor}{medal} #{rank} …`). Shops with zero revenue are skipped. `exemptPermission` has no effect on this board — the cache has no player to check. In the GUI these entries have no head: the board's `icon` (`minecraft:emerald`) or paper is used. A chest shop's name in the ranking is `ownerName` (the owner's name), an NPC shop's is `shopName`."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "`/baltop` and `/leaderboard money` are two different caches",
+      "body": "`/baltop` (and aliases) do not go through LeaderboardManager. Invalidation after `/pay` / `/eco` calls both the baltop cache and `getBoard(\"money\").invalidate()` — the id is hardcoded as the string `money`. If you rename the economy board, `{leaderboard_money:…}` and invalidation diverge: `/baltop` updates immediately, while a sidebar with `{leaderboard_<newid>:1:name}` waits for that board's `refreshInterval` (60 s by default).",
+      "fix": "Do not change the `money` id if placeholders reference it. For a new economy board with another id, wait out the interval after paying money or run `/leaderboard reload` (it re-registers boards and clears the cache)."
+    },
+    {
+      "title": "First request and the building message",
+      "body": "With an empty or stale cache, `getTop()` starts an async rebuild and immediately returns the current snapshot. An empty result while `isBuilding()==true` prints \"building\", not \"empty\". While a rebuild runs, \"refreshing\" may appear at the bottom of the page. vanilla_stat for offline players scans the whole stats directory — on a large world the first build is noticeable.",
+      "fix": "Repeat the command a second later. For heavy boards raise `refreshInterval` (shipped: 300 s for `playtime`, 120 for `shop_sales`)."
+    },
+    {
+      "title": "`format` has almost no effect",
+      "body": "The field is read by the loader but does not make it into `LeaderboardDefinition`. It is used once: for `vanilla_stat` with `format: \"time\"` ticks are converted to `Xh Ym` (playtime). `economy` and `shop_sales` always print currency via EconomyManager. `custom` via `CustomStatProvider.forBoard` is always `String.valueOf(long)` — even if the JSON says `currency`.",
+      "fix": "Do not expect a currency symbol on a custom board. Time works only with `vanilla_stat` + `format: \"time\"`."
+    },
+    {
+      "title": "vanilla_stat pulls everyone with a stats file into the ranking",
+      "body": "Online players come from `ServerPlayer.getStats()`. Offline — every `*.json` in `<world>/stats/`. A value of 0 is still put into the map, unlike `shop_sales`, where zero revenue is dropped. `exemptPermission` excludes the player entirely (PermissionAPI check by UUID). An invalid `stat` logs a WARN and skips only that board; the server does not crash.",
+      "fix": "Grant `exemptPermission` to service accounts. Remember: `minecraft.mined:minecraft.diamond_ore` does not count deepslate; for both types you need two boards or a separate custom counter."
+    },
+    {
+      "title": "`entryFormat` changes chat; the GUI draws its own",
+      "body": "Chat (`/leaderboard <board>`) substitutes `{rank}` `{name}` `{value}` `{medal}` `{rankColor}` and runs the line through `RichTextFormatter`. The GUI always sets the item name to `#<rank> <name>` and lore with the value — `entryFormat` is not passed there. GUI icon: a head if the entry has a UUID; otherwise the board's `icon` or `minecraft:paper`. Medals in the placeholders `{leaderboard_<board>:<rank>:medal|rankcolor}` work wherever placeholders are resolved, without `entryFormat`.",
+      "fix": "Style chat with `entryFormat`/`headerFormat`. The GUI has no other template."
+    },
+    {
+      "title": "A placeholder without a viewer yields a raw token",
+      "body": "`LeaderboardPlaceholderExpansion` returns `null` when `player == null` — PlaceholderAPI leaves `{leaderboard_…}` as is. A hologram resolves placeholders from the nearest player; if nobody is in the dimension, the token is not expanded on the refresh tick. A rank outside the list is an empty string, not an error. An unknown field (`:foo`) is null and the token stays.",
+      "fix": "Place the hologram where players actually are, or raise the hologram's `refreshInterval` while someone is nearby (`/hologram setrefresh`)."
+    },
+    {
+      "title": "`/leaderboard reload` does not touch other mods' boards",
+      "body": "`clearConfigManagedBoards()` removes only ids that came from leaderboard.json. Boards from `LeaderboardAPI.registerBoard` without the configManaged flag survive reload. But they are not re-registered from the file: if another mod registers a board only at startup, reload keeps it; if it expected a repeat call, there is none. A disabled (`enabled: false`) JSON entry is simply not registered.",
+      "fix": "External boards are documented by that mod's author. Your own — only leaderboard.json + reload."
+    },
+    {
+      "title": "`admin delete` wipes the points",
+      "body": "`deleteCustomBoard` removes the entry from JSON, unregisters it and calls `CUSTOM_STATS.clearBoard` — all `<id>:<uuid>` keys in `leaderboard_custom` are deleted. Economy/vanilla boards cannot be deleted by command: edit the file. `admin create` with an id already in memory refuses; if the file had a disabled entry with the same name, create overwrites it with a custom definition.",
+      "fix": "Before delete, copy the collection's JSON if you still need the event points. Disable vanilla boards with `enabled: false`, not delete."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "The GUI does not use `entryFormat`, although the comment in leaderboard.json promises it",
+      "body": "The shipped comment and LeaderboardSystem.md say `entryFormat` controls both chat and GUI item names. `LeaderboardMenu.buildEntryStack` always builds `Component.literal(\"#\" + rank + \" \" + name)` and never reads `definition.entryFormat()`. On the `shop_sales` board, chat has medals and colours; the chest does not.",
+      "fix": "Treat `/leaderboard <board>` chat as the only place the template works. The GUI shows only rank, name and the value in lore."
+    },
+    {
+      "title": "Economy invalidation is tied to the `money` id",
+      "body": "`BaltopCommand.invalidateCache()` invalidates `LeaderboardManager.getBoard(\"money\")` after `/pay` and `/eco`. An economy board with another id is not found by this call. `/baltop` itself still updates.",
+      "fix": "Keep the `money` id, or accept the delay until `refreshInterval` / a manual `/leaderboard reload`."
+    }
+  ]
+}

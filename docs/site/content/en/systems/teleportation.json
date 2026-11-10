@@ -1,0 +1,321 @@
+{
+  "commands": [
+    "warp",
+    "setwarp",
+    "delwarp",
+    "warps",
+    "pwarp",
+    "setpwarp",
+    "delpwarp",
+    "pwarps",
+    "home",
+    "sethome",
+    "delhome",
+    "deletehome",
+    "homes",
+    "renamehome",
+    "spawn",
+    "setspawn",
+    "tpa",
+    "tpahere",
+    "tpaccept",
+    "tpdeny",
+    "tpcancel",
+    "tpaall",
+    "tpauto",
+    "tptoggle",
+    "tp",
+    "tphere",
+    "tpall",
+    "tppos",
+    "tpr",
+    "back",
+    "top",
+    "jump",
+    "jumpto",
+    "tpo",
+    "tpoffline",
+    "tpohere",
+    "warpinfo"
+  ],
+  "commandDetails": {
+    "warp": {
+      "syntax": "/warp | /warp <name> | /warp <name> <target>",
+      "notes": "Bare /warp prints the first page of the list (20 names). The name argument is StringArgumentType.word(); there is no separate <page> branch: /warp 2 looks for a warp named 2, not page 2. Sending another player (online only, getPlayerByName) is a node requiring neoessentials.teleport.warp.others. The root admits both neoessentials.teleport.warp and neoessentials.teleport.warp.list; the teleport itself still requires teleport.warp. With perWarpPermission you also need neoessentials.warps.<name>."
+    },
+    "setwarp": {
+      "syntax": "/setwarp <name> [<pos>]",
+      "notes": "Without pos it places the warp at your feet. pos — BlockPosArgument (integers, ~ allowed, the chunk must be loaded). The point is saved and used strictly at these coordinates: the safety check does not look for a replacement and does not change the warp. Same literals: createwarp, addwarp. The server warp cap is the maxWarps=50 field in a DataStore record of the warps collection, not a config.json key. Player only."
+    },
+    "delwarp": {
+      "syntax": "/delwarp <name>",
+      "notes": "Same literals: deletewarp, removewarp, rwarp. From the console (OP 3) it calls deleteWarpByAdmin, from the game — deleteWarp. Suggestions — current warp names."
+    },
+    "warps": {
+      "syntax": "/warps [<page>]",
+      "notes": "page — IntegerArgumentType.integer(1). Registration depends on commands.listwarps, not commands.warps. Aliases: warplist, listwarps. Permission neoessentials.teleport.warp.list."
+    },
+    "pwarp": {
+      "syntax": "/pwarp <name>",
+      "notes": "name is required; there is no bare /pwarp. The command family is not registered if warpSettings.allowPlayerWarps=false. After checking your own player warp the handler calls teleportToWarp — i.e. the server warp with the same name, not the player's point."
+    },
+    "setpwarp": {
+      "syntax": "/setpwarp <name>",
+      "notes": "Limit: meta neoessentials.warps, then neoessentials.warp.limit.<1..100>, otherwise warpSettings.maxPlayerWarps (3 by default). neoessentials.warp.limit.unlimited removes the cap. Repeating the same name does not overwrite but replies already_exists. The warpSetCooldown is not spent if creation is rejected."
+    },
+    "delpwarp": {
+      "syntax": "/delpwarp <name>",
+      "notes": "Deletes only your own player warp. Others' points are not affected by this command (there is REST DELETE /api/warps/players/{uuid}/{name} for that)."
+    },
+    "pwarps": {
+      "syntax": "/pwarps",
+      "notes": "A list of only your own names plus a counter against your personal maximum (∞ with unlimited). Does not show others' warps."
+    },
+    "home": {
+      "syntax": "/home [<name>]",
+      "notes": "Without a name: the home key, otherwise the first key of a ConcurrentHashMap — not alphabetical. The /h alias is not set if ftbessentials / ftb_essentials / essentials is loaded. In jail with preventJailEscape the command stays silent. Cooldown homeTeleportCooldown, warmup — generalSettings.teleportDelay."
+    },
+    "sethome": {
+      "syntax": "/sethome <name> | /sethome confirm | /sethome deny",
+      "notes": "There is no bare /sethome; the name is required. confirm and deny are sibling literals of the root; the name lives in a pending map, not on the command line. Overwriting an existing home always asks for confirmation (this is not the requireConfirmationForDelete key). The createhome alias — only without a conflicting mod. Name: ^[a-zA-Z0-9_-]+$, up to 20 characters, case as typed. With the RegionGuard flag teleport-escape deny, a home cannot be created in such a zone."
+    },
+    "delhome": {
+      "syntax": "/delhome <name> | /delhome confirm | /delhome deny",
+      "notes": "With homeSettings.requireConfirmationForDelete (true by default) deletion goes only through /delhome confirm. The chat buttons send /delhome confirm and /delhome deny — the name is read from the pending map. The removehome and rhome aliases are skipped on conflict with FTB/Essentials."
+    },
+    "deletehome": {
+      "syntax": "/deletehome <name> | /deletehome confirm | /deletehome deny",
+      "notes": "The same Brigadier node as /delhome: registerDelHomeCommandWithName(\"deletehome\"), if the literal is still free. Same permission: neoessentials.teleport.home.delete."
+    },
+    "homes": {
+      "syntax": "/homes",
+      "notes": "Aliases listhomes, homelist. The family is registered only if commands.listhomes=true; the commands.homes key does not affect the tree. The console does not pass requires()."
+    },
+    "renamehome": {
+      "syntax": "/renamehome <oldname> <newname>",
+      "notes": "A second branch with the same two-word pattern and the permission neoessentials.renamehome.others parses the first argument as <player>:<old>, but only among online players. HomeCommands lowercases both names before calling the manager, whereas /sethome stores the key as typed."
+    },
+    "spawn": {
+      "syntax": "/spawn",
+      "notes": "There is no <player> argument — you cannot send someone else to spawn with this command. The spawnSettings.spawnCooldown is written to lastSpawnUsage before teleportToSpawn: a failed teleport still burns the wait. spawninfo/spawni are not in this page's inventory."
+    },
+    "setspawn": {
+      "syntax": "/setspawn [<pos>]",
+      "notes": "Without pos — your current feet. pos — BlockPosArgument, loaded chunk. Not registered if spawnSettings.allowSpawnSet=false. Permission neoessentials.teleport.spawn.set."
+    },
+    "tpa": {
+      "syntax": "/tpa <player>",
+      "notes": "player — EntityArgument.player(), online only. Rejects yourself. A target with tptoggle off is unreachable unless the sender has neoessentials.teleport.tpo. For a target with tpauto no request is created — the teleport happens immediately. After /tpaccept the request also teleports immediately, exactly to the target's current position: no warmup and no search for a nearby \"safe\" point. If the landing falls into RegionGuard with teleport-escape deny, the teleport is cancelled. One outgoing request at a time (sentRequests)."
+    },
+    "tpahere": {
+      "syntax": "/tpahere <player>",
+      "notes": "The same instant scheme as /tpa, type TPAHERE: on accept the target moves, not the sender, exactly to the sender's current position. /back is recorded for whoever is actually moved."
+    },
+    "tpaccept": {
+      "syntax": "/tpaccept",
+      "notes": "No player name: the single incoming request is accepted (the pendingRequests key is the target's UUID). You cannot pick from a queue."
+    },
+    "tpdeny": {
+      "syntax": "/tpdeny",
+      "notes": "Denies the same single incoming request. No arguments."
+    },
+    "tpcancel": {
+      "syntax": "/tpcancel",
+      "notes": "Cancels your outgoing request. No arguments."
+    },
+    "tpaall": {
+      "syntax": "/tpaall [<target>]",
+      "notes": "Without an argument the hub is the sender; <target> (online, word) requires neoessentials.tpaall.others. Every online player except the hub is sent a TPAHERE, skipping those with tptoggle off. Because of sentRequests on the sender's UUID only the first successful request actually goes out."
+    },
+    "tpauto": {
+      "syntax": "/tpauto | /tpauto on|off | /tpauto <target> | /tpauto <target> on|off",
+      "notes": "A bare call toggles yourself. The on/off literals take precedence over a name: you cannot select a player named on with this command. Another target — neoessentials.tpauto.others. State is in a ConcurrentHashMap; after a restart everyone is off again. Does not bypass tptoggle: enabling it with toggle off gives a warning."
+    },
+    "tptoggle": {
+      "syntax": "/tptoggle | /tptoggle on|off | /tptoggle <target> | /tptoggle <target> on|off",
+      "notes": "Accepting is on by default (no record = true). Another target — neoessentials.tptoggle.others. Also memory-only. Blocks /tpa, /tpahere and /tpaall; does not block /tp, /tphere, /tpall, /tpo, /tpohere."
+    },
+    "tp": {
+      "syntax": "/tp <target> | /tp <player> <target> | /tp <x> <y> <z>",
+      "notes": "Players — EntityArgument.player() (online only). Coordinates — three DoubleArgumentType, no ~ and no world. The tree has no /tp <player> <x> <y> <z> branch. Rejects yourself to yourself. Records /back and calls player.teleportTo directly, bypassing the TeleportUtil warmup."
+    },
+    "tphere": {
+      "syntax": "/tphere <player>",
+      "notes": "EntityArgument.player(), online only. /back is recorded for the target. The executor must be a player (getPlayerOrException)."
+    },
+    "tpall": {
+      "syntax": "/tpall",
+      "notes": "Everyone online except you to your feet. Permission neoessentials.teleport.admin.tpall. The console does not pass: a player is needed. /back is recorded for each."
+    },
+    "tppos": {
+      "syntax": "/tppos <coordinates>",
+      "notes": "Vec3Argument.vec3(): ~ ~ ~ and relative offsets are allowed, unlike /tp's three doubles. The world does not change. Records /back."
+    },
+    "tpr": {
+      "syntax": "/tpr [<locationName>]",
+      "notes": "Without a name randomTeleportSettings.defaultLocation is used (template {world}). With mode=gui bare /tpr opens the biome GUI, while /tpr <locationName> bypasses the GUI. The aliases rtp, randomtp, randomteleport are the same trees. Under /neoe and /neoessentials hang bare tpr|rtp|randomtp|randomteleport without locationName (that is the /neoe catalog, not this page). A named centre is set with /settpr <locationName> (not listed here). Cooldown randomTeleportSettings.cooldown, warmup — the same teleportDelay."
+    },
+    "back": {
+      "syntax": "/back",
+      "notes": "The point is recorded before home/warp/spawn/tpa and before /tp|/tphere|/tpall|/tppos|/top|/jump|/jumpto. /tpo and /tpoffline from ServerAdminCommands do not record /back. Death — backSettings.enableDeathBack; the point is saved without a chat notification. Its own warmup: backSettings.teleportDelay, not generalSettings. enableBackSafety is false by default. A return into RegionGuard with teleport-escape deny is cancelled."
+    },
+    "top": {
+      "syntax": "/top",
+      "notes": "Scans the column from maxBuildHeight down, only above the current Y: from a cave it takes you to the surface above you; it does not search below you. Without solid+air — error no_solid_block."
+    },
+    "jump": {
+      "syntax": "/jump",
+      "notes": "The same execute as /jumpto: a 100-block ray, landing on the block above the hitbox. It does not \"jump\" through walls: if the ray hits an opaque block, you are teleported on top of it."
+    },
+    "staff compass": {
+      "syntax": "Right-click with a regular compass",
+      "notes": "A moderation tool, not a command. Requires the neoessentials.teleport.compass permission. When looking at the top face of a block it moves you into the empty space above it; when looking at the side face of a wall, the ray (up to 100 blocks) passes through the obstacle and picks the first empty space behind it that fits the player. No floor under your feet is required: the height of the point is not adjusted. Unloaded chunks and positions where the body would intersect a block are rejected. The result is shown in the action bar, and duplicates of one click are suppressed; chat is not cluttered. This teleport does not change the /back point."
+    },
+    "jumpto": {
+      "syntax": "/jumpto",
+      "notes": "Identical to /jump (both register* call jumpToTargetBlock). If there are not two blocks of air above the target — jumpto_failed."
+    },
+    "tpo": {
+      "syntax": "/tpo <player>",
+      "notes": "ServerAdminCommands: word, online only via getPlayerByName, bypasses tptoggle, permission neoessentials.teleport.tpo, /back is not recorded. DirectTeleportCommands with commands.tpo registers a second child tpo → argument(\"player\") with permission neoessentials.teleport.admin.tpo and calls teleportToOfflinePlayer (lastLocation from PlayerData). Which node takes the line /tpo Steve — see knownIssues."
+    },
+    "tpoffline": {
+      "syntax": "/tpoffline <player>",
+      "notes": "word, not EntityArgument: an offline player's name passes. If they are online — a normal teleportTo to the live entity. Offline — vanilla playerdata NBT (Pos, Rotation, Dimension) via usercache; no profile or no Pos — not_found / no_data. /back is not recorded. World from Dimension, otherwise overworld."
+    },
+    "tpohere": {
+      "syntax": "/tpohere <player>",
+      "notes": "word + online getPlayerByName. Brings the target, ignoring tptoggle. /back is not recorded for the target. The console is rejected (player_only)."
+    },
+    "warpinfo": {
+      "syntax": "/warpinfo <warp>",
+      "notes": "Prints the name, world and coordinates of a server warp (getLocationString). Does not show player warps. Permission neoessentials.warpinfo. Registered separately (registerWarpInfoCommand), not inside WarpCommands.register."
+    }
+  },
+  "examples": [
+    {
+      "title": "Spawn and three warps for a new world",
+      "goal": "Set the spawn point and public warps without editing JSON by hand, and check that a player can be sent to a warp by command.",
+      "commands": [
+        "/setspawn",
+        "/setwarp spawn",
+        "/setwarp market",
+        "/warps",
+        "/warpinfo market",
+        "/warp market Steve"
+      ],
+      "result": "setspawn replies with success and remembers your feet + facing. Each setwarp without coordinates places the warp where you stand. /warps prints spawn, market (up to 20 per page). /warpinfo market shows the world and coordinates. /warp market Steve requires neoessentials.teleport.warp.others and an online Steve: he is taken to market with the generalSettings.teleportDelay warmup (3 s by default), and you get warped_other. Bare /warp without a name is the same list as /warps, page 1."
+    },
+    {
+      "title": "Homes with a limit and renaming",
+      "goal": "Give a player several points and rename one, hitting maxHomes if there are already five homes.",
+      "commands": [
+        "/sethome home",
+        "/sethome farm",
+        "/homes",
+        "/renamehome farm barn",
+        "/home barn",
+        "/home"
+      ],
+      "result": "The first sethome creates the home key — exactly what bare /home uses later. The second — farm. /homes shows the counter against maxHomes (5, or meta neoessentials.homes / neoessentials.home.<n>). renamehome farm barn works only if the key in storage is farm in lowercase: the command lowercases both arguments itself. /home barn — warmup and, if enabled, the safety check. A sixth /sethome new with five homes replies limit_exceeded and does not create the home; overwriting with /sethome home does not take a slot but asks for /sethome confirm."
+    },
+    {
+      "title": "A TPA request and bypassing a refusal",
+      "goal": "Test the normal /tpa cycle and the admin bypass when a player has closed requests.",
+      "commands": [
+        "/tptoggle off",
+        "/tpa Steve",
+        "/tptoggle on",
+        "/tpa Steve",
+        "/tpaccept",
+        "/tpo Steve"
+      ],
+      "result": "After tptoggle off, any /tpa to that player (except from a sender with neoessentials.teleport.tpo) gets tptoggle_off and no request is created. With accepting turned back on, /tpa Steve sends a clickable request for requestTimeout seconds (60). Steve clicks [Accept] or types /tpaccept without a name: the sender instantly lands at his current position, with no warmup and no substitution of the nearest \"safe\" place. /tpo Steve ignores tptoggle and creates no request: it is a direct teleportTo. Do not confuse it with /tpoffline: /tpo from ServerAdminCommands will not find an offline name (player_not_found)."
+    },
+    {
+      "title": "Reach an offline player, and a random point",
+      "goal": "Teleport to the last vanilla position of a player who left, and test a named RTP around the current coordinates.",
+      "commands": [
+        "/tpoffline Steve",
+        "/settpr wild",
+        "/tpr wild"
+      ],
+      "result": "tpoffline reads world/playerdata: if Steve is in usercache and the NBT has Pos, you end up there (including another dimension from Dimension). No data — no_data, and /back is not recorded. /settpr wild (not a command from this page; its tree is next to /tpr) writes the centre to randomTeleportSettings.locations.wild and clears the slot cache; a new entry has maxRange 10000 by default, not defaultMaxRange 5000. /tpr wild looks for a safe point within that radius, then the same warmup: moving more than 1.5 blocks with cancelOnMovement cancels it."
+    },
+    {
+      "title": "Gather everyone to you and send one back",
+      "goal": "An event at spawn: pull everyone online in, then move one back using tilde coordinates.",
+      "commands": [
+        "/tpall",
+        "/tppos ~ ~10 ~",
+        "/tphere Steve",
+        "/back"
+      ],
+      "result": "tpall moves everyone except you and records /back for each; if you are alone on the server — tpall.no_players. /tppos ~ ~10 ~ raises you 10 blocks in the same world (/tp 100 64 200 has no tildes — only absolute doubles). /tphere Steve pulls him to you and records his /back. Your /back returns you to the point before tppos, not Steve."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "Shared warmup, separate cooldowns, cancellation on movement and damage",
+      "body": "`generalSettings.teleportDelay` (3 s) is read by home, warp, spawn and `/tpr`. `/tpa` and `/tpahere` are instant after acceptance. `/back` uses its own `backSettings.teleportDelay`. Cooldowns are separate: `homeTeleportCooldown` / `homeSetCooldown` / `homeDeleteCooldown`, `warpCooldown` / `warpSetCooldown`, `spawnCooldown`, `randomTeleportSettings.cooldown`, `cooldownBetweenRequests`. Bypass: `neoessentials.teleport.bypass.warmup` (or `.home` / `.warp`) and `…bypass.cooldown`. With `cancelOnMovement` the threshold is 1.5 blocks. `cancelOnDamage` is false by default; if enabled, a second warmup on top of the first is rejected (`already_in_progress`) — the damage handler keeps one pending per player. `/tp`, `/tphere`, `/tpall`, `/tpo`, `/tpohere` go through `player.teleportTo` and do not see this warmup.",
+      "fix": "For an \"instant /home\" grant bypass.warmup rather than zeroing teleportDelay for everyone. Combat blocks only the TeleportUtil path with `allowTeleportInCombat: false` (5 s CombatTracker) — an admin /tp still takes you out of combat."
+    },
+    {
+      "title": "Safety check and forced chunk loading",
+      "body": "Home/spawn call `TeleportUtil.preloadChunksForTeleport` (a 3×3 grid, FORCED) before scanning. Flags: `enableHomeTeleportSafety`, `enableSpawnSafety`, for /back — `enableBackSafety` (false in the shipped config: an unloaded origin chunk was treated as \"lava\"). `/tpa` and `/tpahere` do not scan blocks around a live target player: an accepted request teleports exactly to their current position. Dangerous blocks for the other safe teleports: lava, fire, soul fire, magma, cactus, sweet berries, wither rose, nether portal, campfire, powder snow. No support underfoot or a ceiling at head level — `findSafeLocation`; if nothing is found, the teleport is cancelled. Server warps are an exception the other way: they are always saved and used at exactly the given coordinates, without looking for a safe replacement and without changing the record. RTP loads only the landing chunk, not 3×3.",
+      "fix": "For a server warp check the spot before `/setwarp`: after creation the mod never moves this point. You can check the saved coordinates with `/warpinfo <name>`."
+    },
+    {
+      "title": "Offline /tpoffline reads vanilla NBT, not the mod's lastLocation",
+      "body": "`/tpoffline` takes the profile from usercache, then `playerdata/<uuid>.dat`: the Pos list and Dimension. An online namesake short-circuits to a live teleportTo. The parallel `/tpo` node from DirectTeleportCommands calls `DirectTeleportManager.teleportToOfflinePlayer` — that is NeoEssentials' `PlayerData.getLastLocation()` string, a different source. No lastLocation record — offline_player_not_found, even if the vanilla dat is present. None of the ServerAdmin paths `/tpo` / `/tpoffline` / `/tpohere` call saveBackLocation.",
+      "fix": "To reach a player who left — /tpoffline, not /tpo. If tpoffline.no_data — the player has never been saved in this world (or the name is not in usercache). /back will not take you back after these commands; no point was recorded."
+    },
+    {
+      "title": "Home limit: config, meta, nodes, confirmation",
+      "body": "`getMaxHomesForPlayer`: if the meta `neoessentials.homes` is set (LuckPerms `meta set neoessentials.homes N`), it is used (even if lower than the config; 0 = no homes allowed). Otherwise max(config `maxHomes`=5, the highest granted `neoessentials.home.1`…`neoessentials.home.100`). Overwriting an existing name does not consume the limit but always goes through pending + `/sethome confirm`. Deletion — only if `requireConfirmationForDelete`, via `/delhome confirm`. The set/delete cooldown is not spent on a rejected attempt. `allowCrossDimensionHomes: false` forbids sethome outside the overworld (check `worldName.contains(\"overworld\")`).",
+      "fix": "To raise a group's limit use meta or neoessentials.home.10; do not edit maxHomes if some players should stay at five. Overwrite: clicking [Confirm] sends /sethome confirm; delete — /delhome confirm."
+    },
+    {
+      "title": "Player warps — separate storage and limit, shared teleport",
+      "body": "The `player_warps` collection, not `warps`. `/pwarp` / `/setpwarp` / `/delpwarp` / `/pwarps` appear only with `allowPlayerWarps` at startup. Player limit: the unlimited node, meta `neoessentials.warps`, otherwise max(`neoessentials.warp.limit.N`, `maxPlayerWarps`). `WarpManager.teleportToPlayerWarp` exists, but no playable command calls it: `/pwarp` after getPlayerWarp calls `teleportToWarp` (server warps). A name match takes you to the server warp; without a server one — not_found, although /pwarps shows the name. Brigadier has no `/pwarp <player> <name>` branch.",
+      "fix": "While the bug is alive, make public points with /setwarp. Personal \"homes\" — /sethome. Do not promise players a showcase of others' pwarps."
+    },
+    {
+      "title": "A per-warp permission shows in the list but does not let you in",
+      "body": "With `perWarpPermission: true` the /warp|/warps list shows a warp if you have `neoessentials.teleport.warp` **or** `neoessentials.warps.<name>`. The teleport itself in executeWarp requires **both**: teleport.warp and warps.<name>. The teleport.warp.list permission is enough to open bare /warp as a list, but not to travel.",
+      "fix": "For each public warp grant neoessentials.warps.<name> to those who should use it. Do not count on teleport.warp alone being enough once the flag is on."
+    },
+    {
+      "title": "The server warp cap does not come from config.json",
+      "body": "`maxWarps` defaults to 50 and is read from a service record of the `warps` collection in DataStore (loadWarps). `WarpManager.loadConfig()` does not look at the `warpSettings.maxWarps` key — and the shipped config does not have it. Editing \"Teleportation → maxWarps\" in config.json on the dashboard does not affect the limit. Warp names are case-insensitive by default (lowercase), unlike home keys.",
+      "fix": "The 50 limit can be changed only via the storage record / setMaxWarps in code, not via config.json. For players use maxPlayerWarps — it is read from the config."
+    },
+    {
+      "title": "TPA: one incoming, one outgoing; the maxPendingRequests queue is fictitious",
+      "body": "`sentRequests` — one request per sender. `pendingRequests` — a Map by target UUID, putIfAbsent: a second incoming request is always target_busy, even if `maxPendingRequests` = 5. `allowMultipleRequests` checks for a duplicate of the same pair, but the target still has one slot. `/tpaccept` takes no argument. Timeout `requestTimeout` (60 s); the sender cooldown `cooldownBetweenRequests` (10 s) is not spent on a refusal (busy / tptoggle / already_sent). Friends autoAcceptFromFriends — an isFriend stub.",
+      "fix": "Do not promise a queue of five /tpa requests. Several targets at once — only once sentRequests is fixed (it currently breaks /tpaall too)."
+    },
+    {
+      "title": "Jail, the console and /homes via a different commands key",
+      "body": "`preventJailEscape`: /home, /warp, /spawn, /pwarp refuse a jailed player. /tp and /tpo do not check. Almost all trees require a ServerPlayer: the console passes requires() for setwarp/delwarp/spawn (OP), but executeSetWarpHere/executeSpawn cast getEntity() to a player. The exception is /delwarp from the console. The /homes family is attached by `commands.listhomes`, /warps — by `commands.listwarps`. Turn off listhomes and /homes disappears even if commands.homes=true.",
+      "fix": "To change the command set, edit listhomes/listwarps specifically. From the console delete warps with /delwarp; set spawn and homes from the game."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "/pwarp does not teleport to the player warp",
+      "body": "Issues_Discovered.md: \"Player Warps having issues\". In `PwarpCommands.executePwarp`, after a successful `getPlayerWarp`, `warpManager.teleportToWarp(player, warpName)` is called — a lookup in the **server** warp map. The code comment: \"Reuse teleport logic (may need adjustment)\". The `teleportToPlayerWarp` method exists and is marked admin-only (OP 4), but neither /pwarp nor /warp calls it. Symptom: /setpwarp shop + /pwarps show shop, /pwarp shop replies not_found or takes you to the server /warp shop if the name matches.",
+      "fix": "Do not use pwarps as players' public points. For a working teleport — /home or /warp. Fix: in executePwarp teleport by the TeleportLocation from getPlayerWarp, not teleportToWarp."
+    },
+    {
+      "title": "Two different /tpo under one literal",
+      "body": "`DirectTeleportCommands.registerTpoCommand` (if the teleportation module and commands.tpo are on) attaches `/tpo <player>` → `teleportToOfflinePlayer` (PlayerData.lastLocation), permission `neoessentials.teleport.admin.tpo`. Later `ServerAdminCommands.registerTpo` attaches `/tpo <target>` → online teleportTo bypassing tptoggle, permission `neoessentials.teleport.tpo`. The argument names differ (`player` vs `target`), both are word: the tpo root has two children. Which execute `/tpo Steve` reaches on a particular Brigadier version cannot be determined unambiguously from the source.",
+      "fix": "For online bypassing toggle, rely on /tpo only if commands.tpo is off (then the ServerAdmin node remains). Offline — always /tpoffline. Do not document /tpo as an \"offline teleport\"."
+    },
+    {
+      "title": "/tpaall sends a request only to the first player",
+      "body": "`WorldInteractionCommands.executeTpaAll` calls `sendTeleportRequest(hub, online, TPAHERE)` in a loop. The manager keeps one outgoing request per UUID (`sentRequests`): the second iteration replies already_sent and rolls back. Result: \"sent N\" is almost always 1 (or 0 if the only candidate has tptoggle off). This is not the maxPendingRequests queue.",
+      "fix": "To gather everyone — /tpall (forced) or send /tpahere by hand. /tpaall in its current form is not a mass invitation."
+    }
+  ]
+}

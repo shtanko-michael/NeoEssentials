@@ -1,0 +1,157 @@
+{
+  "commands": [
+    "vote",
+    "votes",
+    "voteparty",
+    "togglevotebroadcast",
+    "votifier"
+  ],
+  "commandDetails": {
+    "vote": {
+      "syntax": "/vote",
+      "notes": "The root requires neoessentials.votifier.vote (the console passes). Prints key/value pairs from votifier.json → voteLinks as plain text (§e<name>§7: §f<link>) — links are not clickable, colour codes and gradients inside voteLinks are not processed; with an empty or missing voteLinks it replies \"No vote links are configured\"."
+    },
+    "votes": {
+      "syntax": "/votes [player]",
+      "notes": "Without an argument it shows the sender's statistics (from the console that is a player named \"Server\"). There is no separate permission for others' statistics — anyone with neoessentials.votifier.vote can see any name's counter; completion offers only online players, but any word is accepted, and an unknown name silently shows 0 instead of an error."
+    },
+    "voteparty": {
+      "syntax": "/voteparty",
+      "notes": "Same node as /vote: neoessentials.votifier.vote. The counter is server-wide and cumulative, not the player's personal contribution; with voteParty.enabled = false the command still replies, it just shows a frozen value."
+    },
+    "togglevotebroadcast": {
+      "syntax": "/togglevotebroadcast",
+      "notes": "Player only plus neoessentials.votifier.togglebroadcast (does not work from the console). It only disables receiving other players' announcements: the player's own vote still broadcasts to everyone else."
+    },
+    "votifier": {
+      "syntax": "/votifier reload | /votifier genkeys | /votifier testvote <site> [player]",
+      "notes": "The root requires neoessentials.votifier.admin (the console passes). Without a subcommand the command does not run (the root node has no .executes) and shows a syntax hint. reload clears the cache of all the mod's configs but does not restart the listener socket; genkeys generates nothing, it only prints instructions; testvote gives a real reward and counts the vote in the statistics and the vote party."
+    }
+  },
+  "examples": [
+    {
+      "title": "Test a reward before connecting your first voting site",
+      "goal": "You wrote a reward in votifier.sites.default and want to make sure it is given without waiting for a real vote from a site.",
+      "commands": [
+        "/votifier reload",
+        "/votes Steve",
+        "/votifier testvote default Steve",
+        "/votes Steve"
+      ],
+      "result": "After reload — \"Votifier config reloaded.\". The first /votes shows Steve's current counter, testvote replies \"Simulated a vote from default for Steve.\", Steve (if online) receives the reward and sees the broadcast from broadcastMessage, and the second /votes shows the counter one higher. The vote party counter also grows by 1 — testvote publishes a real vote event, not a simulation."
+    },
+    {
+      "title": "Test the vote party without collecting 50 votes",
+      "goal": "Make sure the threshold fires and voteParty.commands actually run before setting the production votesRequired value.",
+      "commands": [
+        "/votifier reload",
+        "/voteparty",
+        "/votifier testvote default Steve",
+        "/votifier testvote default Steve",
+        "/voteparty"
+      ],
+      "result": "Temporarily set voteParty.votesRequired = 2 in votifier.json before reload. The first /voteparty shows \"Vote Party: 0/2\"; after the second testvote the console shows \"Vote party triggered!\", the commands from voteParty.commands run, and the counter resets to 0 immediately — the final /voteparty shows \"Vote Party: 0/2\" again. The site reward was given twice, so test on a service account."
+    },
+    {
+      "title": "A vote arrived while the player was offline",
+      "goal": "Check that a vote reward is not lost if the player voted on a site and left the game (or never joined).",
+      "commands": [
+        "/votifier testvote default Steve",
+        "/votes Steve"
+      ],
+      "result": "Steve is offline — the console shows \"Steve voted while offline — reward queued for next login\", the reward goes into the votifier_pending queue, there is NO broadcast (it is sent only for an online voter), but the statistics and the vote party counter increase immediately — /votes Steve already shows +1. On his next login Steve sees \"Claimed 1 pending vote reward(s)!\" and receives all accumulated rewards at once."
+    },
+    {
+      "title": "Reissue the V1 protocol RSA key",
+      "goal": "The private key leaked or you are moving the server and want a clean key pair for voting sites using the old V1 protocol.",
+      "commands": [
+        "/votifier genkeys"
+      ],
+      "result": "The command generates and deletes nothing — it only prints instructions: \"Delete config/neoessentials/votifier/public.pem and private.pem, then restart the server to generate a new V1 keypair.\" You do it by hand: stop the server, delete both .pem files, start it again. At startup the new public key is printed to the console with the line \"Votifier V1 public key (paste into your vote site's panel):\" — you have to paste it into every voting site's panel again, otherwise their votes will no longer decrypt."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "host, port and v2Token are read only at server start",
+      "body": "`VotifierServer.start()` is called once, on `ServerStartedEvent`: it reads `host`/`port`, opens the socket and stores `v2Token` in its own field. `/votifier reload` only clears the config cache — the already open socket stays on the old address, and V2 signature verification keeps using the old token. The comment in votifier.json warns about this too: `enabled: false` does not stop a listener that is already running either.\n\nOnly sections that are re-read on every use are picked up live via reload: `sites`, `voteLinks`, `broadcastMessage` and `voteParty`.",
+      "fix": "After changing `host`, `port`, `v2Token` or `enabled`, restart the whole server. Keep `/votifier reload` for rewards, links, the broadcast and vote party settings."
+    },
+    {
+      "title": "/votifier reload clears the cache of all the mod's configs, not just votifier.json",
+      "body": "The subcommand calls `ConfigManager.getInstance().clearCache()`, which clears the shared `configCache` entirely. This means that along with votifier.json, economy.json, kits.json, crates.json and all the others are re-read from disk — including unfinished edits you left in the editor.",
+      "fix": "Do not run `/votifier reload` while half-edited configs of other systems are on disk. If you only need Votifier, first save everything else in a consistent state."
+    },
+    {
+      "title": "Two independent switches, and they turn off different things",
+      "body": "`modules.votifierEnabled` in config.json is checked at command registration: with `false` the commands `/vote`, `/votes`, `/voteparty`, `/togglevotebroadcast` and `/votifier` do not appear in the tree at all — neither in completion nor in help.\n\n`votifier.enabled` in votifier.json is checked separately, at listener start: the commands stay, but the TCP port is not opened. Side effect: `voteParty.resetOnRestart` is handled on the line after the listener start, so with Votifier disabled the party counter is not reset on restart even if the flag is `true`.",
+      "fix": "To remove the system from the game entirely — `modules.votifierEnabled: false`. To temporarily stop accepting votes while keeping commands and statistics — `votifier.enabled: false` plus a server restart."
+    },
+    {
+      "title": "Site matching is case-insensitive; the only fallback is \"default\"",
+      "body": "`resolveSiteConfig()` iterates the `sites` keys and compares them with the received `serviceName` via `equalsIgnoreCase`, so case in the site name does not matter. If there is no exact match, the `default` entry is used. If that is missing too (or there is no `sites` section at all), no reward is given, silently — no commands, no crate keys, no error message. The player's statistics and the vote party counter still increase.",
+      "fix": "Always keep a `default` entry in `sites`. Take the exact `serviceName` value from the voting site's panel, and test with `/votifier testvote <serviceName> <name>`."
+    },
+    {
+      "title": "Crate keys require the Crates module to be enabled",
+      "body": "The `sites.<site>.keys` block is processed only if `ConfigManager.isCratesModuleEnabled()`. With `modules.cratesEnabled: false` keys are silently not given, while the commands from `sites.<site>.commands` run as usual — the vote reward becomes partial without a single warning.",
+      "fix": "If crate keys are the main vote reward, check `modules.cratesEnabled` in config.json and make sure the balance grows: `/crate keys <name>`."
+    },
+    {
+      "title": "broadcastMessage understands more than the config comment says",
+      "body": "The text goes through `RichTextFormatter.processTablistText()`, so besides the declared `{player}` these work: the `{site}` substitution (the voting site name), `&` codes, gradients and rainbow, named colour tags and even `{animation:name}` tokens from animations.json. Hover/click markup, however, is stripped — you cannot put a clickable link in a vote announcement.\n\nAn empty `broadcastMessage` string disables the announcement entirely.",
+      "fix": "Style the announcement like tablist lines; keep the link to the voting site for `/vote`."
+    },
+    {
+      "title": "Statistics and the reward queue are tied to the name, not the UUID",
+      "body": "The `votifier_stats` and `votifier_pending` collections (in `neoessentials/store/`) are keyed by `username.toLowerCase()` — the name the voting site sent. Case does not matter, but a name change does: after renaming, `/votes` shows 0, and an already queued reward stays under the old name and is never delivered. The UUID is used here only for giving crate keys and for remembering the broadcast opt-out (`votifier_broadcast_toggle`).",
+      "fix": "When a player renames, move their records in `neoessentials/store/votifier_stats.json` and `votifier_pending.json` by hand on a stopped server."
+    },
+    {
+      "title": "From the console /votes and /votifier testvote substitute the name \"Server\"",
+      "body": "Without a `player` argument both commands use `source.getTextName()`. For the console that is the string \"Server\", so `/votes` from the console always shows \"Server has 0 total vote(s).\", and `/votifier testvote default` without a name counts a vote for the nonexistent player \"Server\": it increases the vote party counter, creates a statistics record under the key `server` and queues a reward (there is no such player online).",
+      "fix": "From the console always specify the name explicitly: `/votes Steve`, `/votifier testvote default Steve`."
+    },
+    {
+      "title": "Permission checks let non-players through",
+      "body": "`/vote`, `/votes`, `/voteparty` and `/votifier` are written as `p == null || PermissionAPI.hasPermission(...)`: the console, a command block and a function always pass, regardless of the `neoessentials.votifier.vote` and `neoessentials.votifier.admin` nodes. `/togglevotebroadcast` requires both a player and `neoessentials.votifier.togglebroadcast`.",
+      "fix": "Remember that a command block with `/votifier testvote` gives a reward without any permissions — restrict access to command blocks with the usual Minecraft means."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "The voting site reports \"vote sent\", but nothing happens on the server and the log is empty",
+      "body": "All vote rejections are logged via `NeoLog.debug(..., LogCategory.VOTIFIER, ...)`: an invalid V2 HMAC signature, a mismatched challenge, a broken 256-byte V1 block, any exception while parsing the connection. In config.json `logging.categories.votifier.debug` is `false` by default, and the debug level is written only to `logs/debug.log`, not the console. As a result the most common setup error — a V2 token or V1 public key copied incompletely — looks like total silence.",
+      "fix": "Set `logging.categories.votifier.debug: true` in config.json, run `/neoessentials reload` and check `logs/debug.log`; it will show \"Invalid V2 vote signature\" or \"Invalid V2 vote challenge\". A successfully accepted vote, in contrast, is logged at info level with the line \"Received V1/V2 vote from ... for player ...\"."
+    },
+    {
+      "title": "A typo in sites.*.keys silently gives a key for a nonexistent crate",
+      "body": "The comment in votifier.json promises that without a matching crate in crates.json the key is \"silently skipped\". In reality `VoteRewardManager` calls `CrateKeyManager.addKeys()` directly and does not check that the crate exists: the key balance is written to the `crate_keys` collection under the given id. The player sees the keys in `/crate keys`, but `/crate open <id>` replies \"crate not found\", and there is no automatic way to move those keys to a real crate.",
+      "fix": "Match the ids in `sites.<site>.keys` with the crate ids in crates.json character for character. After editing the config test the whole chain: `/votifier testvote <site> <name>` → `/crate keys <name>` → `/crate open <id>`."
+    },
+    {
+      "title": "/votifier genkeys generates nothing",
+      "body": "Both the subcommand name and its description in the command registry promise key generation. The implementation is a single `sendSuccess` with a hint text: keys are created only inside `RSAKeyManager.load()`, which runs at server start and only if `config/neoessentials/votifier/public.pem` and `private.pem` are not on disk.",
+      "fix": "Treat `genkeys` as help. Real regeneration: stop the server, delete both .pem files, start the server, take the new public key from the console and paste it into every voting site panel."
+    },
+    {
+      "title": "V2 votes stop arriving after every server restart",
+      "body": "If `v2Token` in votifier.json is empty, the server generates a random UUID and tries to save it back to the config. When the write fails (file permissions, a read-only config, a read-only volume), the log gets an ERROR \"Failed to save auto-generated Votifier V2 token — it will regenerate every restart until this is fixed\", and on the next start the token is different — the one you pasted into the voting site panel becomes invalid.",
+      "fix": "Find this ERROR in the log, fix the permissions on `config/neoessentials/votifier.json` or write a permanent `v2Token` by hand, and restart the server."
+    },
+    {
+      "title": "/votifier testvote is not a safe check but a real vote",
+      "body": "The subcommand builds a `Vote` object and publishes `PlayerVoteEvent` directly, bypassing the whole protocol layer. All subscribers run for real: reward commands execute (including giving money and items), crate keys are credited, the player's statistics grow, the vote party counter grows and may cross the threshold right there, and all online players get the \"X voted\" broadcast. There is no confirmation and no undo.",
+      "fix": "Test on a service account, not a real player. Undoing the effects is manual: `neoessentials/store/votifier_stats.json` and `votifier_voteparty.json` on a stopped server."
+    },
+    {
+      "title": "The V1 protocol has no replay protection",
+      "body": "In V2 the server sends a one-time challenge in the greeting and rejects the vote if the received challenge does not match — protection against resending an intercepted packet. V1 has no such field in the protocol, and `handleV1()` checks nothing similar: the same 256-byte RSA block can be sent to the port again and earn the reward as many times as you like.",
+      "fix": "Where the voting site supports NuVotifier (V2), configure that. Do not expose the listener port (8192 by default) to the internet more widely than necessary — restrict access with a firewall to the voting sites' addresses."
+    },
+    {
+      "title": "Votifier messages are not translated into Russian",
+      "body": "The shipped `data/lang/ru_ru.json` has no `commands.neoessentials.votifier.*` keys — all 10 of the system's strings exist only in en_us.json. With `localization.language: ru_ru` the loader fills in missing keys with the English fallback, so both players and admins see \"Vote Party: 3/50\", \"Claimed 1 pending vote reward(s)!\" and the other messages in English.",
+      "fix": "These strings are automatically added to `neoessentials/languages/custom/ru_ru.json` during the merge at startup — translate them right there and restart the server. Do not enable `localization.preserveCustomTranslations` until the translation is done, otherwise merging new keys is disabled."
+    }
+  ]
+}

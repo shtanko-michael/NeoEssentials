@@ -1,0 +1,348 @@
+{
+  "_readme": [
+    "Structural taxonomy of the documentation site. Content lives elsewhere:",
+    "  systems/<slug>.md   — curated prose for that system (optional)",
+    "  systems/<slug>.json — command membership, examples, edge cases, known issues",
+    "Command membership comes from systems/<slug>.json first, then from permissionPrefixes.",
+    "upstreamDoc names a file in docs/Wiki/ that is embedded verbatim, so upstream syncs of",
+    "that directory never conflict with anything written here."
+  ],
+  "systems": [
+    {
+      "slug": "economy",
+      "title": "Economy",
+      "lede": "Balances, transfers, /baltop, chest and NPC shops, Vault API.",
+      "upstreamDoc": "EconomySystem.md",
+      "permissionPrefixes": [
+        "neoessentials.economy",
+        "neoessentials.shop",
+        "neoessentials.chestshop",
+        "neoessentials.sell",
+        "neoessentials.worth",
+        "neoessentials.setworth",
+        "neoessentials.payconfirmtoggle"
+      ],
+      "configFiles": [
+        "economy.json"
+      ]
+    },
+    {
+      "slug": "teleportation",
+      "title": "Teleportation",
+      "lede": "Homes, warps, /tpa, /back, random teleport and the spawn point.",
+      "upstreamDoc": "TeleportationSystem.md",
+      "permissionPrefixes": [
+        "neoessentials.teleport",
+        "neoessentials.renamehome",
+        "neoessentials.tpaall",
+        "neoessentials.tpauto",
+        "neoessentials.tptoggle"
+      ],
+      "configFiles": []
+    },
+    {
+      "slug": "moderation",
+      "title": "Moderation",
+      "lede": "Bans, temporary bans, IP bans, kicks, mutes, jail, vanish and freeze.",
+      "upstreamDoc": "ModerationSystem.md",
+      "permissionPrefixes": [
+        "neoessentials.moderation",
+        "neoessentials.jail"
+      ],
+      "configFiles": []
+    },
+    {
+      "slug": "chat",
+      "title": "Chat and messages",
+      "lede": "Formatting, private messages, mail, mentions, gradients and animations.",
+      "upstreamDoc": "ChatSystem.md",
+      "permissionPrefixes": [
+        "neoessentials.chat",
+        "neoessentials.mail",
+        "neoessentials.msgtoggle",
+        "neoessentials.helpop",
+        "neoessentials.nick"
+      ],
+      "configFiles": [
+        "animations.json"
+      ]
+    },
+    {
+      "slug": "chat-channels",
+      "title": "Chat channels",
+      "lede": "Channel setup, channel permissions and relaying to Discord.",
+      "upstreamDoc": "ChatChannels.md",
+      "permissionPrefixes": [],
+      "configFiles": []
+    },
+    {
+      "slug": "moderation-discord",
+      "title": "Discord integration",
+      "lede": "SDLink / Mc2Discord / DCIntegration bridges, webhooks without a bridge mod, role sync into permission groups.",
+      "upstreamDoc": null,
+      "permissionPrefixes": [],
+      "configFiles": [
+        "discord_auth.json",
+        "discordrolesync.json"
+      ]
+    },
+    {
+      "slug": "auction",
+      "title": "Auction house",
+      "lede": "Players list items from their hand, buy through a GUI and collect unsold items from /ah expired.",
+      "upstreamDoc": null,
+      "permissionPrefixes": [
+        "neoessentials.ah"
+      ],
+      "configFiles": []
+    },
+    {
+      "slug": "kits",
+      "title": "Kits",
+      "lede": "Item sets, cooldowns, usage limits and giving kits to other players.",
+      "upstreamDoc": "KitManagement.md",
+      "permissionPrefixes": [
+        "neoessentials.kits",
+        "neoessentials.kitreset"
+      ],
+      "configFiles": [
+        "kits.json"
+      ]
+    },
+    {
+      "slug": "items",
+      "title": "Items",
+      "lede": "Repair, enchanting, powertool, renaming, stack condensing and books.",
+      "upstreamDoc": "ItemManagement.md",
+      "permissionPrefixes": [
+        "neoessentials.item",
+        "neoessentials.book",
+        "neoessentials.sign",
+        "neoessentials.condense",
+        "neoessentials.customtext",
+        "neoessentials.powertoollist",
+        "neoessentials.ciconfirmtoggle",
+        "neoessentials.skull",
+        "neoessentials.loom",
+        "neoessentials.cartography",
+        "neoessentials.smithing"
+      ],
+      "configFiles": []
+    },
+    {
+      "slug": "utility",
+      "title": "Utility commands",
+      "lede": "Personal time and weather, effects, mob spawning, /fly, /god, /heal and other everyday tools.",
+      "upstreamDoc": "UtilitySystems.md",
+      "permissionPrefixes": [
+        "neoessentials.ptime",
+        "neoessentials.pweather",
+        "neoessentials.spawnmob",
+        "neoessentials.unlimited",
+        "neoessentials.fly",
+        "neoessentials.god",
+        "neoessentials.heal",
+        "neoessentials.feed",
+        "neoessentials.speed",
+        "neoessentials.exp",
+        "neoessentials.kill",
+        "neoessentials.playtime",
+        "neoessentials.whois",
+        "neoessentials.ping",
+        "neoessentials.depth",
+        "neoessentials.compass",
+        "neoessentials.invsee",
+        "neoessentials.enderchest",
+        "neoessentials.rules",
+        "neoessentials.motd",
+        "neoessentials.rtoggle",
+        "neoessentials.gamemode",
+        "neoessentials.time",
+        "neoessentials.weather",
+        "neoessentials.broadcast",
+        "neoessentials.broadcastworld",
+        "neoessentials.list",
+        "neoessentials.gc",
+        "neoessentials.help",
+        "neoessentials.seen",
+        "neoessentials.near",
+        "neoessentials.nearby",
+        "neoessentials.getpos",
+        "neoessentials.world",
+        "neoessentials.anvil",
+        "neoessentials.grindstone",
+        "neoessentials.crafting",
+        "neoessentials.stonecutting",
+        "neoessentials.hat",
+        "neoessentials.more",
+        "neoessentials.suicide",
+        "neoessentials.ext",
+        "neoessentials.burn",
+        "neoessentials.sudo",
+        "neoessentials.effect",
+        "neoessentials.tree",
+        "neoessentials.lightning",
+        "neoessentials.spawner",
+        "neoessentials.recipe",
+        "neoessentials.realname"
+      ],
+      "configFiles": []
+    },
+    {
+      "slug": "afk",
+      "title": "AFK",
+      "lede": "Automatic AFK, idle kick, tab list indicator.",
+      "upstreamDoc": "AFKSystem.md",
+      "permissionPrefixes": [
+        "neoessentials.afk"
+      ],
+      "configFiles": []
+    },
+    {
+      "slug": "holograms",
+      "title": "Holograms",
+      "lede": "Floating animated text, rotation, bobbing, click-to-trade and placeholders.",
+      "upstreamDoc": "HologramSystem.md",
+      "permissionPrefixes": [
+        "neoessentials.hologram"
+      ],
+      "configFiles": []
+    },
+    {
+      "slug": "scoreboard",
+      "title": "Scoreboard",
+      "lede": "A config-driven sidebar: display conditions, line animation, per-group and per-player overrides.",
+      "upstreamDoc": "ScoreboardSystem.md",
+      "permissionPrefixes": [
+        "neoessentials.scoreboard"
+      ],
+      "configFiles": [
+        "scoreboard.json"
+      ]
+    },
+    {
+      "slug": "leaderboard",
+      "title": "Leaderboards",
+      "lede": "Ranking boards from vanilla statistics, the economy and custom scores, with a GUI and holograms.",
+      "upstreamDoc": "LeaderboardSystem.md",
+      "permissionPrefixes": [
+        "neoessentials.leaderboard"
+      ],
+      "configFiles": [
+        "leaderboard.json"
+      ]
+    },
+    {
+      "slug": "tablist",
+      "title": "Tab list",
+      "lede": "Animated header and footer, hex colours, gradients, sorting by group.",
+      "upstreamDoc": "TablistSystem.md",
+      "permissionPrefixes": [
+        "neoessentials.tablist"
+      ],
+      "configFiles": [
+        "tablist.json"
+      ]
+    },
+    {
+      "slug": "crates",
+      "title": "Crates",
+      "lede": "Crates with weighted rewards, keys, physical blocks and an opening animation.",
+      "upstreamDoc": "neoecrates.md",
+      "permissionPrefixes": [
+        "neoessentials.crate"
+      ],
+      "configFiles": [
+        "crates.json"
+      ]
+    },
+    {
+      "slug": "votifier",
+      "title": "Votifier",
+      "lede": "Receives votes from server lists over the V1 (RSA) and V2 (NuVotifier) protocols.",
+      "upstreamDoc": "votifier.md",
+      "permissionPrefixes": [
+        "neoessentials.votifier"
+      ],
+      "configFiles": [
+        "votifier.json"
+      ]
+    },
+    {
+      "slug": "permissions",
+      "title": "Permission system",
+      "lede": "Groups, prefixes, wildcards, LuckPerms/FTB. As shipped: explicit grants; a registry default is not a grant.",
+      "upstreamDoc": "PermissionSystem.md",
+      "permissionPrefixes": [
+        "neoessentials.permissions"
+      ],
+      "configFiles": [
+        "permissions.json"
+      ]
+    },
+    {
+      "slug": "dashboard",
+      "title": "Web dashboard",
+      "lede": "Installation, login, account linking via Discord and the external hosting mode.",
+      "upstreamDoc": "WebDashboard.md",
+      "permissionPrefixes": [
+        "neoessentials.dashboard",
+        "neoessentials.admin.dashboard"
+      ],
+      "configFiles": []
+    },
+    {
+      "slug": "dashboard-connectivity",
+      "title": "Dashboard connectivity",
+      "lede": "Internal and external modes, webDashboard.mode and troubleshooting connection problems.",
+      "upstreamDoc": "DashboardConnectivity.md",
+      "permissionPrefixes": [],
+      "configFiles": []
+    },
+    {
+      "slug": "localization",
+      "title": "Localization",
+      "lede": "Choosing the server language, your own translations and overriding individual strings.",
+      "upstreamDoc": "LocalizationSystem.md",
+      "permissionPrefixes": [
+        "neoessentials.language"
+      ],
+      "configFiles": []
+    },
+    {
+      "slug": "storage",
+      "title": "Storage",
+      "lede": "Pluggable JSON, YAML, SQLite and MySQL backends for all mod data.",
+      "upstreamDoc": "Storage.md",
+      "permissionPrefixes": [],
+      "configFiles": []
+    },
+    {
+      "slug": "split-configs",
+      "title": "Split configs",
+      "lede": "Splitting config.json into per-system files, validation, repair and migration.",
+      "upstreamDoc": "SplitConfigs.md",
+      "permissionPrefixes": [],
+      "configFiles": []
+    },
+    {
+      "slug": "logging",
+      "title": "Logging",
+      "lede": "Per-subsystem normal/debug switches, categories and logs/debug.log.",
+      "upstreamDoc": "Logging.md",
+      "permissionPrefixes": [],
+      "configFiles": []
+    },
+    {
+      "slug": "api",
+      "title": "API and placeholders",
+      "lede": "PlaceholderAPI, Vault, LeaderboardAPI and REST endpoints for third-party mods.",
+      "upstreamDoc": "APISystem.md",
+      "permissionPrefixes": [
+        "neoessentials.admin.placeholders",
+        "neoessentials.vault"
+      ],
+      "configFiles": []
+    }
+  ]
+}

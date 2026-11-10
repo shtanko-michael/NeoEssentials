@@ -1,0 +1,89 @@
+{
+  "commands": ["hologram"],
+  "commandDetails": {
+    "hologram": {
+      "syntax": "/hologram create <id> [<x> <y> <z> [world]] | delete <id> | rename <id> <newid> | copy <id> <newid> | addline <id> <text> | insertline <id> <index> <text> | setline <id> <index> <text> | removeline <id> <index> | moveline <id> <from> <to> | clearlines <id> | addframes <id> <lineIndex> <intervalTicks> <frames> | removeframes <id> <lineIndex> | moveto <id> <x> <y> <z> | movehere <id> | align <id> | tp <id> | near [radius] | setrefresh <id> <seconds> | toggle <id> | list | info <id> | reload | billboard <id> <fixed|vertical|horizontal|center> | textalign <id> <center|left|right> | spin <id> on [speed] [axis] | spin <id> off | spintrack <id> on|off | hover <id> on [amplitude] [speed] | hover <id> off | scale <id> <scale> | linespacing <id> <spacing> | shadow <id> on|off | seethrough <id> on|off | opacity <id> <0-255> | viewrange <id> <range> | linewidth <id> <pixels> | background <id> <transparent|#RRGGBB|#AARRGGBB>",
+      "notes": "The whole root is gated by hasPermission: OP 4, neoessentials.hologram.admin or neoessentials.admin.* (the console always passes). The /holo alias is a redirect to the same node and is registered only if both commands.hologram and commands.holo are enabled. The id is stored in lower case. Line numbers are 1-based. <text> and <frames> are greedyString. There is no setscale subcommand: the scale is set with scale. create without coordinates uses the player's position, Y+1.5 (the console cannot create one this way). near without a radius = 20, radius 1–1000. spin on defaults to speed 3.0 on the Y axis; hover on defaults to amplitude 0.08, speed 1.5. The modules.hologramEnabled module switch turns off registration entirely."
+    }
+  },
+  "examples": [
+    {
+      "title": "Put a welcome hologram at spawn",
+      "goal": "You need a sign above the platform with an online counter, without editing JSON by hand.",
+      "commands": [
+        "/hologram create spawn_welcome",
+        "/hologram addline spawn_welcome &6&lWelcome",
+        "/hologram addline spawn_welcome &7Online: &f{neoessentials_online_players}/{neoessentials_max_players}",
+        "/hologram setrefresh spawn_welcome 10",
+        "/hologram scale spawn_welcome 1.3",
+        "/hologram hover spawn_welcome on 0.1 1.2",
+        "/hologram info spawn_welcome"
+      ],
+      "result": "create without coordinates places an empty hologram at your feet at +1.5 height with a refreshInterval of 5 s. addline appends lines at the bottom (`&` colours and `{…}` placeholders). setrefresh 10 updates placeholders no more often than every 10 s (the global pollIntervalTicks still limits how often the scheduler looks at all). scale 1.3 and hover on are visible immediately: every edit triggers a respawn. info prints the world, coordinates, line count and visual fields."
+    },
+    {
+      "title": "Label a physical crate_<id> crate",
+      "goal": "After /crate admin setblock a service hologram already hangs over the chest — you need to change the text and size without creating a second one.",
+      "commands": [
+        "/hologram list",
+        "/hologram setline crate_vote 1 &6Vote Crate",
+        "/hologram setline crate_vote 2 &eRight-click to open, left-click for odds",
+        "/hologram scale crate_vote 1.3"
+      ],
+      "result": "`setblock` creates a regular hologram with the id `crate_<crate id>` (a second block of the same crate gets `crate_vote_2`, `crate_vote_3`). It shows up in `/hologram list` and in id completion. setline replaces the line and resets that line's frame animation. The label survives `/hologram moveto|movehere`; `/crate admin removeblock` removes the hologram together with the binding. With `modules.hologramEnabled: false` the crate block works, but there is no label."
+    },
+    {
+      "title": "Clone a hologram and make it spin",
+      "goal": "You need a copy of the same sign at another portal, rotating \"like a record\".",
+      "commands": [
+        "/hologram copy spawn_welcome portal_welcome",
+        "/hologram movehere portal_welcome",
+        "/hologram billboard portal_welcome fixed",
+        "/hologram spin portal_welcome on 3 Y",
+        "/hologram spintrack portal_welcome on"
+      ],
+      "result": "copy clones the lines and visuals to a new id at the same point (via Gson, with no shared entity UUIDs). movehere moves it to you at Y+1.5. spin on Y turns on player tracking by default: the text stays readable from all sides. spintrack off leaves raw rotation around the world axis — then billboard fixed makes sense."
+    },
+    {
+      "title": "Reload holograms from storage",
+      "goal": "You edited a record in the DataStore by hand and want to see the result without a restart.",
+      "commands": [
+        "/hologram reload"
+      ],
+      "result": "All display entities are despawned, the in-memory map is cleared, the `holograms` collection is read again, and the entities are spawned back. The reply is reload_success with the number of holograms. `/neoe reload` does not replace this path: holograms have their own command. Shop holograms get the shop NBT tag again after reload (`retagAllShopHolograms`); otherwise clicking them would stop being a purchase."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "Crate auto-holograms: id crate_<id>",
+      "body": "On `/crate admin setblock`, `CrateHologramManager` creates a hologram with the `crate_` prefix. The base id is `crate_<crate id>`; if the crate already has a block, a `_2`, `_3` suffix is added. The block→hologram binding is stored separately (`crate_block_holograms`), so a repeated setblock on the same block reuses the existing hologram instead of creating a second one, and the binding survives `/hologram moveto|movehere`. Manual line edits stay until `removeblock` is called.",
+      "fix": "Find the id in `/hologram list` / completion. Do not create a hologram with the same id by hand — `create` replies already_exists. Remove the block with the crate command, not `/hologram delete`, unless you want to leave a \"live\" chest without a label or the other way round."
+    },
+    {
+      "title": "shop_ holograms are overwritten",
+      "body": "A shop above a sign creates an interactive hologram `shop_<dimension>_<x>_<y>_<z>`. Clicking it is the same buy/sell as clicking the sign (400 ms limit). Any `/hologram setline|moveto` on such an id is overwritten by the next transaction or shop reload. Admin-created holograms never get `interactive: true`.",
+      "fix": "For a shop, change the hologram offset with the shop's tools, not `/hologram`. Looking at `/hologram info shop_…` is fine."
+    },
+    {
+      "title": "Storage is the holograms collection, not holograms.json",
+      "body": "Data is written to the DataStore on every `registerHologram`. The legacy `neoessentials/holograms.json` is imported once if the collection is empty. `/hologram reload` calls `initialize()`: clear memory → migrate (only if empty) → load from the DataStore. Editing the old file after migration does nothing. The upstream wiki, where reload \"reads holograms.json from disk\", is outdated.",
+      "fix": "For a manual edit, change the record in the `holograms` collection, then run `/hologram reload`."
+    },
+    {
+      "title": "/holo and a disabled module",
+      "body": "The alias is registered as `Commands.literal(\"holo\").redirect(hologram)` only with `commands.hologram` **and** `commands.holo`. `holo: true` alone with `hologram` disabled creates neither the root nor the alias. `modules.hologramEnabled: false` skips `HologramCommand.register` entirely — crates are then placed without a label.",
+      "fix": "Keep both command flags enabled. Change the module with a restart."
+    },
+    {
+      "title": "Lines, frames and refresh",
+      "body": "insertline accepts an index `1 … lineCount+1` (insert at the end). setline clears that line's `frames`. addframes needs ≥ 2 frames separated by `|`, intervalTicks 1–200. create sets `refreshInterval: 5` even if there are no placeholders yet; `setrefresh 0` means do not recompute placeholders. The global `hologram.pollIntervalTicks` / `animationInterval` in config.json limit the scheduler for all holograms; `/hologram reload` does not re-read them — you need `/neoe reload`.",
+      "fix": "Change poll/animation with `/neoe reload`. Frames and text with the `/hologram` commands."
+    },
+    {
+      "title": "create, the world and id case",
+      "body": "`exists`/`getHologram` key the id via `toLowerCase`. The world argument of create is a word; if it has no `:`, `minecraft:` is prepended. Completion offers only the dimension path (`overworld`), not the full key. create <id> without coordinates requires a player; create with x y z is available to the console. copy does not carry over entity UUIDs (a fresh spawn). delete despawns and removes the record.",
+      "fix": "Write ids in lower-case Latin from the start so you do not have to guess. From the console, always give coordinates and the world."
+    }
+  ],
+  "knownIssues": []
+}

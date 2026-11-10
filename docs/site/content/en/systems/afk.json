@@ -1,0 +1,66 @@
+{
+  "commands": ["afk", "away"],
+  "commandDetails": {
+    "afk": {
+      "syntax": "/afk [<message>]",
+      "notes": "Player only. The neoessentials.afk permission is checked inside executes, not in requires. <message> is a greedyString and goes into the broadcast as the reason. Without an argument the reason is null. The command silently refuses if the chat module is off (isChatEnabled), commands.afk is off, or the legacy ChatManager.isAfkEnabled() is false. afk is in excludedCommands by default — /afk itself does not reset the idle timer."
+    },
+    "away": {
+      "syntax": "/away [<message>]",
+      "notes": "The same registerAfkCommand as /afk: a separate literal, not a redirect. The commands.away flag is not read — both literals look at commands.afk. The default excludedCommands has no away entry."
+    }
+  },
+  "examples": [
+    {
+      "title": "Go AFK manually with a reason",
+      "goal": "You want to mark yourself as away and show a reason in the broadcast, without waiting for the timeout.",
+      "commands": [
+        "/afk back in 10 minutes"
+      ],
+      "result": "You personally get now_afk. If afk.broadcastOnAfk (or enableafkBroadcasts) is on, everyone gets afkMessage with `{player}` and the given reason. A second `/afk` clears the status (no_longer_afk + returnMessage). `/afk` is in excludedCommands, so the command handler does not reset the timer or clear AFK before the toggle."
+    },
+    {
+      "title": "Return by moving, not by command",
+      "goal": "Check that the movement detector clears AFK on its own.",
+      "commands": [
+        "/afk",
+        "/afk"
+      ],
+      "result": "The first call sets AFK. After that, just walk: every 5 s `AfkMovementDetector` compares position/yaw/pitch against the `movementThreshold` (0.1) and `rotationThreshold` (5.0) thresholds. If `enableActivityTracking` and `trackMovement` are on, `updateActivity` clears AFK and sends the return broadcast. The second `/afk` in the example is the manual return if you do not want to move. Turning your head in place counts; small drift below the threshold does not."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "The tab list indicator comes from tablist.json, not from afk",
+      "body": "`AfkTablistHandler` computes prefix/suffix from `AfkManager` fields (`enableTablistIndicator`, `tablistAfkPrefix`, `tablistAfkSuffix`), but `setTabListDisplayName` is commented out — it does not change the name in the list. The actual suffix is drawn by `TablistManager`: `tablist.json` → `showAfkIndicator` (true by default) and `afkSuffix` (` &7[AFK]` by default). There are no enableTablistIndicator / tablistAfkPrefix keys in the `afk` config section.",
+      "fix": "Configure the indicator in `tablist.json`. The `afk` section handles the timeout, kick, broadcasts and detectors, not the text in the player list."
+    },
+    {
+      "title": "Kick: kickTimeout, exempt and the warning",
+      "body": "Checked every 30 s. Kick is on if `kickTimeout > 0` (seconds; a compatible `kickTimeoutMinutes` exists), or explicitly with `kickAfkPlayers: true`. An explicit `kickAfkPlayers: false` suppresses the kick even with timeout > 0. If kick is enabled with timeout 0, the code forces 30 minutes and logs an error. `neoessentials.afk.exempt` skips only the kick, not auto-AFK. A kick_warning is sent a minute before the kick; because of the 30 s step the message may repeat. The kick text is `afkkickMessage`, otherwise the localized template.",
+      "fix": "For a kick, `kickTimeout: 900` (15 minutes after going AFK) is enough. Grant staff `neoessentials.afk.exempt`."
+    },
+    {
+      "title": "Movement detector and anti click-farm",
+      "body": "`AfkMovementDetector` is a separate thread that reads coordinates via `server.execute` every 5 s. It counts only if `enableActivityTracking` and `trackMovement` are on. Chat (`trackChat`), commands (`trackCommands`) and interactions (`trackInteractions`) are separate switches; the master `enableActivityTracking: false` turns off all four. `AfkActivityHandler` on clicks/drops: more than 30 identical actions in 60 s build up a score; after 300 that action stops resetting the timer. Default `excludedCommands`: afk, list, who, tps, ping, help, ?.",
+      "fix": "Block-click macros will not keep a player out of AFK once the score is exceeded. If `/list` should not clear AFK, it is already in the list; `/away` is not (see knownIssues)."
+    },
+    {
+      "title": "/afk requires the chat module to be enabled",
+      "body": "Despite the separate AFK system, the command exits with `commands.neoessentials.afk.disabled` if `isChatEnabled()` is false or `ChatManager.isAfkEnabled()` is false. Auto-marking by timeout lives in `AfkManager` and does not depend on the chat command, but the manual toggle is unavailable.",
+      "fix": "Keep the chat module on if you need `/afk`. To turn off only the manual command, use `commands.afk: false` (this also disables `/away`)."
+    },
+    {
+      "title": "Sleep, invulnerability and storage",
+      "body": "`ignoreAfkInSleep: true` (the default) excludes AFK players from the sleep percentage. `invulnerableWhenAfk` is false by default. State is written to the `afk_data` collection (the legacy `afk_data.json` file is migrated); `autoSave` / `saveInterval` control periodic flushing. The auto-AFK check runs every 30 s, so an actual timeout of 300 s may fire between 300 and 330 s.",
+      "fix": "Do not expect to-the-second accuracy. Better not to enable `invulnerableWhenAfk` on PvP arenas."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "/away does not clear AFK while trackCommands is on",
+      "body": "`CommandEvent` fires before executes. For `/away` (not in the default `excludedCommands`) `AfkCommandHandler` calls `updateActivity`: if the player is already AFK, the status is cleared. Then `toggleAfk` sets AFK again — chat may get both the return message and \"is now AFK\", and the player stays AFK. `/afk` is in the exclusion list, so toggling back and forth works.",
+      "fix": "Return with `/afk` or by moving. Or add `away` to `afk.excludedCommands`."
+    }
+  ]
+}

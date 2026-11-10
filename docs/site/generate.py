@@ -64,6 +64,155 @@ def read_json(path, default=None):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Languages
+#
+# The site is built twice: Russian at the root, English under /en/. Curated content lives in
+# content/ (Russian, the reference) and content/en/ (English, same relative paths). An English
+# JSON file is deep-merged over its Russian twin — structure (command lists, permission
+# prefixes, config files) comes from the Russian file, text from the English one — so the
+# translation can never drift structurally. A missing English file falls back to Russian with a
+# warning, which --strict turns into a failed build.
+# ─────────────────────────────────────────────────────────────────────────────
+
+LANGS = ('ru', 'en')
+LANG = 'ru'  # the language being built; set by build()
+
+UI = {
+    'anchor_label': ('Ссылка на раздел', 'Link to this section'),
+    'on_this_page': ('На этой странице', 'On this page'),
+    'product_switch': ('Выбор мода', 'Choose the mod'),
+    'skip': ('К содержимому', 'Skip to content'),
+    'search_ph': ('Поиск по командам, правам и конфигу…', 'Search commands, permissions and config…'),
+    'theme': ('Переключить тему', 'Toggle theme'),
+    'lang_label': ('Read in English', 'Читать на русском'),
+    'sections': ('Разделы', 'Sections'),
+    'footer': ('— документация мода для сервера', '— mod documentation for the'),
+    'footer_server': ('', ' server'),
+    'footer_upstream': (' Не путать с апстримом ', ' Not to be confused with upstream '),
+    'no_node': ('нет узла', 'no node'),
+    'inferred_title': ('Узел не объявлен явно — выведен по соглашению реестра',
+                       'The node is not declared explicitly — inferred from the registry convention'),
+    'inferred': ('по соглашению', 'by convention'),
+    'help_only_title': ('Запись в каталоге /help, не отдельная команда мода',
+                        'An entry in the /help catalogue, not a separate mod command'),
+    'help_only': ('каталог /help', '/help catalogue'),
+    'th_command': ('Команда', 'Command'), 'th_syntax': ('Синтаксис', 'Syntax'),
+    'th_aliases': ('Алиасы', 'Aliases'), 'th_perm': ('Право', 'Permission'),
+    'th_desc': ('Описание', 'Description'), 'th_node': ('Узел', 'Node'),
+    'th_registry': ('В реестре', 'In registry'), 'th_grants': ('Что даёт', 'What it grants'),
+    'th_key': ('Ключ', 'Key'), 'th_default': ('По умолчанию', 'Default'),
+    'th_lang': ('Язык', 'Language'), 'th_translated': ('Переведено', 'Translated'),
+    'th_total': ('Всего ключей', 'Total keys'), 'th_coverage': ('Покрытие', 'Coverage'),
+    'reg_yes_title': ('defaultValue=true в PermissionRegistry; при requireExplicitGrant это не грант',
+                      'defaultValue=true in PermissionRegistry; with requireExplicitGrant this is not a grant'),
+    'reg_yes': ('реестр: да', 'registry: yes'),
+    'reg_no_title': ('defaultValue=false — без выдачи отказано', 'defaultValue=false — denied unless granted'),
+    'reg_no': ('реестр: нет', 'registry: no'),
+    'fix': ('Что делать:', 'What to do:'),
+    'examples': ('Примеры', 'Examples'),
+    'edge_cases': ('Тонкие места', 'Edge cases'),
+    'known_issues': ('Известные проблемы', 'Known issues'),
+    'nav_start': ('Начало', 'Start'), 'nav_overview': ('Обзор', 'Overview'),
+    'nav_quickstart': ('Быстрый старт', 'Quick start'), 'nav_reference': ('Справочник', 'Reference'),
+    'nav_commands': ('Все команды', 'All commands'), 'nav_permissions': ('Права', 'Permissions'),
+    'nav_config': ('Конфигурация', 'Configuration'), 'nav_lang': ('Локализация', 'Localization'),
+    'nav_systems': ('Системы', 'Systems'), 'nav_help': ('Помощь', 'Help'),
+    'tile_cmds': ('Команд', 'Commands'), 'tile_cmds_s': ('объявлено в реестре мода', 'declared in the mod registry'),
+    'tile_nodes': ('Узлов прав', 'Permission nodes'),
+    'tile_nodes_s': ('с описанием и defaultValue в реестре', 'with a description and defaultValue in the registry'),
+    'tile_keys': ('Ключей конфига', 'Config keys'), 'tile_keys_s': ('в %d файлах', 'in %d files'),
+    'tile_langs': ('Языков', 'Languages'), 'tile_langs_s': ('русский — %d%%', 'Russian — %d%%'),
+    'index_lede': ('Справочник форка для сервера Farmstead Minecraft: команды, права, конфигурация и разбор проблем.',
+                   'Reference for the Farmstead Minecraft fork: commands, permissions, configuration and troubleshooting.'),
+    'qs_lede': ('Установка, первые настройки и выдача прав.', 'Installation, first settings and granting permissions.'),
+    'other': ('Прочее', 'Other'), 'all': ('Все', 'All'),
+    'k_command': ('команда', 'command'), 'k_perm': ('право', 'permission'),
+    'k_config': ('конфиг', 'config'), 'k_system': ('система', 'system'),
+    'cmds_note': ('Таблица собирается из регистраций команд в исходниках при каждой сборке сайта, поэтому '
+                  'колонка «Право» показывает узел, который мод проверяет на самом деле. Синтаксис и '
+                  'примечания — выверенная вручную часть.',
+                  'The table is built from the command registrations in the source on every site build, so '
+                  'the Permission column shows the node the mod actually checks. Syntax and notes are the '
+                  'hand-verified part.'),
+    'cmds_lede': ('%d команд: синтаксис, алиасы, право доступа и описание.',
+                  '%d commands: syntax, aliases, permission and description.'),
+    'filter_table': ('Фильтр по таблице…', 'Filter the table…'),
+    'perm_note': ('Колонка «В реестре» — это <code>defaultValue</code> узла в <code>PermissionRegistry</code>. '
+                  'В поставке <code>permissions.requireExplicitGrant: true</code>: даже «реестр: да» само по себе '
+                  'доступ не даёт — узел нужно выдать в LuckPerms или внутренним менеджером. OP проходит при '
+                  '<code>opsBypassPermissions: true</code>.',
+                  'The In registry column is the node\'s <code>defaultValue</code> in <code>PermissionRegistry</code>. '
+                  'The shipped config has <code>permissions.requireExplicitGrant: true</code>: even "registry: yes" '
+                  'grants nothing by itself — the node has to be granted in LuckPerms or the built-in manager. '
+                  'OPs pass with <code>opsBypassPermissions: true</code>.'),
+    'perm_lede': ('%d узлов из реестра — что даёт каждый. defaultValue при requireExplicitGrant не грант.',
+                  '%d nodes from the registry — what each one grants. With requireExplicitGrant, defaultValue is not a grant.'),
+    'filter_nodes': ('Фильтр по узлам…', 'Filter nodes…'),
+    'cfg_lede': ('Каждый ключ, его значение по умолчанию и пояснение — прямо из файлов, которые ставит мод.',
+                 'Every key, its default and its explanation — straight from the files the mod installs.'),
+    'filter_keys': ('Фильтр по ключам…', 'Filter keys…'),
+    'loc_lede': ('Какие языки поставляются и насколько полно переведены.',
+                 'Which languages ship with the mod and how complete they are.'),
+    'h_commands': ('Команды', 'Commands'), 'h_config': ('Конфигурация', 'Configuration'),
+    'h_perms': ('Права', 'Permissions'), 'h_guide': ('Подробное руководство', 'Detailed guide'),
+    'upstream_note': ('Раздел ниже — исходная документация проекта (<code>docs/Wiki/%s</code>). Ссылки на '
+                      'другие страницы вики переписаны на этот сайт; текст самих руководств не редактируется, '
+                      'чтобы синк с апстримом не давал конфликтов.',
+                      'The section below is the project\'s original documentation (<code>docs/Wiki/%s</code>). '
+                      'Links to other wiki pages are rewritten to this site; the guides themselves are not '
+                      'edited, so upstream syncs stay conflict-free.'),
+    'ts_title': ('Известные проблемы', 'Known issues'),
+    'ts_lede': ('Симптом, причина и что с этим делать — по всем системам.',
+                'Symptom, cause and what to do about it — across all systems.'),
+}
+
+
+def t(key, *args):
+    """UI text in the language being built."""
+    text = UI[key][LANGS.index(LANG)]
+    return text % args if args else text
+
+
+def content_path(rel):
+    """The curated file for the language being built: content/en/<rel> for English (falling back
+    to the Russian original, with a warning, when it has not been translated yet)."""
+    ru = os.path.join(CONTENT_DIR, rel)
+    if LANG == 'ru':
+        return ru
+    en = os.path.join(CONTENT_DIR, 'en', rel)
+    if os.path.exists(en):
+        return en
+    if os.path.exists(ru):
+        warn('no English translation of content/%s — using the Russian text' % rel.replace(os.sep, '/'))
+    return ru
+
+
+def overlay(base, top):
+    """Deep-merge the translation over the reference: dicts by key, lists by index."""
+    if isinstance(base, dict) and isinstance(top, dict):
+        out = dict(base)
+        for k, v in top.items():
+            out[k] = overlay(base[k], v) if k in base else v
+        return out
+    if isinstance(base, list) and isinstance(top, list):
+        return [overlay(b, top[i]) if i < len(top) else b for i, b in enumerate(base)]
+    return top
+
+
+def read_content_json_file(rel, default=None):
+    """A curated JSON file in the language being built (English text over Russian structure)."""
+    base = read_json(os.path.join(CONTENT_DIR, rel), None)
+    if base is None:
+        return default
+    if LANG == 'ru':
+        return base
+    path = content_path(rel)
+    if path == os.path.join(CONTENT_DIR, rel):
+        return base
+    return overlay(base, read_json(path, {}) or {})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Extraction
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -305,6 +454,7 @@ except ImportError:  # pragma: no cover - CI installs it; keep the build alive l
 RE_H = re.compile(r'<h([23])[^>]*>(.*?)</h\1>', re.S)
 RE_TAGS = re.compile(r'<[^>]+>')
 RE_COUNT_BADGE = re.compile(r'<span class="count">.*?</span>', re.S)
+RE_KEEP_ID = re.compile(r'\bid="([^"]+)"')
 
 
 TRANSLIT = {
@@ -399,12 +549,15 @@ def add_heading_ids(body):
         # The "N" badge is decoration and changes whenever the code does — keeping it out of
         # the anchor is what stops every deep link breaking when a command is added.
         label = RE_COUNT_BADGE.sub('', inner)
-        base = slugify(label)
+        # A generated section heading carries a fixed id (data-keep) so its anchor is the same
+        # on the Russian and the English site — deep links survive the language switch.
+        kept = RE_KEEP_ID.search(m.group(0)) if 'data-keep' in m.group(0) else None
+        base = kept.group(1) if kept else slugify(label)
         seen[base] = seen.get(base, 0) + 1
         anchor = base if seen[base] == 1 else '%s-%d' % (base, seen[base])
-        toc.append({'level': int(level), 'text': RE_TAGS.sub('', label).strip(), 'id': anchor})
-        return '<h%s id="%s">%s<a class="anchor" href="#%s" aria-label="Ссылка на раздел">#</a></h%s>' % (
-            level, anchor, inner, anchor, level)
+        toc.append({'level': int(level), 'text': html.unescape(RE_TAGS.sub('', label)).strip(), 'id': anchor})
+        return '<h%s id="%s">%s<a class="anchor" href="#%s" aria-label="%s">#</a></h%s>' % (
+            level, anchor, inner, anchor, t('anchor_label'), level)
 
     return RE_H.sub(repl, body), toc
 
@@ -446,8 +599,8 @@ def page(rel, title, subtitle, body, toc=None, active='', wide=False, extra_head
         items = ''.join('<li class="lv%d"><a href="#%s">%s</a></li>' % (t['level'], t['id'], e(t['text']))
                         for t in toc if t['level'] <= 3)
         if items:
-            toc_html = ('<aside class="toc"><p class="toc-title">На этой странице</p>'
-                        '<ul>%s</ul></aside>' % items)
+            toc_html = ('<aside class="toc"><p class="toc-title">%s</p>'
+                        '<ul>%s</ul></aside>' % (t('on_this_page'), items))
 
     is_regionguard = product == 'regionguard'
     product_name = 'RegionGuard' if is_regionguard else 'NeoEssentials'
@@ -456,17 +609,18 @@ def page(rel, title, subtitle, body, toc=None, active='', wide=False, extra_head
     doc_title = title if title == site_name else '%s · %s' % (title, site_name)
 
     product_switch = (
-        '<nav class="product-switch" aria-label="Выбор мода">'
+        '<nav class="product-switch" aria-label="%s">'
         '<a href="%sindex.html"%s>NeoEssentials</a>'
         '<a href="%sregionguard/index.html"%s>RegionGuard</a>'
         '</nav>' % (
-            up, '' if is_regionguard else ' class="on" aria-current="page"',
+            t('product_switch'), up, '' if is_regionguard else ' class="on" aria-current="page"',
             up, ' class="on" aria-current="page"' if is_regionguard else ''))
 
     return """<!doctype html>
-<html lang="ru" data-base="{up}">
+<html lang="{lang}" data-base="{up}" data-alt="{alt}">
 <head>
 <meta charset="utf-8">
+<script>{early}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{doc_title}</title>
 <meta name="description" content="{subtitle}">
@@ -479,11 +633,12 @@ def page(rel, title, subtitle, body, toc=None, active='', wide=False, extra_head
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap">
-<link rel="stylesheet" href="{up}assets/site.css?v=2">
+<link rel="alternate" hreflang="{alt_lang}" href="{alt}">
+<link rel="stylesheet" href="{up}assets/site.css?v=3">
 {extra_head}
 </head>
 <body{bodycls}>
-<a class="skip" href="#main">К содержимому</a>
+<a class="skip" href="#main">{t_skip}</a>
 <header class="topbar">
   <a class="brand" href="{up}{product_home}" aria-label="{site_name}">
     <img class="brand-logo" src="{up}assets/farmstead.png" alt="" width="36" height="36">
@@ -494,13 +649,14 @@ def page(rel, title, subtitle, body, toc=None, active='', wide=False, extra_head
   </a>
   {product_switch}
   <div class="search-wrap">
-    <input id="q" type="search" placeholder="Поиск по командам, правам и конфигу…" autocomplete="off" spellcheck="false">
+    <input id="q" type="search" placeholder="{t_search}" autocomplete="off" spellcheck="false">
     <div id="results" hidden></div>
   </div>
-  <button id="theme" type="button" aria-label="Переключить тему">◐</button>
+  <a id="lang" href="{alt}" hreflang="{alt_lang}" lang="{alt_lang}" data-lang="{alt_lang}" title="{t_lang}" aria-label="{t_lang}">{alt_code}</a>
+  <button id="theme" type="button" aria-label="{t_theme}">◐</button>
 </header>
 <div class="shell">
-  <nav class="sidenav" aria-label="Разделы">{nav}</nav>
+  <nav class="sidenav" aria-label="{t_sections}">{nav}</nav>
   <main id="main">
     <div class="page-head">
       <h1>{title}</h1>
@@ -511,8 +667,8 @@ def page(rel, title, subtitle, body, toc=None, active='', wide=False, extra_head
   </main>
 </div>
 <footer class="site-foot">
-  <p><strong>{site_name}</strong> — документация мода для сервера
-  <a href="https://farmsteadminecraft.online">Farmstead Minecraft</a>.{footer_tail}</p>
+  <p><strong>{site_name}</strong> {t_footer}
+  <a href="https://farmsteadminecraft.online">Farmstead Minecraft</a>{t_footer_server}.{footer_tail}</p>
 </footer>
 <script src="{up}assets/site.js" defer></script>
 </body>
@@ -522,12 +678,34 @@ def page(rel, title, subtitle, body, toc=None, active='', wide=False, extra_head
            toc=toc_html, extra_head=extra_head,
            bodycls=' class="wide"' if wide else '', product_home=product_home,
            product_name=product_name, site_name=site_name, product_switch=product_switch,
-           footer_tail=(' Не путать с апстримом '
+           lang=LANG, alt=ALT_HREF, alt_lang=('en' if LANG == 'ru' else 'ru'),
+           alt_code=('EN' if LANG == 'ru' else 'RU'), early=EARLY_LANG_JS,
+           t_skip=t('skip'), t_search=t('search_ph'), t_theme=t('theme'), t_lang=t('lang_label'),
+           t_sections=t('sections'), t_footer=t('footer'), t_footer_server=t('footer_server'),
+           footer_tail=(t('footer_upstream') +
                         '<a href="https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials">'
                         'ZeroG NeoEssentials</a>.' if not is_regionguard else ''))
 
 
+ALT_HREF = '__ALT_HREF__'  # the same page in the other language; resolved per file in write()
+
+# Runs before anything renders: a reader who picked a language (the switch stores it, like the
+# theme) is sent to that language's copy of the page; a first-time reader gets the language of
+# their browser (Russian for ru/uk/be/kk, English otherwise).
+EARLY_LANG_JS = (
+    "(function(){try{var d=document.documentElement,l=d.lang,"
+    "s=localStorage.getItem('ne-docs-lang');"
+    "if(s!=='ru'&&s!=='en'){var n=((navigator.languages&&navigator.languages[0])||navigator.language||'')"
+    ".toLowerCase();s=/^(ru|uk|be|kk)/.test(n)?'ru':'en';}"
+    "if(s!==l){location.replace(d.getAttribute('data-alt')+location.hash);}}catch(e){}})();"
+)
+
+
 def write(out_dir, rel_path, content):
+    if ALT_HREF in content:
+        up = '../' * rel_path.count('/')
+        alt = up + ('en/' if LANG == 'ru' else '../') + rel_path
+        content = content.replace(ALT_HREF, alt)
     dest = os.path.join(out_dir, rel_path)
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     with io.open(dest, 'w', encoding='utf-8', newline='\n') as fh:
@@ -543,6 +721,15 @@ CATEGORY_RU = {
     'PLAYER': 'Игрок', 'MISC': 'Разное', 'CHAT': 'Чат', 'TELEPORT': 'Телепортация',
     'ITEMS': 'Предметы', 'KITS': 'Киты', 'MODERATION': 'Модерация',
 }
+CATEGORY_EN = {
+    'CORE': 'Core', 'ADMIN': 'Administration', 'ECONOMY': 'Economy',
+    'PLAYER': 'Player', 'MISC': 'Miscellaneous', 'CHAT': 'Chat', 'TELEPORT': 'Teleportation',
+    'ITEMS': 'Items', 'KITS': 'Kits', 'MODERATION': 'Moderation',
+}
+
+
+def category_name(category):
+    return (CATEGORY_RU if LANG == 'ru' else CATEGORY_EN).get(category, category)
 
 
 def command_row(cmd, curated):
@@ -552,11 +739,11 @@ def command_row(cmd, curated):
         variants = cmd.get('syntaxVariants') or []
         syntax = ' | '.join(variants) if variants else ('/' + cmd['name'])
     perm = cmd.get('permission')
-    perm_cell = code(perm) if perm else '<span class="muted">нет узла</span>'
+    perm_cell = code(perm) if perm else '<span class="muted">%s</span>' % t('no_node')
     if cmd.get('permissionInferred'):
-        perm_cell += ' <span class="tag tag-soft" title="Узел не объявлен явно — выведен по соглашению реестра">по соглашению</span>'
+        perm_cell += ' <span class="tag tag-soft" title="%s">%s</span>' % (t('inferred_title'), t('inferred'))
     if cmd.get('helpCatalogOnly'):
-        perm_cell += ' <span class="tag tag-soft" title="Запись в каталоге /help, не отдельная команда мода">каталог /help</span>'
+        perm_cell += ' <span class="tag tag-soft" title="%s">%s</span>' % (t('help_only_title'), t('help_only'))
     aliases = ', '.join(code(a) for a in cmd.get('aliases', [])) or '<span class="muted">—</span>'
     desc = e(extra.get('description') or cmd['description'])
     notes = extra.get('notes')
@@ -575,27 +762,29 @@ def command_row(cmd, curated):
         e(cmd['name']), e(syntax), aliases, perm_cell, desc)
 
 
+def cmd_thead():
+    return ('<thead><tr><th>%s</th><th>%s</th><th>%s</th><th>%s</th><th>%s</th></tr></thead>'
+            % (t('th_command'), t('th_syntax'), t('th_aliases'), t('th_perm'), t('th_desc')))
+
+
 def commands_table(cmds, curated):
     rows = ''.join(command_row(c, curated) for c in cmds)
-    return ('<div class="scroller"><table class="grid cmd-table">'
-            '<thead><tr><th>Команда</th><th>Синтаксис</th><th>Алиасы</th>'
-            '<th>Право</th><th>Описание</th></tr></thead>'
-            '<tbody>%s</tbody></table></div>') % rows
+    return ('<div class="scroller"><table class="grid cmd-table">%s'
+            '<tbody>%s</tbody></table></div>') % (cmd_thead(), rows)
 
 
 def permissions_table(nodes):
     rows = []
     for n in nodes:
-        default = ('<span class="tag tag-ok" title="defaultValue=true в PermissionRegistry; '
-                   'при requireExplicitGrant это не грант">реестр: да</span>' if n['default']
-                   else '<span class="tag tag-warn" title="defaultValue=false — без выдачи отказано">'
-                        'реестр: нет</span>')
+        default = ('<span class="tag tag-ok" title="%s">%s</span>' % (t('reg_yes_title'), t('reg_yes'))
+                   if n['default']
+                   else '<span class="tag tag-warn" title="%s">%s</span>' % (t('reg_no_title'), t('reg_no')))
         rows.append('<tr data-search="%s"><td><code>%s</code></td><td>%s</td><td>%s</td></tr>'
                     % (e((n['node'] + ' ' + n['description']).lower()), e(n['node']), default,
                        e(n['description'])))
-    return ('<div class="scroller"><table class="grid"><thead><tr><th>Узел</th>'
-            '<th>В реестре</th><th>Что даёт</th></tr></thead><tbody>%s</tbody></table></div>'
-            % ''.join(rows))
+    return ('<div class="scroller"><table class="grid"><thead><tr><th>%s</th>'
+            '<th>%s</th><th>%s</th></tr></thead><tbody>%s</tbody></table></div>'
+            % (t('th_node'), t('th_registry'), t('th_grants'), ''.join(rows)))
 
 
 def config_table(entries):
@@ -611,20 +800,20 @@ def config_table(entries):
                     '<td>%s</td></tr>'
                     % (e((c['key'] + ' ' + c['description']).lower()), e(c['key']),
                        e(c['default']), e(c['description']) or '<span class="muted">—</span>'))
-    return ('<div class="scroller"><table class="grid"><thead><tr><th>Ключ</th>'
-            '<th>По умолчанию</th><th>Описание</th></tr></thead><tbody>%s</tbody></table></div>'
-            % ''.join(rows))
+    return ('<div class="scroller"><table class="grid"><thead><tr><th>%s</th>'
+            '<th>%s</th><th>%s</th></tr></thead><tbody>%s</tbody></table></div>'
+            % (t('th_key'), t('th_default'), t('th_desc'), ''.join(rows)))
 
 
-def callouts(items, kind, title):
+def callouts(items, kind, title, anchor):
     if not items:
         return ''
-    out = ['<section class="callouts %s"><h2 id="%s">%s</h2>' % (kind, slugify(title), e(title))]
+    out = ['<section class="callouts %s"><h2 id="%s" data-keep>%s</h2>' % (kind, anchor, e(title))]
     for it in items:
         out.append('<article class="callout"><h3>%s</h3>%s%s</article>' % (
             e(it.get('title', '')),
             md_to_html(it.get('body', '')),
-            ('<p class="callout-fix"><strong>Что делать:</strong> %s</p>' % md_to_html(it['fix']).replace('<p>', '').replace('</p>', ''))
+            ('<p class="callout-fix"><strong>%s</strong> %s</p>' % (t('fix'), md_to_html(it['fix']).replace('<p>', '').replace('</p>', '')))
             if it.get('fix') else ''))
     out.append('</section>')
     return ''.join(out)
@@ -633,7 +822,7 @@ def callouts(items, kind, title):
 def examples_block(items):
     if not items:
         return ''
-    out = ['<section class="examples"><h2 id="primery">Примеры</h2>']
+    out = ['<section class="examples"><h2 id="primery" data-keep>%s</h2>' % t('examples')]
     for ex in items:
         out.append('<article class="example"><h3>%s</h3>%s<pre class="cmd"><code>%s</code></pre>%s</article>'
                    % (e(ex.get('title', '')),
@@ -650,8 +839,7 @@ def examples_block(items):
 
 def load_catalog():
     """Extract commands, permissions, config and attach curated system membership."""
-    WARNINGS.clear()
-    print('Extracting from source…')
+    print('Extracting from source… (%s)' % LANG)
     commands = extract_commands()
     nodes = extract_permissions()
     lang_stats = extract_lang_stats()
@@ -661,11 +849,11 @@ def load_catalog():
     print('  %d commands, %d permission nodes, %d config files, %d languages'
           % (len(commands), len(nodes), len(configs), len(lang_stats)))
 
-    meta = read_json(os.path.join(CONTENT_DIR, '_meta.json'), None)
+    meta = read_content_json_file('_meta.json', None)
     if meta is None:
         warn('docs/site/content/_meta.json missing — falling back to permission-prefix grouping')
         meta = {'systems': []}
-    curated_cmds = read_json(os.path.join(CONTENT_DIR, 'commands.json'), {}) or {}
+    curated_cmds = read_content_json_file('commands.json', {}) or {}
     systems = meta.get('systems', [])
     wiki_pages = wiki_page_map(systems)
     for sysdef in systems:
@@ -728,8 +916,29 @@ def wiki_page_name(sysdef):
 # Build
 # ─────────────────────────────────────────────────────────────────────────────
 
-def build(out_dir, base, wiki_out=None):
-    global NAV
+def check_languages():
+    """Every shipped language must be complete — tools/lang_check.py decides; --strict fails on it."""
+    sys.path.insert(0, os.path.join(ROOT, 'tools'))
+    try:
+        import lang_check
+    finally:
+        sys.path.pop(0)
+    _, report = lang_check.run(quiet=True)
+    for code, problems in sorted(report.items()):
+        kinds = {}
+        for kind, _, _ in problems:
+            if kind not in lang_check.SOFT:
+                kinds[kind] = kinds.get(kind, 0) + 1
+        if kinds:
+            warn('data/lang/%s.json is not complete (%s) — run python tools/lang_check.py --lang %s'
+                 % (code, ', '.join('%s %d' % kv for kv in sorted(kinds.items())), code))
+
+
+def build(out_dir, base, wiki_out=None, lang='ru'):
+    global NAV, LANG
+    LANG = lang
+    if lang == 'ru':
+        check_languages()
     cat = load_catalog()
     commands = cat['commands']
     nodes = cat['nodes']
@@ -741,22 +950,22 @@ def build(out_dir, base, wiki_out=None):
     wiki_pages = cat['wiki_pages']
 
     NAV = [
-        {'title': 'Начало', 'items': [
-            {'id': 'index', 'title': 'Обзор', 'href': 'index.html'},
-            {'id': 'quickstart', 'title': 'Быстрый старт', 'href': 'quickstart/index.html'},
+        {'title': t('nav_start'), 'items': [
+            {'id': 'index', 'title': t('nav_overview'), 'href': 'index.html'},
+            {'id': 'quickstart', 'title': t('nav_quickstart'), 'href': 'quickstart/index.html'},
         ]},
-        {'title': 'Справочник', 'items': [
-            {'id': 'commands', 'title': 'Все команды', 'href': 'commands/index.html'},
-            {'id': 'permissions', 'title': 'Права', 'href': 'permissions/index.html'},
-            {'id': 'config', 'title': 'Конфигурация', 'href': 'config/index.html'},
-            {'id': 'lang', 'title': 'Локализация', 'href': 'localization/index.html'},
+        {'title': t('nav_reference'), 'items': [
+            {'id': 'commands', 'title': t('nav_commands'), 'href': 'commands/index.html'},
+            {'id': 'permissions', 'title': t('nav_permissions'), 'href': 'permissions/index.html'},
+            {'id': 'config', 'title': t('nav_config'), 'href': 'config/index.html'},
+            {'id': 'lang', 'title': t('nav_lang'), 'href': 'localization/index.html'},
         ]},
-        {'title': 'Системы', 'items': [
+        {'title': t('nav_systems'), 'items': [
             {'id': 'sys-' + s['slug'], 'title': s['title'], 'href': 'systems/%s/index.html' % s['slug']}
             for s in systems
         ]},
-        {'title': 'Помощь', 'items': [
-            {'id': 'troubleshooting', 'title': 'Известные проблемы', 'href': 'troubleshooting/index.html'},
+        {'title': t('nav_help'), 'items': [
+            {'id': 'troubleshooting', 'title': t('known_issues'), 'href': 'troubleshooting/index.html'},
         ]},
     ]
 
@@ -765,11 +974,11 @@ def build(out_dir, base, wiki_out=None):
     # ---- index -------------------------------------------------------------
     ru = next((l for l in lang_stats if l['code'] == 'ru_ru'), None)
     stat_tiles = [
-        ('Команд', len(commands), 'объявлено в реестре мода'),
-        ('Узлов прав', len(nodes), 'с описанием и defaultValue в реестре'),
-        ('Ключей конфига', sum(len([c for c in ent if not c['container']]) for _, ent in configs),
-         'в %d файлах' % len(configs)),
-        ('Языков', len(lang_stats), 'русский — %d%%' % (ru['percent'] if ru else 0)),
+        (t('tile_cmds'), len(commands), t('tile_cmds_s')),
+        (t('tile_nodes'), len(nodes), t('tile_nodes_s')),
+        (t('tile_keys'), sum(len([c for c in ent if not c['container']]) for _, ent in configs),
+         t('tile_keys_s', len(configs))),
+        (t('tile_langs'), len(lang_stats), t('tile_langs_s', ru['percent'] if ru else 0)),
     ]
     tiles = ''.join('<div class="tile"><p class="tile-n">%s</p><p class="tile-k">%s</p>'
                     '<p class="tile-s">%s</p></div>' % (v, e(k), e(s)) for k, v, s in stat_tiles)
@@ -777,7 +986,7 @@ def build(out_dir, base, wiki_out=None):
     intro = read_md_content('index.md')
     body = ('<section class="tiles">%s</section>' % tiles) + intro
     write(out_dir, 'index.html', page(0, 'Farmstead NeoEssentials',
-                                      'Справочник форка для сервера Farmstead Minecraft: команды, права, конфигурация и разбор проблем.',
+                                      t('index_lede'),
                                       body, active='index'))
 
     # ---- quick start -------------------------------------------------------
@@ -785,7 +994,7 @@ def build(out_dir, base, wiki_out=None):
     if qs:
         b, toc = add_heading_ids(qs)
         write(out_dir, 'quickstart/index.html',
-              page(1, 'Быстрый старт', 'Установка, первые настройки и выдача прав.', b, toc,
+              page(1, t('nav_quickstart'), t('qs_lede'), b, toc,
                    active='quickstart'))
 
     # ---- commands ----------------------------------------------------------
@@ -796,8 +1005,8 @@ def build(out_dir, base, wiki_out=None):
         for s in systems if s['_commands'])
     if orphans:
         # Commands no system claims stay reachable instead of being quietly invisible.
-        filters += ('<button type="button" class="chip" data-filter="other">Прочее '
-                    '<span class="count">%d</span></button>' % len(orphans))
+        filters += ('<button type="button" class="chip" data-filter="other">%s '
+                    '<span class="count">%d</span></button>' % (t('other'), len(orphans)))
     sys_of = {}
     for s in systems:
         for c in s['_commands']:
@@ -808,18 +1017,15 @@ def build(out_dir, base, wiki_out=None):
         rows.append(row.replace('<tr ', '<tr data-sys="%s" ' % e(sys_of.get(c['name'].lower(), 'other')), 1))
         extra = curated_cmds.get(c['name'].lower(), {})
         search.append({'t': '/' + c['name'], 'd': extra.get('description') or c['description'],
-                       'u': 'commands/index.html#' + cmd_anchor(c['name']), 'k': 'команда'})
-    table = ('<div class="scroller"><table class="grid cmd-table"><thead><tr><th>Команда</th>'
-             '<th>Синтаксис</th><th>Алиасы</th><th>Право</th><th>Описание</th></tr></thead>'
-             '<tbody>%s</tbody></table></div>' % ''.join(rows))
-    note = ('<div class="note"><p>Таблица собирается из регистраций команд в исходниках при каждой '
-            'сборке сайта, поэтому колонка «Право» показывает узел, который мод проверяет на самом '
-            'деле. Синтаксис и примечания — выверенная вручную часть.</p></div>')
+                       'u': 'commands/index.html#' + cmd_anchor(c['name']), 'k': t('k_command')})
+    table = ('<div class="scroller"><table class="grid cmd-table">%s'
+             '<tbody>%s</tbody></table></div>' % (cmd_thead(), ''.join(rows)))
+    note = '<div class="note"><p>%s</p></div>' % t('cmds_note')
     write(out_dir, 'commands/index.html',
-          page(1, 'Все команды', '%d команд: синтаксис, алиасы, право доступа и описание.' % len(all_cmds),
-               note + '<div class="filters"><button type="button" class="chip on" data-filter="*">Все</button>' +
+          page(1, t('nav_commands'), t('cmds_lede', len(all_cmds)),
+               note + '<div class="filters"><button type="button" class="chip on" data-filter="*">%s</button>' % t('all') +
                filters + '</div><div class="tablefilter"><input id="tq" type="search" '
-               'placeholder="Фильтр по таблице…" autocomplete="off"></div>' + table,
+               'placeholder="%s" autocomplete="off"></div>' % t('filter_table') + table,
                active='commands', wide=True))
 
     # ---- permissions -------------------------------------------------------
@@ -829,24 +1035,20 @@ def build(out_dir, base, wiki_out=None):
     parts = []
     toc = []
     for category in sorted(by_cat, key=lambda c: (-len(by_cat[c]), c)):
-        title = '%s (%s)' % (CATEGORY_RU.get(category, category), category)
+        title = '%s (%s)' % (category_name(category), category)
         anchor = slugify(category)
         toc.append({'level': 2, 'text': title, 'id': anchor})
         parts.append('<h2 id="%s">%s <span class="count">%d</span></h2>'
                      % (anchor, e(title), len(by_cat[category])))
         parts.append(permissions_table(sorted(by_cat[category], key=lambda x: x['node'])))
     for n in nodes.values():
-        search.append({'t': n['node'], 'd': n['description'], 'u': 'permissions/index.html', 'k': 'право'})
-    perm_note = ('<div class="note"><p>Колонка «В реестре» — это <code>defaultValue</code> узла в '
-                 '<code>PermissionRegistry</code>. В поставке <code>permissions.requireExplicitGrant: true</code>: '
-                 'даже «реестр: да» само по себе доступ не даёт — узел нужно выдать в LuckPerms или '
-                 'внутренним менеджером. OP проходит при <code>opsBypassPermissions: true</code>.</p></div>')
+        search.append({'t': n['node'], 'd': n['description'], 'u': 'permissions/index.html', 'k': t('k_perm')})
+    perm_note = '<div class="note"><p>%s</p></div>' % t('perm_note')
     write(out_dir, 'permissions/index.html',
-          page(1, 'Права', '%d узлов из реестра — что даёт каждый. defaultValue при requireExplicitGrant не грант.'
-               % len(nodes),
+          page(1, t('nav_permissions'), t('perm_lede', len(nodes)),
                perm_note +
-               '<div class="tablefilter"><input id="tq" type="search" placeholder="Фильтр по узлам…" '
-               'autocomplete="off"></div>' + ''.join(parts), toc, active='permissions', wide=True))
+               '<div class="tablefilter"><input id="tq" type="search" placeholder="%s" '
+               'autocomplete="off"></div>' % t('filter_nodes') + ''.join(parts), toc, active='permissions', wide=True))
 
     # ---- config ------------------------------------------------------------
     parts = []
@@ -860,11 +1062,11 @@ def build(out_dir, base, wiki_out=None):
         parts.append(config_table(entries))
         for c in real:
             search.append({'t': c['key'], 'd': c['description'] or fname,
-                           'u': 'config/index.html#' + anchor, 'k': 'конфиг'})
+                           'u': 'config/index.html#' + anchor, 'k': t('k_config')})
     write(out_dir, 'config/index.html',
-          page(1, 'Конфигурация', 'Каждый ключ, его значение по умолчанию и пояснение — прямо из файлов, которые ставит мод.',
-               '<div class="tablefilter"><input id="tq" type="search" placeholder="Фильтр по ключам…" '
-               'autocomplete="off"></div>' + ''.join(parts), toc, active='config', wide=True))
+          page(1, t('nav_config'), t('cfg_lede'),
+               '<div class="tablefilter"><input id="tq" type="search" placeholder="%s" '
+               'autocomplete="off"></div>' % t('filter_keys') + ''.join(parts), toc, active='config', wide=True))
 
     # ---- localization ------------------------------------------------------
     rows = ''.join(
@@ -873,10 +1075,10 @@ def build(out_dir, base, wiki_out=None):
         % (e(l['code']), l['covered'], l['total'], l['percent'], l['percent']) for l in lang_stats)
     loc_md = read_md_content('localization.md')
     write(out_dir, 'localization/index.html',
-          page(1, 'Локализация', 'Какие языки поставляются и насколько полно переведены.',
-               '<div class="scroller"><table class="grid"><thead><tr><th>Язык</th><th>Переведено</th>'
-               '<th>Всего ключей</th><th>Покрытие</th></tr></thead><tbody>%s</tbody></table></div>%s'
-               % (rows, loc_md), active='lang'))
+          page(1, t('nav_lang'), t('loc_lede'),
+               '<div class="scroller"><table class="grid"><thead><tr><th>%s</th><th>%s</th>'
+               '<th>%s</th><th>%s</th></tr></thead><tbody>%s</tbody></table></div>%s'
+               % (t('th_lang'), t('th_translated'), t('th_total'), t('th_coverage'), rows, loc_md), active='lang'))
 
     # ---- systems -----------------------------------------------------------
     for sysdef in systems:
@@ -888,8 +1090,8 @@ def build(out_dir, base, wiki_out=None):
             chunks.append('<div class="note"><p>%s</p></div>' % e(sysdef['summary']))
 
         if sysdef['_commands']:
-            chunks.append('<h2 id="komandy">Команды <span class="count">%d</span></h2>'
-                          % len(sysdef['_commands']))
+            chunks.append('<h2 id="komandy" data-keep>%s <span class="count">%d</span></h2>'
+                          % (t('h_commands'), len(sysdef['_commands'])))
             chunks.append(commands_table(sysdef['_commands'], curated_cmds))
 
         own_md = read_md_content('systems/%s.md' % slug)
@@ -897,8 +1099,8 @@ def build(out_dir, base, wiki_out=None):
             chunks.append(own_md)
 
         chunks.append(examples_block(extra.get('examples', [])))
-        chunks.append(callouts(extra.get('edgeCases', []), 'edge', 'Тонкие места'))
-        chunks.append(callouts(extra.get('knownIssues', []), 'issue', 'Известные проблемы'))
+        chunks.append(callouts(extra.get('edgeCases', []), 'edge', t('edge_cases'), 'tonkie-mesta'))
+        chunks.append(callouts(extra.get('knownIssues', []), 'issue', t('known_issues'), 'izvestnye-problemy'))
 
         cfg_keys = sysdef.get('configFiles', [])
         cfg_chunks = []
@@ -907,10 +1109,11 @@ def build(out_dir, base, wiki_out=None):
             if entries:
                 cfg_chunks.append('<h3><code>%s</code></h3>%s' % (e(fname), config_table(entries)))
         if cfg_chunks:
-            chunks.append('<h2 id="konfiguraciya">Конфигурация</h2>' + ''.join(cfg_chunks))
+            chunks.append('<h2 id="konfiguraciya" data-keep>%s</h2>' % t('h_config') + ''.join(cfg_chunks))
 
         if sysdef['_nodes']:
-            chunks.append('<h2 id="prava">Права <span class="count">%d</span></h2>' % len(sysdef['_nodes']))
+            chunks.append('<h2 id="prava" data-keep>%s <span class="count">%d</span></h2>'
+                          % (t('h_perms'), len(sysdef['_nodes'])))
             chunks.append(permissions_table(sysdef['_nodes']))
 
         upstream = sysdef.get('upstreamDoc')
@@ -920,12 +1123,9 @@ def build(out_dir, base, wiki_out=None):
                 text = read(path)
                 text = re.sub(r'^#\s+.*\n', '', text, count=1)
                 text = rewrite_upstream_links(text, wiki_pages)
-                chunks.append('<h2 id="podrobnoe-rukovodstvo">Подробное руководство</h2>'
-                              '<div class="upstream-note">Раздел ниже — исходная документация '
-                              'проекта (<code>docs/Wiki/%s</code>). Ссылки на другие страницы '
-                              'вики переписаны на этот сайт; текст самих руководств не '
-                              'редактируется, чтобы синк с апстримом не давал конфликтов.</div>%s'
-                              % (e(upstream), md_to_html(text)))
+                chunks.append('<h2 id="podrobnoe-rukovodstvo" data-keep>%s</h2>'
+                              '<div class="upstream-note">%s</div>%s'
+                              % (t('h_guide'), t('upstream_note', e(upstream)), md_to_html(text)))
             else:
                 warn('system "%s" points at missing upstream doc %s' % (slug, upstream))
 
@@ -934,7 +1134,7 @@ def build(out_dir, base, wiki_out=None):
               page(2, sysdef['title'], sysdef.get('lede', ''), body, toc,
                    active='sys-' + slug, wide=True))
         search.append({'t': sysdef['title'], 'd': sysdef.get('lede', ''),
-                       'u': 'systems/%s/index.html' % slug, 'k': 'система'})
+                       'u': 'systems/%s/index.html' % slug, 'k': t('k_system')})
 
     # ---- troubleshooting ---------------------------------------------------
     all_issues = []
@@ -951,20 +1151,20 @@ def build(out_dir, base, wiki_out=None):
                       '<p class="callout-sys"><a href="../systems/%s/index.html">%s</a></p>%s%s</article>'
                       % (e(it.get('title', '')), e(it['slug']), e(it['system']),
                          md_to_html(it.get('body', '')),
-                         ('<p class="callout-fix"><strong>Что делать:</strong> %s</p>'
-                          % md_to_html(it['fix']).replace('<p>', '').replace('</p>', ''))
+                         ('<p class="callout-fix"><strong>%s</strong> %s</p>'
+                          % (t('fix'), md_to_html(it['fix']).replace('<p>', '').replace('</p>', '')))
                          if it.get('fix') else ''))
     body = ts_md + ('<section class="callouts issue">%s</section>' % ''.join(blocks) if blocks else '')
     b, toc = add_heading_ids(body)
     write(out_dir, 'troubleshooting/index.html',
-          page(1, 'Известные проблемы', 'Симптом, причина и что с этим делать — по всем системам.',
+          page(1, t('ts_title'), t('ts_lede'),
                b, toc, active='troubleshooting'))
 
     # ---- RegionGuard -------------------------------------------------------
     # RegionGuard is maintained in the parent Farmstead monorepo, while this site is built from
     # the standalone NeoEssentials repository on GitHub Actions. Keep its curated documentation
     # here so Pages builds are self-contained and do not depend on a sibling checkout.
-    rg_meta = read_json(os.path.join(REGIONGUARD_CONTENT_DIR, '_meta.json'), {}) or {}
+    rg_meta = read_content_json_file('regionguard/_meta.json', {}) or {}
     rg_pages = rg_meta.get('pages', [])
     rg_groups = []
     for group_name in rg_meta.get('groups', []):
@@ -984,7 +1184,7 @@ def build(out_dir, base, wiki_out=None):
     for item in rg_pages:
         slug = item.get('slug', '')
         source = item.get('source') or ((slug or 'index') + '.md')
-        source_path = os.path.join(REGIONGUARD_CONTENT_DIR, source)
+        source_path = content_path('regionguard/' + source)
         if not os.path.exists(source_path):
             warn('RegionGuard page "%s" points at missing content %s' % (slug or 'index', source))
             continue
@@ -1027,14 +1227,14 @@ def build(out_dir, base, wiki_out=None):
 
 
 def read_md_content(rel):
-    path = os.path.join(CONTENT_DIR, rel)
+    path = content_path(rel)
     if not os.path.exists(path):
         return ''
     return md_to_html(read(path))
 
 
 def read_content_json(slug):
-    return read_json(os.path.join(CONTENT_DIR, 'systems', slug + '.json'), {}) or {}
+    return read_content_json_file('systems/%s.json' % slug, {}) or {}
 
 
 def doc_url(rel=''):
@@ -1183,7 +1383,9 @@ def main():
                     help='also write GitHub Wiki index (Home.md, _Sidebar.md) to this directory')
     ap.add_argument('--strict', action='store_true', help='exit non-zero if anything was warned about')
     a = ap.parse_args()
-    rc = build(a.out, a.base, wiki_out=a.wiki_out)
+    WARNINGS.clear()
+    rc = build(a.out, a.base, wiki_out=a.wiki_out, lang='ru')
+    rc = build(os.path.join(a.out, 'en'), a.base, lang='en') or rc
     if a.strict and WARNINGS:
         return 1
     return rc

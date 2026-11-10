@@ -1,0 +1,636 @@
+{
+  "commands": [
+    "?",
+    "announce",
+    "antioch",
+    "anvil",
+    "backup",
+    "bb",
+    "bc",
+    "bcastworld",
+    "beezooka",
+    "bigtree",
+    "bottom",
+    "break",
+    "broadcast",
+    "broadcastworld",
+    "burn",
+    "compass",
+    "coords",
+    "craft",
+    "crafting",
+    "day",
+    "depth",
+    "direction",
+    "ec",
+    "ecedit",
+    "effect",
+    "enderchest",
+    "enderchestedit",
+    "exp",
+    "ext",
+    "extinguish",
+    "feed",
+    "fireball",
+    "firework",
+    "fly",
+    "fw",
+    "gamemode",
+    "gc",
+    "getpos",
+    "give",
+    "gma",
+    "gmc",
+    "gms",
+    "gmsp",
+    "god",
+    "grindstone",
+    "hat",
+    "heal",
+    "help",
+    "ice",
+    "info",
+    "inv",
+    "invsee",
+    "kill",
+    "killme",
+    "kittycannon",
+    "lightning",
+    "list",
+    "me",
+    "mem",
+    "mob",
+    "more",
+    "motd",
+    "n",
+    "near",
+    "nearby",
+    "night",
+    "nuke",
+    "online",
+    "ping",
+    "playtime",
+    "pong",
+    "potion",
+    "ptime",
+    "pweather",
+    "realname",
+    "recipe",
+    "remove",
+    "rest",
+    "rg",
+    "rtoggle",
+    "rules",
+    "seen",
+    "smite",
+    "spawner",
+    "spawnmob",
+    "speed",
+    "stonecutter",
+    "stonecutting",
+    "storm",
+    "sudo",
+    "suicide",
+    "sun",
+    "thunder",
+    "time",
+    "tree",
+    "unlimited",
+    "weather",
+    "whereami",
+    "who",
+    "whois",
+    "workbench",
+    "world",
+    "xp"
+  ],
+  "commandDetails": {
+    "bb": {
+      "syntax": "/bb <player>",
+      "notes": "A RegionGuard command, not a NeoEssentials one. Requires the base node regionguard.command plus owner or member status of a regular region (not __global__) under the player. The named player must be online and in the same region; an owner/member of that region stays put, while a guest is immediately teleported to the configured NeoEssentials spawn (if set) or the vanilla spawn and gets a message about being sent back. The warmup and messages of the regular /spawn are not used. In /help the command description is shown in Russian (\"Send a guest of the current claim back to spawn\")."
+    },
+    "help": {
+      "syntax": "/help | /help <page_or_command> | /help <command> <page>",
+      "notes": "Before registering it removes the vanilla help and ? nodes via reflection. One word argument: a plain number ≥ 1 is a page number (10 commands each), otherwise a search by name/description in the CommandRegistry catalog. A second page exists only for /help <command> <page>; /? has none. The list is filtered by the actual node from CommandPermissionRegistry; the console and holders of neoessentials.admin / neoessentials.* see everything. The description is looked up first by the full syntax without placeholders (for example, cmd.rg.flag.clear.description), then by the root (cmd.bb.description); so individual /rg branches show different Russian descriptions. A player can type the root of any NeoEssentials command or alias in any case (/HOME, /Home, /home); the case of arguments and subcommands is not changed. Node — neoessentials.help (not neoessentials.?)."
+    },
+    "?": {
+      "syntax": "/? | /? <page_or_command>",
+      "notes": "Alias of /help: the same requires (neoessentials.help, the console passes), the same executeHelp. No <command> <page> branch. The catalog shows the node as neoessentials.? — a registry convention; the check uses neoessentials.help."
+    },
+    "anvil": {
+      "syntax": "/anvil",
+      "notes": "Player only (console — player_only). A virtual menu with stillValid=true, no physical block. The root .requires is instanceof ServerPlayer. The neoessentials.anvil permission is checked by PermissionValidator (a console with OP 2 never gets here anyway because of requires). Repair XP is charged as with a normal anvil."
+    },
+    "crafting": {
+      "syntax": "/crafting",
+      "notes": "Player only (console — player_only). A virtual menu with stillValid=true, no physical block. Permission neoessentials.crafting via PermissionValidator. The craft and workbench aliases are registered by the same method if commands.crafting is on."
+    },
+    "craft": {
+      "syntax": "/craft",
+      "notes": "Alias of /crafting. Permission neoessentials.crafting, not neoessentials.craft. Disabled by the commands.crafting key; there is no separate commands.craft."
+    },
+    "workbench": {
+      "syntax": "/workbench",
+      "notes": "Alias of /crafting. Permission neoessentials.crafting. Declared in the catalog with this node explicitly."
+    },
+    "grindstone": {
+      "syntax": "/grindstone",
+      "notes": "Player only (console — player_only). A virtual menu with stillValid=true, no physical block. Permission neoessentials.grindstone."
+    },
+    "stonecutting": {
+      "syntax": "/stonecutting",
+      "notes": "Player only (console — player_only). A virtual menu with stillValid=true, no physical block. Permission neoessentials.stonecutting. The stonecut literal is also registered (it is not in the /help catalog — not a separate claimed command)."
+    },
+    "stonecutter": {
+      "syntax": "/stonecutter",
+      "notes": "Alias of /stonecutting. Permission neoessentials.stonecutting."
+    },
+    "seen": {
+      "syntax": "/seen <player>",
+      "notes": "Without an argument the root .executes replies with usage and returns 0. Looks up online by exact name, otherwise case-insensitive in seen_data.json (UUID → activity). Console: PermissionValidator, needs source.hasPermission(2). File config/neoessentials/seen_data.json."
+    },
+    "near": {
+      "syntax": "/near [radius]",
+      "notes": "Player only. Radius Integer 1–500, default 100. Same dimension; vanish is checked pairwise via canViewerSeeVanishedPlayer. The /tp click in the hint only with neoessentials.teleport.tp. Does not work from the console."
+    },
+    "nearby": {
+      "syntax": "/nearby [radius]",
+      "notes": "A separate tree, the same 1–500 / 100. The check is neoessentials.near, not neoessentials.nearby. Enabled by the commands.nearby key independently of commands.near."
+    },
+    "ping": {
+      "syntax": "/ping [player]",
+      "notes": "Without an argument — your own ping (the console gets player=null from PermissionValidator.success() and goes into latency() — do not call it without a target). Another player: EntityArgument.player() (online only) and neoessentials.ping.others (true by default). Quality — English strings Excellent…Terrible, not from lang."
+    },
+    "pong": {
+      "syntax": "/pong",
+      "notes": "Only a /help catalog entry (registerCommand in NeoEssentials.java). There is no Commands.literal(\"pong\") in the sources — the command will not appear in Brigadier completion, and /pong does nothing. See /ping."
+    },
+    "playtime": {
+      "syntax": "/playtime [target]",
+      "notes": "Target — word + online name (getPlayerByName). Counter: Stats.PLAY_TIME plus the current session's milliseconds from sessionStart (set in onPlayerJoin). Console without a target — player_only. Another player — neoessentials.playtime.others."
+    },
+    "whois": {
+      "syntax": "/whois <player>",
+      "notes": "No root .executes. Two branches: EntityArgument.player() (online) and word playername. The offline branch calls getOfflinePlayerSeenInfo, which always returns Optional.empty() — an offline name gives player_not_found. UUID/coordinates/IP only with neoessentials.whois.detailed. The whois node is false by default. Not to be confused with /info."
+    },
+    "realname": {
+      "syntax": "/realname <player>",
+      "notes": "Without an argument — usage. Searches online: exact name, then nickname without &-codes, then contains. Multiple matches print a list (up to 10). Does not search offline. Permission neoessentials.realname."
+    },
+    "list": {
+      "syntax": "/list",
+      "notes": "No arguments. With vanish, hidden players are not shown without neoessentials.vanish.see. With LuckPerms loaded — lines by primary group (descending weight, default always at the bottom); otherwise a single grey \"Players:\". The console passes PermissionValidator with OP 2."
+    },
+    "who": {
+      "syntax": "/who",
+      "notes": "Alias of /list, permission neoessentials.list."
+    },
+    "online": {
+      "syntax": "/online",
+      "notes": "Alias of /list, permission neoessentials.list."
+    },
+    "motd": {
+      "syntax": "/motd | /motd set <message> | /motd clear | /motd reload | /motd broadcast | /motd profile list | /motd profile create <name> <message> | /motd profile delete <name> | /motd profile switch <name> | /motd profile info [name] | /motd rotation enable <intervalMinutes> | /motd rotation disable | /motd rotation next",
+      "notes": "The root is gated by allowsAny: neoessentials.motd / motd.set / motd.broadcast / motd.reload / motd.profile / motd.rotation — any one is enough to see the tree. Bare /motd still checks neoessentials.motd internally. set/clear — motd.set; reload — motd.reload; broadcast — motd.broadcast (sends only to players with motd); the profile branch — motd.profile; rotation — motd.rotation (interval Integer 1–10080). set and create: greedyString, & → §, placeholders {player}/{online}/{max}/{time} and PlaceholderAPI."
+    },
+    "compass": {
+      "syntax": "/compass [player]",
+      "notes": "Without a target — player only, neoessentials.compass. With a target EntityArgument.player() and compass.others; the console can view another player's. Shows cardinal directions, coordinates, biome, distance to spawn. An extra bearing literal is registered but is not in the /help catalog."
+    },
+    "direction": {
+      "syntax": "/direction [player]",
+      "notes": "Alias of /compass, permission neoessentials.compass / compass.others."
+    },
+    "getpos": {
+      "syntax": "/getpos [player]",
+      "notes": "Without a target — player, neoessentials.getpos. With a target — getpos.others. Exact and block coordinates, light, the block underfoot, the Nether/Overworld equivalent. An extra pos literal exists in the tree but not in the catalog."
+    },
+    "coords": {
+      "syntax": "/coords [player]",
+      "notes": "Alias of /getpos, permission neoessentials.getpos."
+    },
+    "whereami": {
+      "syntax": "/whereami [player]",
+      "notes": "Alias of /getpos, permission neoessentials.getpos."
+    },
+    "depth": {
+      "syntax": "/depth [player]",
+      "notes": "The root .requires is instanceof ServerPlayer: the console cannot run even /depth <player>. Your own — neoessentials.depth; another player's EntityArgument.player() — depth.others. Sea level Y=63, bedrock Y=−64. Layer descriptions are hardcoded in English (Deepslate Level, Nether Floor…)."
+    },
+    "info": {
+      "syntax": "/info",
+      "notes": "Not an alias of /whois, despite the catalog description. Prints a header + the active MOTD (only {player}/{name}) + a footer with a link to /rules. Permission neoessentials.info (default true). The console passes (p == null)."
+    },
+    "fly": {
+      "syntax": "/fly | /fly on | /fly off | /fly <target> | /fly <target> on | /fly <target> off",
+      "notes": "requires: p == null || node — the console and command blocks pass without OP. Target — word, online only via getPlayerByName. The order is not [on|off] [player]: the target comes first, or bare on/off for yourself. Another player — neoessentials.fly.others on the target branch. Without on/off it inverts mayfly; turning off resets flying and fallDistance. The enabled state is saved by UUID and restored after login if the player still has neoessentials.fly."
+    },
+    "god": {
+      "syntax": "/god | /god on | /god off | /god <target> | /god <target> on | /god <target> off",
+      "notes": "requires: p == null || node — the console and command blocks pass without OP. Target — word, online only via getPlayerByName. Enabling also fully heals and sets hunger to 20, clears the target from nearby mobs and prevents mobs from picking them as a new target. Another player — god.others. The enabled state is saved by UUID and restored after login if the player still has neoessentials.god."
+    },
+    "heal": {
+      "syntax": "/heal [target]",
+      "notes": "requires: p == null || node — the console and command blocks pass without OP. Target — word, online only via getPlayerByName. Full HP, hunger 20, saturation 20, removeAllEffects. Does not heal the dead (heal.dead). Another player — heal.others."
+    },
+    "feed": {
+      "syntax": "/feed [target]",
+      "notes": "requires: p == null || node — the console and command blocks pass without OP. Target — word, online only via getPlayerByName. Only hunger and saturation 20; effects are not touched. Another player — feed.others."
+    },
+    "speed": {
+      "syntax": "/speed <speed> [target] | /speed walk <speed> [target] | /speed fly <speed> [target]",
+      "notes": "requires: p == null || node — the console and command blocks pass without OP. Target — word, online only via getPlayerByName. Float 0–10 → Minecraft 0.0–1.0 (cap 1.0). Bare /speed <n> checks whether the target is flying right now (abilities.flying), not mayfly. Walk — MOVEMENT_SPEED; fly — Abilities.flyingSpeed + onUpdateAbilities. Another player — speed.others."
+    },
+    "ext": {
+      "syntax": "/ext [target]",
+      "notes": "requires: p == null || node — the console and command blocks pass without OP. Target — word, online only via getPlayerByName. clearFire(). Another player — ext.others."
+    },
+    "extinguish": {
+      "syntax": "/extinguish [target]",
+      "notes": "Alias of /ext, permission neoessentials.ext / ext.others."
+    },
+    "burn": {
+      "syntax": "/burn <target> [seconds]",
+      "notes": "The target is required. Seconds Integer 1–600, default 10. Sets remainingFireTicks = seconds×20. There is no separate burn.others — neoessentials.burn is enough. The console passes."
+    },
+    "give": {
+      "syntax": "/give <target> <item> [amount]",
+      "notes": "Target and item are required. item — word (no NBT/components); resolved by WorthManager.resolveItem: namespace:path, otherwise minecraft:path, otherwise an exact path from any mod, otherwise contains. amount Integer 1–3456, default 1; stacks are split by maxStack, the excess drops. Overrides vanilla /give. Does not overlap with /crate key give — that is a /crate subcommand."
+    },
+    "more": {
+      "syntax": "/more [amount]",
+      "notes": "Player only, main hand. Without amount — maxStackSize; otherwise Integer 1–3456 (can exceed the max stack size). Empty hand — no_item. Console: the tree is visible (p == null), execute — player_only."
+    },
+    "hat": {
+      "syntax": "/hat",
+      "notes": "Player only. Swaps the main hand and armor slot 3 (helmet), even if the item is \"not a helmet\". Empty hand — no_item."
+    },
+    "exp": {
+      "syntax": "/exp | /exp show [target] | /exp set <amount> [target] | /exp give <amount> [target]",
+      "notes": "The order is amount then target, not the other way round. Bare /exp and show — your own XP (console without a target — player_only). set: neoessentials.exp.set, amount ≥ 0 (first zeroes levels/points, then giveExperiencePoints). give: exp.give, amount ≥ 1. Another player's set/give — exp.set.others / exp.give.others. Target online only."
+    },
+    "xp": {
+      "syntax": "/xp | /xp set <amount> | /xp give <amount>",
+      "notes": "A trimmed alias of /exp: the same permissions neoessentials.exp / exp.set / exp.give, but no show and no [target] on set/give — you cannot give another player XP with this command. Vanilla /xp is overridden."
+    },
+    "sudo": {
+      "syntax": "/sudo <target> <command> | /sudo * <command> | /sudo ** <command>",
+      "notes": "The * and ** literals are separate (word() does not consume \"*\"). * — everyone except the sender; ** — everyone including. command — greedyString; the c: prefix sends chat via ServerChatEvent (formatter/mute/anti-spam), otherwise performPrefixedCommand without the leading /. You cannot target yourself by name (sudo.self); exempt players are silently skipped in bulk and block a single target if the sender is a player (the console bypasses exempt)."
+    },
+    "gamemode": {
+      "syntax": "/gamemode survival|creative|adventure|spectator [target] | /gamemode 0|1|2|3",
+      "notes": "Mode names are literals, not word. The numbers 0–3 = survival/creative/adventure/spectator and do not accept [target]. Another player — gamemode.others. Console without a target — player_only. Overrides vanilla /gamemode. Target — online word."
+    },
+    "gms": {
+      "syntax": "/gms [player]",
+      "notes": "Survival shortcut. Enabled by commands.gamemode. Your own — neoessentials.gamemode, another player's EntityArgument.player() — gamemode.others. Already in that mode — already_in_mode. Console without a target — player_only."
+    },
+    "gmc": {
+      "syntax": "/gmc [player]",
+      "notes": "Creative shortcut. The same permission and target scheme as /gms."
+    },
+    "gma": {
+      "syntax": "/gma [player]",
+      "notes": "Adventure shortcut. The same permission and target scheme as /gms."
+    },
+    "gmsp": {
+      "syntax": "/gmsp [player]",
+      "notes": "Spectator shortcut. The same permission and target scheme as /gms."
+    },
+    "suicide": {
+      "syntax": "/suicide | /suicide confirm",
+      "notes": "Player only. The first call opens a 10 s window; confirm kills with DamageTypes.GENERIC_KILL (not PvP). A 30 s cooldown after success. Creative/Spectator — invalid_gamemode. Not an alias of vanilla /kill."
+    },
+    "killme": {
+      "syntax": "/killme | /killme confirm",
+      "notes": "Alias of /suicide, permission neoessentials.suicide. Enabled by commands.suicide."
+    },
+    "ptime": {
+      "syntax": "/ptime | /ptime reset [target] | /ptime <time> [target]",
+      "notes": "A client-side ClientboundSetTimePacket; does not change server time. Bare — show. reset removes it; <time> — sunrise/day/morning/noon/afternoon/sunset/night/dusk/midnight or ticks; \"reset\" as a word also gives −1. Another player — ptime.others. The map is in memory; onPlayerQuit erases it."
+    },
+    "pweather": {
+      "syntax": "/pweather | /pweather reset [target] | /pweather sun [target] | /pweather clear | /pweather storm [target] | /pweather rain",
+      "notes": "Client-side RAIN/THUNDER_LEVEL_CHANGE. clear and rain are synonyms of sun/storm, but without the [target] branch. Another player — pweather.others. State is in memory and resets on quit. There is no separate thunder."
+    },
+    "time": {
+      "syntax": "/time | /time set <value> | /time add <value> | /time <value>",
+      "notes": "Bare — the current ticks of the source's world. set/add and the shorthand value require neoessentials.time.set. Names: sunrise=23000, day/morning=1000, noon=6000, afternoon=9000, sunset=12000, night/dusk=13000, midnight=18000, or a Long. Writes setDayTime to ALL dimensions. Overrides vanilla /time."
+    },
+    "day": {
+      "syntax": "/day",
+      "notes": "Sets 1000 in all worlds. Permission neoessentials.time.set, not neoessentials.time."
+    },
+    "night": {
+      "syntax": "/night",
+      "notes": "Sets 13000 in all worlds. Permission neoessentials.time.set."
+    },
+    "weather": {
+      "syntax": "/weather sun|clear|rain|storm|thunder [duration]",
+      "notes": "duration Integer 1–1000000 seconds; 0 in code → 6000 ticks (5 min). clear=sun, rain=storm. Only dimensions with hasSkyLight (Nether/End are skipped). Overrides vanilla /weather."
+    },
+    "sun": {
+      "syntax": "/sun",
+      "notes": "Shortcut for /weather sun without a duration, permission neoessentials.weather."
+    },
+    "storm": {
+      "syntax": "/storm",
+      "notes": "Shortcut for /weather storm without a duration, permission neoessentials.weather."
+    },
+    "thunder": {
+      "syntax": "/thunder",
+      "notes": "Shortcut for /weather thunder without a duration, permission neoessentials.weather."
+    },
+    "broadcast": {
+      "syntax": "/broadcast <message>",
+      "notes": "greedyString. PlaceholderAPI placeholders from the sender (console — without a player). Prefix §6[Broadcast] §f, colour codes. Sent to all players and to the server's system chat — there is no separate \"sent to N\". The console passes."
+    },
+    "bc": {
+      "syntax": "/bc <message>",
+      "notes": "Alias of /broadcast, permission neoessentials.broadcast."
+    },
+    "announce": {
+      "syntax": "/announce <message>",
+      "notes": "Alias of /broadcast, permission neoessentials.broadcast."
+    },
+    "n": {
+      "syntax": "/n <message>",
+      "notes": "Automatically puts the red prefix §c[Объявление] §7>> §r (\"Announcement\") before the text. The argument is greedyString; & colour codes and PlaceholderAPI placeholders from the sender are supported, so you can style the text in any colour. Access: neoessentials.notice or OP level 2; the console passes too. The message is sent directly as a system message and does not go through the regular chat handlers."
+    },
+    "broadcastworld": {
+      "syntax": "/broadcastworld <message>",
+      "notes": "Only players in the current src.getLevel() (for the console that is usually the overworld). Prefix §6[World] §e. PlaceholderAPI placeholders."
+    },
+    "bcastworld": {
+      "syntax": "/bcastworld <message>",
+      "notes": "Alias: performPrefixedCommand \"broadcastworld …\", permission neoessentials.broadcastworld."
+    },
+    "gc": {
+      "syntax": "/gc",
+      "notes": "JVM uptime, TPS from getAverageTickTimeNanos (cap 20), used/total/max MB, the total of loaded chunks. The console passes."
+    },
+    "mem": {
+      "syntax": "/mem",
+      "notes": "Alias of /gc, permission neoessentials.gc."
+    },
+    "kill": {
+      "syntax": "/kill <target>",
+      "notes": "The target is required — you cannot kill yourself without a name (unlike vanilla /kill). Online players only. exempt plus no kill.force on a player sender blocks it; the console bypasses exempt. genericKill. Overrides vanilla /kill (entities/selectors no longer work)."
+    },
+    "world": {
+      "syntax": "/world | /world <dimension> [target]",
+      "notes": "Bare — a list of dimension().location(). Teleports to the dimension's shared spawn; path or full id, case-insensitive. Another player — world.others. Console without a target — player_only."
+    },
+    "spawner": {
+      "syntax": "/spawner <mob>",
+      "notes": "Player only, a 6-block ray, the block must be a SPAWNER. Besides neoessentials.spawner you need spawner.<mob> or spawner.*. An id without \":\" → minecraft:. Changes setEntityId; no drops."
+    },
+    "recipe": {
+      "syntax": "/recipe [item]",
+      "notes": "Player only. Without item — the item in the main hand. Otherwise word → minecraft:path. awardRecipes for all recipes with that result. Overrides vanilla /recipe (the give/take branches no longer exist)."
+    },
+    "backup": {
+      "syntax": "/backup",
+      "notes": "save(null, true, false) across all levels, then a ProcessBuilder from commands.backupCommand (an empty string / \"save-all\" — save only). The command is split by spaces, inheritIO, does not wait for completion. Permission neoessentials.backup."
+    },
+    "unlimited": {
+      "syntax": "/unlimited | /unlimited list [target] | /unlimited clear [target] | /unlimited <item> [target]",
+      "notes": "Bare and list print the set of ids. clear removes everything. <item> toggles an id (minecraft: prefix, or hand — the id from the sender's hand). Another player — unlimited.others. The set is in memory; onPlayerQuit erases it. Stack refilling is done by the item-use handler."
+    },
+    "effect": {
+      "syntax": "/effect <target> clear | /effect <target> <effect> [duration] [amplifier]",
+      "notes": "The target is required (online word). duration 1–1000000 s, default 30; amplifier 0–255, default 0. Effect — path or namespace:path. Overrides vanilla /effect. The console passes."
+    },
+    "spawnmob": {
+      "syntax": "/spawnmob <mob> [amount] [target]",
+      "notes": "amount Integer 1–100, default 1. Without target — at the sender's feet (console — player_only). Another player — spawnmob.others. finalizeSpawn COMMAND. An id without \":\" → minecraft:."
+    },
+    "mob": {
+      "syntax": "/mob <mob> [amount]",
+      "notes": "Alias of /spawnmob without the [target] branch — you cannot spawn at another player with this command. Permission neoessentials.spawnmob."
+    },
+    "invsee": {
+      "syntax": "/invsee <target>",
+      "notes": "The target EntityArgument.player() is required. The console passes requires, but execute uses getPlayerOrException (a player is needed). Audit — neoessentials/inventory_audit.log. With `neoessentials.invsee` a read-only window opens (mayPickup/mayPlace=false); with `neoessentials.invsee.edit` — the editable live inventory and a \"one editor per target\" lock. The `.edit` node also grants access to the command itself and takes precedence over viewing. You cannot view your own inventory (invsee.self). Enabled by commands.invsee."
+    },
+    "inv": {
+      "syntax": "/inv <target>",
+      "notes": "Alias of /invsee, not a redirect: its own requires. The mode is determined the same way: `neoessentials.invsee` — view, `neoessentials.invsee.edit` — edit."
+    },
+    "enderchest": {
+      "syntax": "/enderchest <target>",
+      "notes": "Only another/specified player's EC; there is no own-EC variant without a target. Unlike invsee, it does not forbid yourself — /ec <your name> opens it. Permission neoessentials.enderchest."
+    },
+    "ec": {
+      "syntax": "/ec <target>",
+      "notes": "Alias of /enderchest, permission neoessentials.enderchest."
+    },
+    "enderchestedit": {
+      "syntax": "/enderchestedit <target>",
+      "notes": "The target's live EC, single-editor lock. Permission neoessentials.enderchest.edit, key commands.enderchestedit."
+    },
+    "ecedit": {
+      "syntax": "/ecedit <target>",
+      "notes": "Alias of /enderchestedit, permission neoessentials.enderchest.edit."
+    },
+    "fireball": {
+      "syntax": "/fireball [type] [speed] [ride]",
+      "notes": "Player only. Defaults: type=fireball, speed=2.0, no ride. Suggested types: fireball, small, large, arrow, skull, egg, snowball, expbottle, dragon, trident, windcharge. speed Double 0–10. ride is a literal, permission fireball.ride. After the root fireball, execute additionally requires fireball.<type> or fireball.* — for bare /fireball that is fireball.fireball (no such node in the registry) or fireball.*."
+    },
+    "tree": {
+      "syntax": "/tree <type>",
+      "notes": "Player only, a 20-block ray, plants on the block above the hit. Types: oak, birch, spruce, jungle, acacia, darkoak, mangrove, cherry, azalea, bigoak, mega_spruce, mega_jungle. Permission neoessentials.tree."
+    },
+    "bigtree": {
+      "syntax": "/bigtree",
+      "notes": "Calls the same handler with type=bigoak (fancy_oak). Permission neoessentials.tree."
+    },
+    "break": {
+      "syntax": "/break",
+      "notes": "Player only, a 20-block ray, destroyBlock without drops. Bedrock — only with neoessentials.break.bedrock. Console: the tree is visible, execute — player_only."
+    },
+    "ice": {
+      "syntax": "/ice [target]",
+      "notes": "setTicksFrozen(getTicksRequiredToFreeze()+1) — the powder snow mechanic, not an ice block. Your own — neoessentials.ice; another online word — ice.others. Console without a target — player_only."
+    },
+    "bottom": {
+      "syntax": "/bottom",
+      "notes": "Player only. Looks for the lowest solid block with two air above it between minBuildHeight and the current Y, records back via MiscTeleportManager. No safe place — no_safe."
+    },
+    "lightning": {
+      "syntax": "/lightning [target]",
+      "notes": "Without a target — a strike at the point of a 100-block ray (a player is needed). With a target — at an online player's feet, permission lightning.others. Console without a target — player_only."
+    },
+    "smite": {
+      "syntax": "/smite [target]",
+      "notes": "Alias of /lightning, permission neoessentials.lightning."
+    },
+    "remove": {
+      "syntax": "/remove <type> [radius]",
+      "notes": "Player only. type: all, items, drops, mobs, animals, monsters, arrows, xp, paintings, boats, minecarts, tnt. Radius Integer 1–10000, default 200. Does not touch players. An unknown type matches 0 removals. Not to be confused with /rules remove."
+    },
+    "nuke": {
+      "syntax": "/nuke [target]",
+      "notes": "Not entity removal. Without a target — everyone online; with a target — one name. Above each, a 5×5 grid of PrimedTnt (step 5, −10..10) at maxBuildHeight, fuse 80 ticks. Permission neoessentials.nuke. The console without a target bombs everyone."
+    },
+    "firework": {
+      "syntax": "/firework clear | /firework power <level> | /firework fire [amount] | /firework color <options>",
+      "notes": "No root .executes — bare /firework does not run. You need a rocket in your main hand. power Integer 0–127; fire 1–50 and a separate neoessentials.firework.fire; color — greedyString: hex[,hex] and optionally fade:/shape (star, large, creeper, burst) / trail|twinkle|flicker. Player only."
+    },
+    "fw": {
+      "syntax": "/fw",
+      "notes": "Only a /help catalog entry. There is no Commands.literal(\"fw\") — the alias does not work. Use /firework."
+    },
+    "antioch": {
+      "syntax": "/antioch [flavour]",
+      "notes": "Player only. A 20-block ray, PrimedTnt fuse 80. Any greedy argument adds two server-wide Holy Hand Grenade lines; TNT spawns either way. Permission neoessentials.antioch."
+    },
+    "kittycannon": {
+      "syntax": "/kittycannon",
+      "notes": "Player only. A kitten (age −24000) with a look-direction×2 impulse; after 20 ticks discard + explode power 0, ExplosionInteraction.NONE — no block damage. Permission neoessentials.kittycannon."
+    },
+    "beezooka": {
+      "syntax": "/beezooka [amount]",
+      "notes": "Player only. amount Integer 1–20, default 1. Bees with persistent anger of 400–800 ticks. Permission neoessentials.beezooka."
+    },
+    "rest": {
+      "syntax": "/rest [target]",
+      "notes": "Not a vote to skip the night. resetStat(TIME_SINCE_REST) — resets the phantom timer. Your own — neoessentials.rest (default true); another player — rest.others. Console without a target — player_only."
+    },
+    "potion": {
+      "syntax": "/potion clear | /potion add <effect> [duration] [amplifier]",
+      "notes": "Not /effect: edits the POTION_CONTENTS of the item in hand (potion / splash / lingering / tipped_arrow). duration 1–1000000 s default 30; amplifier 0–255 default 0. No root .executes. Player only. Permission neoessentials.potion."
+    },
+    "rtoggle": {
+      "syntax": "/rtoggle | /rtoggle on | /rtoggle off | /rtoggle <target> | /rtoggle <target> on | /rtoggle <target> off",
+      "notes": "Where /r replies: enabled (default) — to the last person you messaged; disabled — to the last person who messaged you. Another player — rtoggle.others. Console without a target — player_only. State is in process memory."
+    },
+    "rules": {
+      "syntax": "/rules | /rules <page> | /rules add <rule> | /rules remove <number> | /rules edit <number> <newText> | /rules insert <number> <rule> | /rules clear | /rules reload",
+      "notes": "Viewing — neoessentials.rules (default true), 10 lines each, page Integer ≥ 1. Admin branches — rules.admin. add/edit/insert: greedyString, & → §. Numbering starts at 1. File config/neoessentials/rules_data.json; the legacy rules.json migrates by itself. PermissionValidator (console = OP 2)."
+    },
+    "rg": {
+      "syntax": "/rg define <id> | /rg claim <id> | /rg redefine <id> | /rg remove <id> | /rg delete <id> | /rg list | /rg tp <id> | /rg clearowners <id> | /rg clearmembers <id> | /rg info [id] | /rg addowner <id> <player> | /rg addmember <id> <player> | /rg delowner <id> <player> | /rg delmember <id> <player> | /rg flag <id> list | /rg flag <id> <flag> <value> | /rg flag <id> clear <flag> [value]",
+      "notes": "helpCatalogOnly: NeoEssentials does not build Brigadier for /rg. The tree belongs to the \"regionguard\" mod; these 17 lines, as well as /bb <player>, appear in /help only if ModList.isLoaded(\"regionguard\") at startup. In /help each /rg branch gets its own translated description (for example define, list and flag clear), not a shared text for the /rg root. Without the mod, /rg and /bb are not in the catalog and NE does not register them. Permissions and behaviour belong to RegionGuard, not to neoessentials.rg nodes."
+    }
+  },
+  "examples": [
+    {
+      "title": "Switch the mode for yourself and someone else with shortcuts",
+      "goal": "Check that /gms and /gmc go into the same tree as the full /gamemode, and that someone else's mode is gated by a separate node.",
+      "commands": [
+        "/gms",
+        "/gmc Steve",
+        "/gamemode spectator",
+        "/gamemode 1 Steve"
+      ],
+      "result": "/gms without a target sets Survival for the sender (needs neoessentials.gamemode; the console gets player_only). /gmc Steve requires gamemode.others and an online EntityArgument player — offline gives \"player not found\". /gamemode spectator is a full literal, not a number. /gamemode 1 Steve does not parse: the 0–3 branches do not accept [target]; 1 is for yourself only. If you are already in that mode, the shortcuts reply already_in_mode."
+    },
+    {
+      "title": "Portable GUIs without a block",
+      "goal": "Open a crafting table and an anvil in the field, and make sure the console cannot do it.",
+      "commands": [
+        "/workbench",
+        "/craft",
+        "/anvil",
+        "/grindstone",
+        "/stonecutter"
+      ],
+      "result": "workbench and craft are one /crafting handler (permission neoessentials.crafting, key commands.crafting). anvil / grindstone / stonecutter are separate commands and keys. The menus are virtual (stillValid is always true); XP on the anvil is charged as usual. From the console all five reply player_only (anvil also has a root requires ServerPlayer)."
+    },
+    {
+      "title": "An announcement to the whole server and to your world only",
+      "goal": "Tell /broadcast from /broadcastworld and see that placeholders are taken from the sender.",
+      "commands": [
+        "/broadcast &6Restart soon, {online} players online",
+        "/bc Maintenance window",
+        "/broadcastworld This world only"
+      ],
+      "result": "/broadcast and /bc send the line §6[Broadcast] §f… to everyone online and to the server's system chat — there is no separate \"sent to N\"; you see your own message as a recipient. {online} is resolved by PlaceholderAPI. /broadcastworld marks it §6[World] §e and filters by src.getLevel(): a player in the Nether will not see an announcement from the Overworld; the console usually broadcasts to the overworld."
+    },
+    {
+      "title": "Joke projectiles",
+      "goal": "Check that /antioch, /kittycannon and /beezooka require a player and do not work from the console.",
+      "commands": [
+        "/antioch",
+        "/antioch holy",
+        "/kittycannon",
+        "/beezooka 3"
+      ],
+      "result": "Look at a block (20-block ray). /antioch places TNT with an 80-tick fuse; any tail like holy additionally broadcasts two Holy Hand Grenade lines. /kittycannon launches a kitten; a second later the entity vanishes with a power-0 explosion (blocks are intact). /beezooka 3 — three angry bees (limit 20). The console gets player_only for all three."
+    },
+    {
+      "title": "RegionGuard in help, not in NeoEssentials",
+      "goal": "Understand why /rg is sometimes in /help and sometimes not, and who actually runs the command.",
+      "commands": [
+        "/help rg",
+        "/rg list"
+      ],
+      "result": "If the regionguard mod is loaded, /help rg shows 17 syntaxes from the catalog (define, claim, flag…). /rg list itself is executed by RegionGuard: NeoEssentials only called registerCommand(\"rg …\") at startup. Without regionguard these lines are not in /help, and /rg list is either an unknown command or another mod's tree — NeoEssentials does not create it."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "OP and permission nodes — three different checks",
+      "body": "Most trees in PlayerState/ServerAdmin/Fun/Utility use `.requires(p == null || PermissionAPI.hasPermission(...))`. The console, command blocks and functions always pass. For a player, PermissionAPI with `opsBypassPermissions: true` (the default in config.json) returns true for any OP, even without the node. With `permissions.requireExplicitGrant: true` (shipped) the registry default does not grant access by itself — a non-OP needs an explicit grant.\n\nCommands on PermissionValidator (seen, ping, depth, anvil, crafting, rules, all of /motd, suicide, list, near, whois, compass, getpos, gamemode shortcuts) require `source.hasPermission(2)` for a non-player — a command block without OP 2 is refused. A player still needs the node if they are not OP and the bypass is off.\n\nThe /gms shortcuts and the full /gamemode differ: the shortcuts use PermissionValidator, /gamemode uses PermissionAPI with `p == null`.",
+      "fix": "Grant nodes to non-OPs explicitly. To stop OPs getting /give and /nuke \"for free\", set `opsBypassPermissions: false` and give nodes to groups. Restrict command blocks with /sudo and /nuke via vanilla OP and access to the blocks."
+    },
+    {
+      "title": "Console vs player",
+      "body": "The GUIs (anvil, crafting, grindstone, stonecutting), /hat, /more, /break, /tree, /fireball, /spawner, /recipe, /remove, /bottom, /suicide and all fun commands require a ServerPlayer in execute. /depth and /anvil additionally set `.requires(instanceof ServerPlayer)` — the console does not even reach the target.\n\nAnother online name is accepted by fly/god/heal/give/kill/effect: /give Steve diamond 64 works from the console. /ping and /compass without a name cannot be used from the console (your own ping/compass).\n\n/nuke without an argument from the console bombs everyone online. /list and /gc work from the console with OP 2 (Validator) or right away (PermissionAPI).",
+      "fix": "From the console always specify a name where there is [player]/[target]. Do not leave a command block with a bare /nuke."
+    },
+    {
+      "title": "/give does not collide with crates and breaks vanilla /give",
+      "body": "Crate keys are given with `/crate key give <player> <crate> <amount>` — a different literal, a different module. There is no overlap with `/give`.\n\nNeoEssentials registers its own `/give <target> <item> [amount]`: item is a word without components/NBT, amount 1–3456. Vanilla `/give <targets> <item>` with `@a` selectors, count via component and data components in square brackets after the item is no longer parsed once the mod registers — Brigadier keeps the mod's node.\n\nItem resolution — WorthManager: `minecraft:diamond`, `diamond` or a path fragment (`copper` takes the first id whose path contains \"copper\").",
+      "fix": "Do vanilla giving with NBT via `/minecraft:give`. For crates — only `/crate key give`. Do not rely on the \"first diamond_ore vs diamond\" order in fuzzy contains."
+    },
+    {
+      "title": "/fly and /god state is saved; the other personal toggles are not",
+      "body": "Enabled /fly and /god are written to the DataStore collection `player_command_states` by UUID and restored on the next login. Restoring requires the player to still have the corresponding neoessentials.fly or neoessentials.god permission; if the permission is revoked, the saved flag is deleted. `playerTimes`, `playerWeather` and `unlimitedItems` remain in-memory maps and are cleared on quit.",
+      "fix": "For permanent flight or protection enable /fly or /god once. For client-side time, weather and unlimited use a command block, a script or the panel after login."
+    },
+    {
+      "title": "/xp is not /exp, /mob is not /spawnmob",
+      "body": "`/exp` supports show/set/give and [target] on set/give. `/xp` — only bare, set <amount> and give <amount> for yourself. `/spawnmob <mob> [amount] [target]` spawns at another player; `/mob` stops at amount. Both aliases are labelled as full commands in the catalog, but the tree is shorter.",
+      "fix": "For another player's XP and mobs at another player use the canonical /exp and /spawnmob."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "/pong and /fw are in /help but not in Brigadier",
+      "body": "NeoEssentials.java calls `registerCommand(\"pong\")` and `registerCommand(\"fw\")`, so the lines end up in the HelpCommand catalog. Neither PingCommand nor FunCommands creates `Commands.literal(\"pong\")` / `literal(\"fw\")`. Completion and parsing follow the tree: /pong and /fw are unknown commands (or vanilla/another mod, if someone else took them).",
+      "fix": "Ping — /ping. Firework — /firework clear|power|fire|color. Do not promise players aliases from /help until the literals appear in the source."
+    },
+    {
+      "title": "/info is labelled as a whois alias in the catalog but does something else",
+      "body": "`registerCommand(\"info\", \"Get player information (alias)\")` describes whois, but WhoisCommand does not register an info literal. FunCommands attaches /info to printing the MOTD + a footer about /rules. Permission neoessentials.info, no arguments — /info Steve does not work as whois.",
+      "fix": "Player data — only /whois <player>. Treat /info as a short MOTD."
+    },
+    {
+      "title": "/compass prints the card twice",
+      "body": "In the no-target branch CompassCommand calls `showCompassInfo(...)` twice in a row. The player sees a duplicated \"facing / coordinates / biome\" block. The [player] branch is called once.",
+      "fix": "Until it is fixed, read the first card. /compass <player> for someone else has no duplicate."
+    },
+    {
+      "title": "/whois does not show offline players",
+      "body": "The word branch calls `showOfflinePlayerInfo` → `getOfflinePlayerSeenInfo`, which always returns `Optional.empty()` (an \"integrate with SeenCommand\" stub). Even with neoessentials.whois.detailed an offline name ends in player_not_found. Online — EntityArgument.player() — works.",
+      "fix": "Check offline status with /seen <player> (seen_data.json). /whois only for those currently in the world."
+    },
+    {
+      "title": "Bare /fireball requires the nonexistent node fireball.fireball",
+      "body": "The root requires checks neoessentials.fireball. executeFireball for the default type `\"fireball\"` additionally requires `neoessentials.fireball.fireball` or `neoessentials.fireball.*`. There is no fireball.fireball node in PermissionRegistry. A player with only fireball (and no OP bypass) gets no_perm_type. The `trident` suggestion is in PROJECTILE_TYPES but not in the switch — a large fireball spawns.",
+      "fix": "Grant neoessentials.fireball.* (or OP with opsBypassPermissions). For the trident do not expect a separate entity."
+    },
+    {
+      "title": "/recipe, /give, /kill, /xp, /effect override vanilla",
+      "body": "The mod registers the same literals after vanilla. Lost: `/recipe give`, `/give` with selectors and components, `/kill @e`, full `/xp add/query`, vanilla `/effect`. The mod removes /help via reflection and installs its own. This is not a parsing failure — the last tree wins.",
+      "fix": "Vanilla parsing — with the namespace prefix: `/minecraft:give`, `/minecraft:kill`, `/minecraft:recipe`, `/minecraft:xp`, `/minecraft:effect`, `/minecraft:help`."
+    },
+    {
+      "title": "/rest does not skip the night",
+      "body": "The upstream wiki says \"Skip the night (vote)\". The implementation is `resetStat(TIME_SINCE_REST)`: it zeroes the insomnia counter that makes phantoms spawn. The game day, weather and sleep vote do not change.",
+      "fix": "Night — /time night / /day or vanilla sleeping. /rest — anti-phantom only."
+    }
+  ]
+}

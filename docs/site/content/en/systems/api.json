@@ -1,0 +1,106 @@
+{
+  "commands": ["placeholder", "vault"],
+  "commandDetails": {
+    "placeholder": {
+      "syntax": "/placeholder [list | stats | info <identifier> | test <text>]",
+      "notes": "The root is gated by neoessentials.admin.placeholders via validateAdminPermission (OP 2 and the console pass). Bare /placeholder prints help. <identifier> is a word with completion from the registry; <text> is greedy, braces included, e.g. {neoessentials_balance}. test takes the context of the executor only: the tree has no player argument (contrary to the class javadoc). From the console player == null, so personal tokens stay unresolved. The command is not registered when commands.placeholder: false."
+    },
+    "vault": {
+      "syntax": "/vault [info | convert <from> <to>]",
+      "notes": "Registered only if modules.vaultEnabled and commands.vault. .requires: vanilla OP level 3 **or** neoessentials.vault.admin (the console has no UUID, so hasPermission(3) remains). Bare /vault equals info. convert compares provider names with spaces removed (case-insensitive) and needs at least two registered VaultEconomy providers. The neoessentials.vault.admin node is not declared in PermissionRegistry — without OP 3 you must grant it explicitly; the registry default will not give it."
+    }
+  },
+  "examples": [
+    {
+      "title": "Check the canonical {neoessentials_*} in game",
+      "goal": "Make sure the registry is alive and see exactly what PlaceholderManager sees — not the tablist's short alias.",
+      "commands": [
+        "/placeholder list",
+        "/placeholder info neoessentials_balance",
+        "/placeholder test Hello {neoessentials_name}, balance {neoessentials_balance}, group {neoessentials_group}"
+      ],
+      "result": "list prints identifiers such as neoessentials_name, neoessentials_balance, leaderboard_…, votifier_…, crate_keys — expansion id + _ + name. info neoessentials_balance reports registered, because DefaultPlaceholderExpansion.getIdentifier() = neoessentials and balance is in the set. test runs PlaceholderManager.setPlaceholders for your player: name/balance/group are substituted. The same text with {balance} or {player} is not resolved by test — those keys are not in the registry."
+    },
+    {
+      "title": "Compatible {luckperms_*} and {ftbranks_*}",
+      "goal": "Paste text copied from a pack with LuckPerms PAPI and understand that these are PermissionAPI aliases, not a bridge to another mod's expansion.",
+      "commands": [
+        "/placeholder test {luckperms_prefix}{luckperms_group}{luckperms_suffix}",
+        "/placeholder test {ftbranks_prefix}{ftbranks_rank}",
+        "/placeholder test {neoessentials_prefix}{neoessentials_group}"
+      ],
+      "result": "Both families resolve through PermissionAPI.getPrefix/getSuffix/group: with LuckPerms active — its meta, with FTB Ranks — its data, without an external mod — the internal groups. {luckperms_prefix} works even if LuckPerms was never installed. info luckperms_prefix will most likely say not_registered: it is not a registry entry but a separate resolveExternalPlaceholder branch."
+    },
+    {
+      "title": "REST next to the command: ping and resolve",
+      "goal": "An external backend checks the port without a key, and text substitution with a Bearer token.",
+      "commands": [
+        "/dashboard start",
+        "/apikey create placeholders ADMIN",
+        "/placeholder stats"
+      ],
+      "result": "After start: GET http://<host>:8080/api/ping without Authorization → {\"success\":true,\"mod\":\"neoessentials\",\"mode\":\"external\"} (default port 8080). GET /api/placeholders/list, /api/placeholders/stats and /api/placeholders/resolve?player=<name>&text=… require AUTH (session or API key). resolve on the server is the same PlaceholderManager as /placeholder test. stats in game prints registered_placeholders and the other registry counters. Full panel pairing is `/dashboard pair \"<url>\" <code>` (the panel token is never typed by hand)."
+    },
+    {
+      "title": "Who is the economy/permissions/chat for other mods right now",
+      "goal": "A third-party NeoForge mod talks to VaultServiceRegistry, not to NeoEssentials classes. You need to see the active provider.",
+      "commands": [
+        "/vault info"
+      ],
+      "result": "Three lines: Economy, Permission, Chat — the active name and a list of all registrations tagged [registeredBy]. Built-in providers register with ServicePriority.NORMAL and registeredBy neoessentials. With economy.useExternalEconomy and the sg_economy mod, a HIGH adapter appears in the list. Another mod overrides the built-in economy by registering a VaultEconomy with HIGH/HIGHEST — NeoEssentials shops then also go through VaultShopEconomyAdapter."
+    },
+    {
+      "title": "Reconcile balances of two economies for online players",
+      "goal": "The server has two VaultEconomy providers and you need to align balances of the players currently online, not offline ones.",
+      "commands": [
+        "/vault info",
+        "/vault convert NeoEssentials OtherEco"
+      ],
+      "result": "Names in convert are getName() with spaces removed. Fewer than two providers → convert_need_two. The loop covers only server.getPlayerList().getPlayers(): offline accounts are not touched. For each player: createPlayerAccount on the target if needed, then deposit/withdraw for the balance difference. The counter in convert_complete is the number of online players processed, not the number of non-zero transfers."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "Canonical form is {neoessentials_*}; short {player}/{tps} live in other pipelines",
+      "body": "The DefaultPlaceholderExpansion id is `neoessentials`, without underscores (the resolver splits a token at the **first** `_`: `{neoessentials_balance}` → expansion `neoessentials` + `balance`; an id like `my_mod` never matches). The set: name/username/displayname, prefix/suffix/group, channel, world/x/y/z/biome, health/food/level/exp/gamemode/ping, balance/balance_formatted/balance_raw/currency_symbol/baltop_rank/pay_toggle, server_name/server_motd/online_players/max_players, time/time_24/date, afk/afk_time/afk_reason, deaths/player_kills/mob_kills/play_time. PlaceholderManager does **not** know `{tps}`, `{online}`, `{max}`, `{player}`: they are substituted by TablistManager.applyPlaceholders and ChatFormatter.resolveShortPlaceholders. `/placeholder test {tps}` returns the token as is. Unprefixed `{balance}` is not resolved in test either — the registry key is `neoessentials_balance`.",
+      "fix": "In chat formats, MOTD and the tablist you can mix both styles. For `/placeholder test`, REST `/api/placeholders/resolve` and other mods via PlaceholderAPI, write `{neoessentials_…}`. Register your own expansion with an id that has no `_`."
+    },
+    {
+      "title": "Console and player in test; REST resolve accepts another player's name",
+      "body": "`/placeholder test` catches `getPlayerOrException` and on failure (console) resolves with player=null. Tokens with requiresPlayer (nearly all, except server_name/motd/online/max/time/date) stay as `{…}`. Brigadier has no target argument — the javadoc «test <text> [player]» is wrong. HTTP `GET /api/placeholders/resolve?player=&text=` does accept another online player's name.",
+      "fix": "Check personal tokens from in game. From the console look at server_*, or call REST with ?player=."
+    },
+    {
+      "title": "REST is the panel's HTTP, Vault is a separate Java bus",
+      "body": "The Dashboard API (port `webDashboard.port`, default 8080) is JSON for the external panel: Bearer session or `/apikey`, `/api/ping` without a key, `/api/placeholders/*` with a key, pairing via `/dashboard pair`. The Vault API is four interfaces in a separate artifact (`VaultEconomy` / `VaultPermission` / `VaultChat` / `VaultServiceRegistry`), with no Minecraft classes and no HTTP. Another mod declares compileOnly on vault-api and calls registerEconomy(…, HIGH, \"mymod\"). These surfaces are not interchangeable: REST does not deposit through VaultServiceRegistry, and Vault does not authorize the panel.",
+      "fix": "Panel and scripts — REST + API key. Cross-mod economy/permissions/prefixes — VaultServiceRegistry. Do not put the Bearer token in a frontend."
+    },
+    {
+      "title": "/vault convert does not see offline players and does not transfer history",
+      "body": "The code has an explicit comment «no offline player scanning needed in NeoForge» and loops only over the online list. The balance difference is applied with deposit/withdraw on the target; the source provider is not zeroed. The completion name is `provider.getName().replace(\" \", \"\")`.",
+      "fix": "Have the relevant players log in before convert. Move offline balances with the economies' own tools. Check names in `/vault info`, not the mod's display name."
+    },
+    {
+      "title": "OP 2 is not enough for /vault",
+      "body": "Most admin commands of the mod accept level 2. `/vault` requires `src.hasPermission(3)` or the `neoessentials.vault.admin` node. OP 2 without the node will not see the command. The console normally passes as level 4. The node is not in PermissionRegistry — the internal `neoessentials.*` wildcard will not create it as a «registered default»; it works only if you grant the literal node or a covering wildcard yourself.",
+      "fix": "Grant `neoessentials.vault.admin` or raise the operator to level 3+."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "{neoessentials_tps} from the upstream wiki is not in the registry",
+      "body": "APISystem.md and the «Server-wide» table promise `{neoessentials_tps}` / `{tps}`. `DefaultPlaceholderExpansion.initializePlaceholders` has no `tps` key and no switch branch for it. TPS is computed by TablistManager.getTps and substituted only as the short `{tps}` in the tablist header and in chat short-form. `/placeholder test {neoessentials_tps}` and REST resolve leave the token untouched. Same with `{player}`: in the expansion it is `name`/`username`/`displayname`, and `{player}` is handled only by the tablist.",
+      "fix": "For PlaceholderAPI/REST use `{neoessentials_name}` and accept that TPS is not served through this registry. In tablist.json write `{tps}`."
+    },
+    {
+      "title": "The /placeholder test [player] javadoc does not match the tree",
+      "body": "The PlaceholderCommand class header promises an optional target. Registration: `test` → greedy `text` → executes. Everything after the first word goes into the text; there is no separate player argument. `/placeholder test {neoessentials_name} Steve` simply resolves the string «{neoessentials_name} Steve» for the executor.",
+      "fix": "Another player's context — only via GET `/api/placeholders/resolve?player=Steve&text=…`."
+    },
+    {
+      "title": "/vault convert silently skips offline accounts",
+      "body": "This is not an unfinished TODO in the wiki: the method deliberately iterates only online players. An admin comparing baltop from SQLite across two providers will see convert_complete with the online count (often 0 to a few) and conclude the conversion «broke», although offline players are simply out of scope.",
+      "fix": "Treat the command as an online-session reconciliation, not a database migration. For a full transfer use the economy's own export/import."
+    }
+  ]
+}

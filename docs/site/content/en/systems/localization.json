@@ -1,0 +1,60 @@
+{
+  "commands": ["language"],
+  "commandDetails": {
+    "language": {
+      "syntax": "/language <code> | /language set <code> | /language list | /language reload | /language stats | /language info | /language template <code> | /language exportmissing | /language clearmissing | /language validate <code> | /language regenerate <code> | /language override set <key> <value> | /language override get <key> | /language override remove <key> | /language override list | /language override clear | /language override reload",
+      "notes": "The root requires vanilla OP 4 (`source.hasPermission(4)`), not the neoessentials.language node. The permission registry records the command as vanilla:op-level-4. Bare `/language <code>` is shorthand for set. The <value> of override set is a greedyString (the rest of the line). The console passes the OP check."
+    }
+  },
+  "examples": [
+    {
+      "title": "Switch the server to Russian",
+      "goal": "The language is set by a single code; players do not need to install anything.",
+      "commands": [
+        "/language list",
+        "/language ru_ru",
+        "/language stats"
+      ],
+      "result": "`list` prints the codes from the jar. `/language ru_ru` is the same as `/language set ru_ru` and writes `localization.language` to the config. `stats` shows how many keys are covered relative to en_us. An unknown code does not break chat: missing strings are taken from en_us."
+    },
+    {
+      "title": "Fix one string without touching the jar",
+      "goal": "Your own wording for a kit or ban message that survives a mod update.",
+      "commands": [
+        "/language override set commands.neoessentials.kits.claimed You received kit {0}",
+        "/language override get commands.neoessentials.kits.claimed",
+        "/language override list"
+      ],
+      "result": "The override is stored in the DataStore (`language_overrides`), not in a language file. `get` prints the current override or says the key has none. Double any `'` quote in a value with `{0}`, otherwise MessageFormat swallows the substitution."
+    },
+    {
+      "title": "Your own full translation",
+      "goal": "Start a file in languages/custom/ instead of copying from the jar by hand.",
+      "commands": [
+        "/language template ru_ru",
+        "/language validate ru_ru",
+        "/language reload"
+      ],
+      "result": "`template` writes a skeleton into `languages/custom/`. It is an overlay: keys missing from the file are still taken from the jar. `validate` checks placeholders and §-codes. After editing the file by hand, run `reload`, not a restart."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "OP 4 and neoessentials.language are different things",
+      "body": "Brigadier checks `hasPermission(4)`. No PermissionRegistry node is attached to this command. A player with `neoessentials.language` in LuckPerms but without OP 4 will not see the command.",
+      "fix": "Either grant OP 4 / use the console, or accept that an external provider cannot open this command by node."
+    },
+    {
+      "title": "reload does not re-register commands",
+      "body": "`/language reload` re-reads catalogues and overrides. The `commands.language` section is read at startup: a disabled command will not appear after reload.",
+      "fix": "Enabling `/language` itself needs a server restart."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "A single quote in a string with {0} prints a literal {0}",
+      "body": "This is MessageFormat: `'` starts an escaped section and swallows the placeholder. en_us/ru_ru already account for this by doubling; your own override is easy to break.",
+      "fix": "Write `''` instead of `'`. After the edit, run `/language override reload` or `/language reload`."
+    }
+  ]
+}

@@ -1,0 +1,199 @@
+{
+  "commands": [
+    "pay",
+    "balance",
+    "bal",
+    "baltop",
+    "balancetop",
+    "eco",
+    "paytoggle",
+    "pt",
+    "worth",
+    "sell",
+    "setworth",
+    "payconfirmtoggle",
+    "chestshop",
+    "cshop",
+    "npcshop"
+  ],
+  "commandDetails": {
+    "pay": {
+      "syntax": "/pay <player> <amount>",
+      "notes": "Permission neoessentials.economy.pay (a .requires node plus a repeat check in execute). <amount> — DoubleArgumentType from 0.01; Brigadier will not accept percentages like 10%. Name suggestions are online only, but with neoessentials.economy.pay.offline the transfer goes to a cached profile. The /p alias is registered in the same PayCommand; it has no separate command in this file. There is no cooldown in the config: ConfigManager.getPayCooldownSeconds() always returns 0."
+    },
+    "balance": {
+      "syntax": "/balance [player]",
+      "notes": "The /balance, /bal and /money roots are gated by neoessentials.economy.balance. Bare /balance shows your own account. The [player] branch is gated by neoessentials.economy.balance.others (or OP 2). The name is resolved via EconomyPlayerUtil — offline too. The console does not pass: executeOther calls getPlayerOrException on the sender. The /money alias in the same file shows only your own balance, like /bal."
+    },
+    "bal": {
+      "syntax": "/bal",
+      "notes": "A separate registration in BalanceCommand, the root is also neoessentials.economy.balance: only your own balance, there is no <player> argument. Another player's account — only via /balance <player>."
+    },
+    "baltop": {
+      "syntax": "/baltop [page]",
+      "notes": "neoessentials.economy.baltop; the console passes (player == null). Without [page] — page 1, IntegerArgumentType from 1. The page size of 10 and the 60 s cache TTL are hardcoded in BaltopCommand; economy.json has no keys for them. Players with neoessentials.economy.baltop.exempt are left out of the table. The /btop alias is registered in the same loop and has no separate card."
+    },
+    "balancetop": {
+      "syntax": "/balancetop [page]",
+      "notes": "Same node as /baltop: the {baltop, balancetop, btop} loop in BaltopCommand.register."
+    },
+    "eco": {
+      "syntax": "/eco give|take <player> <amount> | set <player> <amount> | reset <player> | history [player]",
+      "notes": "Root — OP 2 or neoessentials.economy.eco; there is no bare /eco. give/take — amount from 0.01, set — from 0.0 (negatives are rejected in execute). Names resolve offline via the profile; a string starting with @ is a vanilla selector, online only (quests: /eco give @p 100). history without an argument — your own feed; [player] additionally requires source.hasPermission(2) specifically, the eco node alone is not enough. The /economy alias — the same tree. The 10% percentage syntax is not supported."
+    },
+    "paytoggle": {
+      "syntax": "/paytoggle",
+      "notes": "neoessentials.economy.paytoggle (or OP 2). Player only: getPlayerOrException. The value is written immediately to the pay_toggles collection. Until a record exists, economy.json → paytoggleDefault applies (true in the template — payments are accepted)."
+    },
+    "pt": {
+      "syntax": "/pt",
+      "notes": "Bare /pt is paytoggle: PayToggleCommand registers literal(\"pt\").executes before PowertoolCommand. After Brigadier merges them, /pt list, /pt remove and /pt <command> belong to powertool (neoessentials.item.powertool), not the economy. Do not treat the subcommands as part of paytoggle."
+    },
+    "worth": {
+      "syntax": "/worth [hand [amount] | <item> [amount]]",
+      "notes": "neoessentials.worth; without arguments and with /worth hand — the item in the main hand (qty = stack size if amount is not given). The <item> branch is greedyString: a trailing number is read as the quantity (\"diamond 64\", \"thermal:copper_ingot 16\"), otherwise qty = 1. The command is not registered if modules.economyEnabled is off or commands.worth = false."
+    },
+    "sell": {
+      "syntax": "/sell [hand [amount] | inventory|all|invent | <item> [amount]]",
+      "notes": "Root — neoessentials.sell. Bare /sell and the hand branch additionally require neoessentials.sell.hand; inventory/all/invent — neoessentials.sell.bulk. <item> — StringArgumentType.word() (no spaces, colons are fine). The multiplier is config.json → economy.sellMultiplier plus the neoessentials.economy.sellmultiplier.N tiers. Renamed items (CUSTOM_NAME) are not sold unless economy.allowSellNamedItems is true."
+    },
+    "setworth": {
+      "syntax": "/setworth <item> <price|remove>",
+      "notes": "neoessentials.setworth. <item> — ResourceLocationArgument: diamond and minecraft:diamond are both valid; there is no hand literal, the string hand is normalized to minecraft:hand and then the main hand is used. <price> — DoubleArgumentType from 0; 0 in WorthManager.setPrice removes the price just like the remove literal. Writes to the item_worth collection immediately; /neoe reload is not needed."
+    },
+    "payconfirmtoggle": {
+      "syntax": "/payconfirmtoggle",
+      "notes": "Registered by MiscItemCommands, not EconomyCommands. Permission neoessentials.payconfirmtoggle. Player only. The flag lives in an in-memory Set and resets on restart. /pay does not read this flag — see knownIssues."
+    },
+    "chestshop": {
+      "syntax": "/chestshop [list [player] | info | convert | remove [<x> <y> <z>] | setprice <buy|sell|both> <price> | stats | limit | export | import [create] | reload | pricing | hologram enable|disable|enablepos <x> <y> <z>|move <x> <y> <z>]",
+      "notes": "Bare /chestshop prints help; the root requires neoessentials.chestshop (the console passes). Targeting for info/convert/setprice/remove without coordinates/hologram is player.pick(5.0). list [player] — others' only with neoessentials.shop.list.others or OP 3, and online only. convert — neoessentials.shop.create. remove without coordinates — the owner or shop.admin.remove/OP 3; with coordinates — admins only. setprice — shop.setprice or shop.admin.setprice; someone else's sign — only admin.setprice. hologram enablepos is invoked by the chat button after creating a sign. reload — OP 3 or shop.admin.reload. There is no /shop alias in the code, despite the ShopCommand javadoc."
+    },
+    "cshop": {
+      "syntax": "/cshop [list [player] | info | convert | remove [<x> <y> <z>] | setprice <buy|sell|both> <price> | stats | limit | export | import [create] | reload | pricing | hologram enable|disable|enablepos <x> <y> <z>|move <x> <y> <z>]",
+      "notes": "A redirect to the chestshop node, and only if both the chestshop and cshop keys are enabled in commands. If only cshop is enabled, nothing is registered."
+    },
+    "npcshop": {
+      "syntax": "/npcshop [create <name> | remove | additem <shopId> <item> <buyPrice> <sellPrice> <quantity> | removeitem <shopId> <index> | list | info <shopId> | reload | respawn <shopId> | entitytype <shopId> <entityType> <ai>]",
+      "notes": "The whole node — OP 3 or neoessentials.shop.npc.manage; bare /npcshop — help. <name> for create is greedyString (spaces allowed). <shopId> — a UUID or an unambiguous prefix from /npcshop list. additem: <item> — word(), the listing always stores \"minecraft:\" + the item without the minecraft: prefix; buy/sell from −1 (−1 disables that side), quantity from 1. remove — the nearest shop entity within 5 blocks. Buying in the GUI requires neoessentials.shop.use (right-click — buy, left-click — sell)."
+    }
+  },
+  "examples": [
+    {
+      "title": "First money on an empty server",
+      "goal": "The module is already on (modules.economyEnabled), but players only have the starting balance, and you need to test transfers, tax and the rich list before the wipe opens.",
+      "commands": [
+        "/eco give Steve 1000",
+        "/pay Alex 200",
+        "/balance Alex",
+        "/baltop"
+      ],
+      "result": "The template economy.json has no startingBalance key — new UUIDs get 100.0 from code. /eco give writes to the economy_balances collection and sends online targets \"received_give\". /pay deducts exactly 200 from the sender: with taxPercentage 0 the fee is 0 and the recipient sees the same amount. Set taxPercentage: 5 and repeat — the sender still loses 200, the recipient gets 190, and 10 is burned (not credited to the server). /balance Alex requires neoessentials.economy.balance.others; without the node only /balance by Alex himself works. The first /baltop often replies \"building\" — the cache is built asynchronously; a second later the command shows the top and the cache age in seconds."
+    },
+    {
+      "title": "A /sell price list from scratch, without editing worth.json by hand",
+      "goal": "Players should sell diamonds and all ores with a command, not through a chest. Prices live in the item_worth store, not in the config.",
+      "commands": [
+        "/setworth minecraft:diamond 25",
+        "/setworth hand 4",
+        "/worth diamond 64",
+        "/sell hand",
+        "/sell inventory"
+      ],
+      "result": "The first command sets 25 per diamond. The second takes the id from the main hand (hold an iron_ingot) — that is minecraft:hand, not a separate literal. /worth diamond 64 prints 1600 with the symbol from economy.json only if you look at /pay; /worth and /sell read currencySymbol from the economy section of config.json, not from economy.json — that key no longer exists in config.json, so you will almost always see $. Bare /sell = /sell hand and does not bypass neoessentials.sell.hand. inventory/all/invent require sell.bulk and skip items with CUSTOM_NAME while allowSellNamedItems is false — chat shows named_items_skipped. The multiplier is 1.0 in config.json → economy.sellMultiplier; the tier neoessentials.economy.sellmultiplier.150 gives ×1.5 on top if it is higher than the global one."
+    },
+    {
+      "title": "A player chest shop with the item from hand and a hologram",
+      "goal": "A player sells an enchanted bow, not a \"bare\" minecraft:bow. The name on the sign's 4th line carries no NBT.",
+      "commands": [
+        "/chestshop convert",
+        "/chestshop hologram enable",
+        "/chestshop info",
+        "/chestshop limit"
+      ],
+      "result": "Place a chest and a sign on an adjacent block. Line 1 (index 0) empty or [Shop], line 2 — quantity (1…3456), line 3 — B 50:S 20 (or B FREE / S 1K), line 4 — ?. You have 30 s after placing to fill in the sign, otherwise the pending entry expires. convert is needed if the sign was written before the handler saw it; a normal placement registers itself as soon as all 4 lines are filled. Right-clicking the sign with the bow in hand \"bakes in\" the DataComponents; without that, a chest with the same bow is \"out of stock\". After creation a clickable button appears in chat — it sends /chestshop hologram enablepos <x> <y> <z>; enable does the same if you are looking at the sign (no farther than 5 blocks). The hologram id is like shop_<dim>_<x>_<y>_<z>, off by default. Right-clicking someone else's sign buys, left-clicking sells; both require neoessentials.shop.use; the owner sees info instead of a trade. To break the sign: shift+left-click, otherwise the hit is intercepted as a sale. A double chest shares its 54 slots between both signs."
+    },
+    {
+      "title": "An admin shop without a chest or a slot limit",
+      "goal": "Spawn sells food infinitely. The player limit maxShopsPerPlayer does not apply to admin signs.",
+      "commands": [
+        "/chestshop list",
+        "/chestshop setprice buy 8",
+        "/chestshop stats"
+      ],
+      "result": "Write exactly Admin Shop on line 1 — you need neoessentials.shop.create.admin, otherwise \"no_permission_admin\". No chest is looked for and stock never runs out. The template config.json has no shop.maxShopsPerPlayer key; for regular players the code limit is 10; admin signs do not count toward it. list without an argument — your signs; other names only online and with shop.list.others. setprice changes the price on the sign you are looking at and rewrites the sign text; a type outside {buy,sell,both} fails in execute. An admin shop's hologram can be enabled only by someone with shop.create.admin: plain OP and shop.admin.remove do not count for this (isShopOwner)."
+    },
+    {
+      "title": "NPC shop: create, stock, change the entity",
+      "goal": "A trader without a chest or sign, with a GUI like an admin ChestShop: items are minted and destroyed directly.",
+      "commands": [
+        "/npcshop create Spawn Armorer",
+        "/npcshop list",
+        "/npcshop additem ab12cd34 diamond 50 -1 1",
+        "/npcshop additem ab12cd34 emerald -1 20 16",
+        "/npcshop info ab12cd34",
+        "/npcshop entitytype ab12cd34 minecraft:villager true"
+      ],
+      "result": "create spawns an invulnerable ArmorStand at your coordinates and prints the full UUID plus an 8-character prefix — use that. additem with −1 for sell makes the slot buy-only; the command rejects both −1. Right-clicking the NPC opens the GUI (neoessentials.shop.use): right-click a slot — buy, left-click — sell, if a sell price is set. entitytype recreates the entity in place; true for a mob enables AI but \"tethers\" it to the spawn point (radius 6). If the void ate the entity — /npcshop respawn <id>; listings in npc_shops are not lost. /npcshop reload re-reads the store; /neoe reload does not."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "Bare /pt is paytoggle, /pt list is powertool",
+      "body": "PayToggleCommand.register sets `literal(\"pt\").executes(paytoggle)` from EconomyCommands (formerly in NeoEssentials.java). Later PowertoolCommand.registerPtAlias attaches `list`, `remove` and greedy `<command>` to the same literal without a root `.executes()`. Brigadier merges the nodes: the first `.executes()` survives and the children are added. Result: `/pt` toggles receiving payments (`neoessentials.economy.paytoggle`), `/pt list` / `/pt remove` / `/pt <command>` are powertool (`neoessentials.item.powertool`). PayToggle always registers `/pt`, without checking `commands.pt`; the powertool children appear only if `commands.pt` is on. If `commands.paytoggle` is off, bare `/pt` has no `.executes()` and counts as an incomplete command.",
+      "fix": "Give players `/paytoggle` for opting out of transfers. Explain powertool to admins: the binding list is `/pt list` or `/powertool list`, not bare `/pt`."
+    },
+    {
+      "title": "/bal does not show other accounts; offline for /pay and /balance.others are different nodes",
+      "body": "`/bal` is registered without an argument: only your own balance. `/balance <player>` is gated by `neoessentials.economy.balance.others` and resolves offline via the profile. The console cannot open someone else's balance — `executeOther` requires a player sender. `/pay` allows offline only with `neoessentials.economy.pay.offline`; without the node — `offline_not_allowed`, even if the name is in the cache. `/pay` and `/eco` completion shows online players only. Ignoring (IgnoreManager) blocks `/pay` only if the recipient is online — an offline transfer does not see the ignore. `/chestshop list <player>` does not look up offline players at all: only `getPlayerByName`.",
+      "fix": "For staff: the pair `balance` + `balance.others`. For treasurers making offline payouts — `pay.offline`. To view others' signs — `shop.list.others`, and the target must be in the game."
+    },
+    {
+      "title": "The /pay tax burns the difference instead of crediting the server",
+      "body": "`EconomyAPI.payPlayer` deducts the full `<amount>` from the sender, credits the recipient `amount − fee`, and the fee goes nowhere. `taxPercentage` in economy.json is a percentage (5 = 5%). The rate comes from `EconomyModifierManager.getEffectiveTaxRate`: `neoessentials.economy.taxexempt` zeroes it (via hasPermissionStrict; OP by itself gives no exemption while `permissions.opsBypassEconomyModifierPermissions` is false). With a tax ≥ 100%, net ≤ 0 and the transfer is rejected. The cap for a single transfer is `maxTransferAmount` (template 10000) or the `neoessentials.economy.paylimit.N` tier / LuckPerms meta; bypass — `neoessentials.economy.pay.bypass.limit`.",
+      "fix": "State in the rules that the fee is burned. For exempt players — `neoessentials.economy.taxexempt`, not \"just OP\"."
+    },
+    {
+      "title": "paytoggle is on by default and survives restarts",
+      "body": "`paytoggleDefault: true` means \"I accept /pay\". Until a player has called `/paytoggle` at least once, they are not in the cache and every `/pay` to them goes through. After toggling, the record goes straight into the `pay_toggles` collection of the active `storage.type` (the legacy `paytoggles.json` is imported once). The refusal message is the same as for ignore (`pay.toggled_off`) — from chat you cannot tell \"turned off receiving\" from \"ignored\".",
+      "fix": "If newcomers must not be sent money before they agree, set `paytoggleDefault: false`. You can check your own status only by running `/paytoggle` again (there is no separate get)."
+    },
+    {
+      "title": "The hologram above a sign is opt-in, not auto-created",
+      "body": "`ShopData.hologramEnabled` is false by default. After a sign is created, chat offers the button `/chestshop hologram enablepos x y z`. Only the owner can enable/move a player shop's hologram: `isShopOwner` ignores OP and `shop.admin.remove`. An Admin Shop has `ownerUUID == null`, so `neoessentials.shop.create.admin` is needed. The `move` offset is clamped by Brigadier to ±4.5. The id has the `shop_` prefix. `ShopHologramManager` does not check `modules.hologramEnabled` and writes directly to `HologramManager`. `/chestshop reload`, after re-reading the `chest_shops` collection, cleans up orphaned `shop_*` holograms.",
+      "fix": "Tell players to press the chat button or look at their sign and run `/chestshop hologram enable`. Moderators remove others' holograms with `/hologram remove <id>`, not `/chestshop hologram disable`."
+    },
+    {
+      "title": "What /neoe reload does and does not do",
+      "body": "`ConfigManager.loadAll()` clears the cache, so the next `/pay` already sees the new `taxPercentage` / `currencySymbol` from economy.json. `EconomyManager.reinitialize()` fires only if the singleton never finished initializing at startup (the module appeared disabled in a load race) — live balances are not re-read from disk. `WorthManager.reload()` re-reads `item_worth`. `/neoe reload` does not touch the `chest_shops` and `npc_shops` collections: for signs — `/chestshop reload` (which also re-reads `shop.pricing` in config.json), for NPCs — `/npcshop reload`. `modules.economyEnabled` / `modules.shopEnabled` and the `commands.*` flags are read at registration: enabling `/pay` or shops after changing the key requires a restart.",
+      "fix": "Editing economy.json (tax, symbol, cap) — `/neoe reload`. Editing signs in the store or dynamic prices — `/chestshop reload`. Editing NPCs — `/npcshop reload`. Changing modules.* — restart."
+    },
+    {
+      "title": "The template economy.json has no startingBalance",
+      "body": "The getter looks up the `startingBalance` key in economy.json and, not finding it, returns 100.0. `/eco reset` sets exactly this value, not \"zero\". The duplicate key in config.json was removed in v32 — edit economy.json. `cleanupInactiveAccounts` + `inactiveAccountCleanupDays` (30) purge inactive accounts once an hour; `/eco reset` does not do that.",
+      "fix": "Add `startingBalance` to `config/neoessentials/economy.json` and run `/neoe reload` — new UUIDs and reset pick up the number. Existing balances do not change by themselves."
+    },
+    {
+      "title": "/npcshop additem always prepends the minecraft: namespace",
+      "body": "`executeAddItem` stores `\"minecraft:\" + itemId.replace(\"minecraft:\", \"\")`. `diamond` and `minecraft:diamond` both become `minecraft:diamond`. `thermal:copper_ingot` turns into `minecraft:thermal:copper_ingot` and does not match the real item in the GUI. On a ChestShop sign a modded id on the 4th line resolves fine (ShopParser does not force minecraft:), as does `/setworth thermal:copper_ingot`.",
+      "fix": "In an NPC shop write the short id for vanilla items. A modded item cannot be set correctly in an NPC shop with this command — only by editing the `npc_shops` collection and `/npcshop reload`, or sell it through a sign."
+    },
+    {
+      "title": "/eco history of another player needs vanilla OP 2, not the eco node",
+      "body": "The `/eco` root allows OP 2 **or** `neoessentials.economy.eco`. The `history <player>` branch additionally has `.requires(src -> src.hasPermission(2))`. A player with only the eco node and no OP can use `/eco give` and their own `/eco history`, but not `/eco history Steve`. The feed limit is `transactionHistoryLimit` (50 in the template; if you remove the key, the getter gives 20).",
+      "fix": "Give history auditors OP 2 (or the console). For giving money `neoessentials.economy.eco` is enough."
+    },
+    {
+      "title": "Shop sign: line format and the 30 s timeout",
+      "body": "Indices are 0…3; this matches \"line 1\" of the old English wiki in the human sense, but people confuse it with the price line: line 0 — name / `Admin Shop` / `[Shop]` / empty; 1 — an integer 1…3456; 2 — `B 10`, `S 5`, `B 10:S 5`, K/M suffixes, `FREE`; 3 — an id or `?`. A player sign needs an adjacent ChestBlockEntity (6 sides + under the sign). While the player is editing the text, the handler waits up to 30 s. After registration the sign text is cosmetic: the source of truth is the `chest_shops` collection, not the sign.",
+      "fix": "Do not change prices by editing the sign in the world — use `/chestshop setprice` or a CSV import. Did not fill it in within 30 s — break and place the sign again, or run `/chestshop convert` while looking at it."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "/payconfirmtoggle does nothing to /pay",
+      "body": "A comment in MiscItemCommands promises the behaviour of Essentials Commandpayconfirmtoggle: \"toggle whether /pay asks for confirmation\". The command puts the UUID into an in-memory Set, and the getter `isPayConfirmDisabled` is not called anywhere else. PayCommand has neither a confirmation nor any reference to this Set — the transfer goes through right after the balance, tax and paytoggle checks. The flag is not even written to disk; a restart clears it.",
+      "fix": "Do not promise players \"confirm the transfer first\". If you need confirmations, this is not the command; currently it only prints a chat line about its internal flag."
+    }
+  ]
+}

@@ -1,0 +1,332 @@
+{
+  "commands": [
+    "ban",
+    "unban",
+    "banip",
+    "unbanip",
+    "banlist",
+    "tempban",
+    "tempbanip",
+    "kick",
+    "kickall",
+    "mute",
+    "unmute",
+    "mutelist",
+    "jail",
+    "jailfor",
+    "unjail",
+    "setjail",
+    "deljail",
+    "jaillist",
+    "jailinfo",
+    "jails",
+    "togglejail",
+    "freeze",
+    "unfreeze",
+    "freezeall",
+    "unfreezeall",
+    "freezelist",
+    "vanish",
+    "v",
+    "unvanish",
+    "vanishlist",
+    "warn",
+    "warnings",
+    "clearwarnings",
+    "removewarn",
+    "note",
+    "notes",
+    "removenote",
+    "report",
+    "reports",
+    "reviewreport",
+    "modhistory",
+    "history"
+  ],
+  "commandDetails": {
+    "ban": {
+      "syntax": "/ban <player> [reason]",
+      "notes": "<player> — StringArgumentType.word, online first (case-insensitive), otherwise the server's profile cache; offline bans are possible. Without [reason], moderation.banSettings.defaultBanReason is used. Gated by neoessentials.moderation.ban on the root. Banning the same UUID again returns false while the record is active."
+    },
+    "unban": {
+      "syntax": "/unban <player>",
+      "notes": "The name is looked up in active bans, then in the profile cache. Removes by UUID, writes unbannedBy/unbannedAt; the record stays in the same player_bans collection with active: false. Permission neoessentials.moderation.unban."
+    },
+    "banip": {
+      "syntax": "/banip <ip> [reason]",
+      "notes": "<ip> — one word; only an IPv4 of four octets 0–255 is accepted, you cannot pass a name. Kicks everyone online with that address. enableIPBans: false → banIP returns false. Permission neoessentials.moderation.banip. Without a reason — defaultBanReason."
+    },
+    "unbanip": {
+      "syntax": "/unbanip <ip>",
+      "notes": "Removes an active IP ban and archives it with unbannedBy. Completion — the current ip_bans keys. Permission neoessentials.moderation.unbanip."
+    },
+    "banlist": {
+      "syntax": "/banlist [players | ips]",
+      "notes": "Without an argument the players branch runs. players archives expired temp bans on read if autoExpireTempBans is on. ips returns the raw ipBans Map without an expiry filter. Permission neoessentials.moderation.banlist."
+    },
+    "tempban": {
+      "syntax": "/tempban <player> <duration> [reason]",
+      "notes": "<duration> — word, not greedy: \"30m\", \"2h\", \"1d\", not \"1h 30m\". Parsed by BanManager.parseDuration; 0 or an unknown format → invalid_duration. Target as in /ban (online, otherwise cache). Permission neoessentials.moderation.tempban. enableTempBans: false blocks issuing."
+    },
+    "tempbanip": {
+      "syntax": "/tempbanip <ip> <duration> [reason]",
+      "notes": "The same IPv4 filter as /banip, the same word <duration> as /tempban. Kicks online players with that IP. expireTime is stored in ip_bans. Permission neoessentials.moderation.tempbanip."
+    },
+    "kick": {
+      "syntax": "/kick <player> [reason]",
+      "notes": "Online only. You cannot kick yourself. Without [reason] the tree hardcodes \"Kicked by an operator\", not defaultKickReason from the config. Screen — kickSettings.kickMessage with {reason}/{kicker}. Writes the kicks collection. Permission neoessentials.moderation.kick."
+    },
+    "kickall": {
+      "syntax": "/kickall [reason]",
+      "notes": "Kicks everyone except the sender. Without a reason the tree hardcodes \"Server maintenance\"; the screen text is kickAllMessage. Permission neoessentials.moderation.kickall."
+    },
+    "mute": {
+      "syntax": "/mute <target> [duration_or_reason]",
+      "notes": "<target> — EntityArgument.player(), online only. The root is gated by neoessentials.chat.mute (the console passes). duration_or_reason is greedy: a first word like 30m/1h/1d/2w is taken as the duration, the rest is the reason; without such a word the whole string is the reason and the mute is permanent. A target with neoessentials.chat.mute.exempt (hasPermissionExplicit) is not muted. A separate silence literal copies this tree; it is not listed on this page."
+    },
+    "unmute": {
+      "syntax": "/unmute <target>",
+      "notes": "Again EntityArgument.player() — you cannot unmute an offline player by command, although the record lives in mutes. The root is gated by neoessentials.chat.mute. Registration is skipped if chat or commands.unmute is off."
+    },
+    "mutelist": {
+      "syntax": "/mutelist",
+      "notes": "No arguments. The root is gated by neoessentials.chat.mute. Expired entries are lazily removed via isMuted. The console is allowed."
+    },
+    "jail": {
+      "syntax": "/jail <player> <jail> [duration_or_reason]",
+      "notes": "<jail> — the location name. The tail is greedy, as in /mute: a 30m/1h/… token is the duration, otherwise the whole string is the reason for an indefinite jailing. Offline via the profile cache. Permission neoessentials.moderation.jail. Requires an existing location (and at least one, if requireJailLocation)."
+    },
+    "jailfor": {
+      "syntax": "/jailfor <player> <jail> <duration> [reason]",
+      "notes": "<duration> is required and must match the same regexp as /jail, otherwise invalid_duration. Access: neoessentials.moderation.jail.timed or neoessentials.moderation.jail (validateAnyPermission; in LuckPerms the parent node does not imply .timed)."
+    },
+    "unjail": {
+      "syntax": "/unjail <player>",
+      "notes": "Online or profile cache. Teleports to originalLocation if it was recorded (online at the time of jailing). Permission neoessentials.moderation.unjail."
+    },
+    "setjail": {
+      "syntax": "/setjail <name> [sphere <radius> | cuboid]",
+      "notes": "Player only. Bare /setjail <name>: WorldEdit cuboid → otherwise a sphere at your feet with jailSettings.defaultSphereRadius. sphere <radius> — Double ≥ 1.0 at the current position. cuboid requires a WE selection. Permission neoessentials.moderation.setjail."
+    },
+    "deljail": {
+      "syntax": "/deljail <name>",
+      "notes": "Same permission as setjail. Does not release inmates — only warns how many there were. While the location is missing, canPlayerMove returns true, but isPlayerJailed stays true until /unjail or a login (logging in without a location clears the jail by itself)."
+    },
+    "jaillist": {
+      "syntax": "/jaillist",
+      "notes": "Contrary to the /help catalog, this is a list of jailed players, not locations. Locations — /jailinfo without an argument. Permission neoessentials.moderation.jaillist."
+    },
+    "jailinfo": {
+      "syntax": "/jailinfo [jail]",
+      "notes": "Without a name — all locations; with a name — one plus the number of inmates. The argument is a cell name, not a player. Permission neoessentials.moderation.jailinfo."
+    },
+    "jails": {
+      "syntax": "/jails",
+      "notes": "A separate literal with the same executeJailList as /jaillist (jailed players, not locations). Permission neoessentials.moderation.jaillist. Not a redirect."
+    },
+    "togglejail": {
+      "syntax": "/togglejail <player>",
+      "notes": "Online only. If already jailed — unjail; otherwise jails into getAllJailLocations().getFirst() with the reason \"Toggled by staff\" and no duration. An empty location list → error. Permission neoessentials.moderation.jail."
+    },
+    "freeze": {
+      "syntax": "/freeze <player> [reason]",
+      "notes": "Online only (getPlayerByName). Without a reason — freezeSettings.defaultFreezeReason. Already frozen — error. Writes the freezes collection. Permission neoessentials.moderation.freeze."
+    },
+    "unfreeze": {
+      "syntax": "/unfreeze <player>",
+      "notes": "Looks in the frozen list first (offline too), otherwise online. Permission neoessentials.moderation.unfreeze."
+    },
+    "freezeall": {
+      "syntax": "/freezeall [reason]",
+      "notes": "The tree has an optional greedy reason. Does not affect the sender or those already frozen. Permission neoessentials.moderation.freezeall."
+    },
+    "unfreezeall": {
+      "syntax": "/unfreezeall",
+      "notes": "Unfreezes everyone in freezes, including offline players. Permission neoessentials.moderation.unfreezeall."
+    },
+    "freezelist": {
+      "syntax": "/freezelist",
+      "notes": "Permission neoessentials.moderation.freezelist."
+    },
+    "vanish": {
+      "syntax": "/vanish [player]",
+      "notes": "Without an argument — yourself (player only). Another <player> is gated by neoessentials.moderation.vanish.others; the target must be online. Root — neoessentials.moderation.vanish. A toggle: calling again removes vanish. The state is written to vanishes. /v copies this tree if commands.vanish is on."
+    },
+    "v": {
+      "syntax": "/v [player]",
+      "notes": "A full copy of /vanish, not a Brigadier redirect. Registered together with vanish; there is no separate commands.v."
+    },
+    "unvanish": {
+      "syntax": "/unvanish [player]",
+      "notes": "Forces vanish off. Without an argument — yourself; another player — vanish.others. Root permission neoessentials.moderation.vanish. Target online only."
+    },
+    "vanishlist": {
+      "syntax": "/vanishlist",
+      "notes": "Offline players still in vanishes are shown by UUID. Permission neoessentials.moderation.vanishlist."
+    },
+    "warn": {
+      "syntax": "/warn <player> [reason]",
+      "notes": "Without a reason — \"No reason given.\". UUID: online, otherwise existing warns (the profile cache is not used — there is no first warning for an offline player without history). Permission neoessentials.moderation.warn."
+    },
+    "warnings": {
+      "syntax": "/warnings <player>",
+      "notes": "<player> is required. Prints up to 5 records, no paging. Permission neoessentials.moderation.warnings."
+    },
+    "clearwarnings": {
+      "syntax": "/clearwarnings <player>",
+      "notes": "Erases all of the target's warnings. Permission neoessentials.moderation.warn."
+    },
+    "removewarn": {
+      "syntax": "/removewarn <player> <warnId>",
+      "notes": "<warnId> — word; an 8-character prefix from /warnings is enough. Permission neoessentials.moderation.warn."
+    },
+    "note": {
+      "syntax": "/note <player> <text>",
+      "notes": "<text> is required (greedy). The first note for an offline player with no existing notes does not resolve — the profile cache is not consulted. Permission neoessentials.moderation.note."
+    },
+    "notes": {
+      "syntax": "/notes <player>",
+      "notes": "Up to 5 records, no pages. Permission neoessentials.moderation.notes (separate from note)."
+    },
+    "removenote": {
+      "syntax": "/removenote <player> <noteId>",
+      "notes": "An 8-character prefix, as with removewarn. Permission neoessentials.moderation.note."
+    },
+    "report": {
+      "syntax": "/report <player> <reason>",
+      "notes": "Player only, not the console; you cannot report yourself. Target: online or profile cache. The neoessentials.moderation.report node is granted to everyone by default. Online staff with neoessentials.moderation.reports get an English line in chat; the report is written to reports either way."
+    },
+    "reports": {
+      "syntax": "/reports",
+      "notes": "The PENDING queue, up to 8 lines, no pages. Permission neoessentials.moderation.reports."
+    },
+    "reviewreport": {
+      "syntax": "/reviewreport <id> accept|dismiss [notes]",
+      "notes": "The branches are the literals accept and dismiss, not a free word. <id> is resolved via findById (a short prefix, if the manager searches that way). Statuses REVIEWED / DISMISSED. Permission neoessentials.moderation.reports."
+    },
+    "modhistory": {
+      "syntax": "/modhistory <player>",
+      "notes": "Online, otherwise profile cache — like PublicModerationEndpoint. Sections for bans, mutes, kicks and warnings, 5 lines each. Shows the reason, issuer, date, whether the record is active and a permanent duration. Permission neoessentials.moderation.history."
+    },
+    "history": {
+      "syntax": "/history <player>",
+      "notes": "dispatcher.redirect to the modhistory node. Registered only if commands.modhistory is on. The same permission neoessentials.moderation.history."
+    }
+  },
+  "examples": [
+    {
+      "title": "Block the IP, not the name, and check the duration",
+      "goal": "An alt on the same address must not get in after the main account is banned. You need both a permanent and a temporary IP ban.",
+      "commands": [
+        "/banip 203.0.113.10 griefing",
+        "/banlist ips",
+        "/tempbanip 203.0.113.20 2h proxy",
+        "/unbanip 203.0.113.10"
+      ],
+      "result": "/banip and /tempbanip take an address, not a name: \"Steve\" fails isValidIP (exactly 4 octets 0–255). Everyone online from 203.0.113.10 is disconnected immediately with the ipBanMessageFormat template. The record lives in the ip_bans collection of the same storage.type as the rest of the mod; the web panel writes there too via POST /api/moderation/ipban. A temporary ban stores expireTime: isIPBanned on login and the scheduler every checkExpiredBansInterval seconds (300 by default), with autoExpireTempBans: true, archive it with unbannedBy = null. /banlist ips does not print the expiry in the line — unlike /banlist players."
+    },
+    {
+      "title": "Temporary player ban and shared history with the panel",
+      "goal": "Issue 30 minutes, make sure the player can join after it expires and the record was not erased — and that the panel shows the same as the game.",
+      "commands": [
+        "/tempban Steve 30m cheating",
+        "/banlist",
+        "/modhistory Steve",
+        "/unban Steve"
+      ],
+      "result": "Steve is kicked with tempBanMessageFormat ({reason}, {bannedBy}, {expiry}). The UUID resolves online or from the cache — an offline tempban works if the player has ever joined. /banlist without an argument = players and archives expired entries on read. /modhistory reads BanManager.getBanHistory + MuteManager + KickManager + WarnManager — the same collections as GET /api/moderation/bans/{uuid} and the public lookup. /unban does not delete the document: active: false, unbannedBy/unbannedAt are filled in. A repeated /ban of the same UUID while the ban is active does not stack on top."
+    },
+    {
+      "title": "Jail for a duration and tell /jail from /jailfor",
+      "goal": "A cell at spawn, Steve for two hours, Alex strictly via a separate command. On expiry — automatic release without /unjail.",
+      "commands": [
+        "/setjail spawn",
+        "/jail Steve spawn 2h griefing",
+        "/jailfor Alex spawn 30m",
+        "/jaillist",
+        "/jailinfo spawn"
+      ],
+      "result": "/setjail spawn without a tail places a sphere of radius defaultSphereRadius (10.0) at your feet if there is no wand/WE selection. /jail's tail is greedy: the word 2h matched the duration regexp — a timed jailing, expireAt = now+2h, reason griefing. The tree has no /jailfor without duration. Once a second (20 ticks) and on login, checkJailTimeout releases expired inmates and writes jail.released_expired. /jaillist prints inmates; cell coordinates — /jailinfo. The maxJailsBeforeTempBan/PermBan counter (3 and 6 in the template) lives only in process memory: after a restart escalation starts from zero; the third jail in the same session brings auto_tempban_notice, the sixth a permban instead of jailing."
+    },
+    {
+      "title": "Vanish survives a rejoin; \"see vanished\" does not",
+      "goal": "Hide, leave, join again — stay invisible. Understand why a colleague without a separate tier cannot see you even with OP.",
+      "commands": [
+        "/vanish",
+        "/vanishlist",
+        "/unvanish"
+      ],
+      "result": "The UUID and the priority number are written to the vanishes collection and loaded at startup. onPlayerLeave does not clear the state; on join, hide packets are sent again after 1 tick. vanishOnJoin is a separate flag: with true anyone with neoessentials.moderation.vanish is vanished automatically, even if they were not hidden before (false in the template). Who sees vanished players: the node neoessentials.vanish.priority.<tier> from the series 1000, 500, 250, 100, 50, 25, 10, 5, 1, checked with hasPermissionStrict — OP and a bare neoessentials.* give no tier. An equal or higher tier sees a lower one; tier 0 sees nobody. The viewerPriorities map (session \"see vanished\") is not written to DataStore and no command fills it: there is no /vanish see literal in the tree."
+    },
+    {
+      "title": "An hour-long mute in game — and why IP mutes are panel-only",
+      "goal": "Mute an online offender for a duration so that /mutelist, /modhistory and the panel show a single record. Understand the command's limits compared to the panel.",
+      "commands": [
+        "/mute Steve 1h spam in chat",
+        "/mutelist",
+        "/modhistory Steve",
+        "/unmute Steve"
+      ],
+      "result": "Steve must be online: EntityArgument.player() does not accept offline players, although MuteManager keys by lowercase name and survives restarts (the mutes collection). 1h is taken as the duration, spam in chat is the reason; the target immediately gets target_notification. Chat, /msg and mail are blocked by isMuted by name. The panel's POST /api/moderation/mute hits the same MuteManager (duration there is in seconds, not \"1h\"). IP mute — only POST /api/moderation/ipmute → the ip_mutes collection: there is no in-game command, and ChatMuteGuard does not call isIPMuted, so an IP mute by itself does not silence chat. /unmute again requires an online target."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "One punishment store: game and panel",
+      "body": "BanManager, MuteManager, KickManager, WarnManager, NoteManager, ReportManager, JailManager, FreezeManager, VanishManager write to the collections `player_bans`, `ip_bans`, `mutes`, `ip_mutes`, `kicks`, `warns`, `notes`, `reports`, `jails`, `jail_locations`, `freezes`, `vanishes` of the active `storage.type`. `ModerationEndpoint` and `PublicModerationEndpoint` call the same methods as the commands, not a separate table. The exception is time units: the panel body passes `duration` in **seconds** (`durationSeconds * 1000`), the game uses `30m`/`2h` tokens. `duration: -1` in POST `/api/moderation/ban` = a permanent ban.",
+      "fix": "After banning from the panel check `/banlist` and `/modhistory <player>` — it is not \"another database\". Do not confuse API seconds with command suffixes."
+    },
+    {
+      "title": "Ban duration: what removes it by itself",
+      "body": "`expireTime > 0 && now > expireTime` — expired. For players, `/banlist` (players), `isPlayerBanned` on login and the `checkExpiredBansInterval` scheduler archive the record (`unbannedBy` empty). For IPs the scheduler and `isIPBanned` on login do the same, but `/banlist ips` returns the raw map and may show an already dead temp ban until the next cleanup tick. `autoExpireTempBans: false` leaves the key in the map, the checks return \"not banned\", and there is no archive. `parseDuration` understands `s/m/h/d/w/mo/y`; for `/tempban*` the argument is a word, so \"1h 30m\" with a space does not fit the tree; \"1h30m\" as one word becomes 130 minutes (the digits are concatenated and the `hm` suffix falls to the default = minutes).",
+      "fix": "For a compound duration write one word with a single unit, or several separated by commas without the argument-separating space. Do not expect `/banlist ips` to hide expired entries instantly — check on login or wait for the interval."
+    },
+    {
+      "title": "/mute, /unmute, /mutelist are node-gated and work on online players only",
+      "body": "The root of all three commands is gated by `neoessentials.chat.mute`: without a grant they are not in the tree or in tab-complete (the console passes). `<target>` is `EntityArgument.player()`; an offline player can be neither muted nor unmuted, although the record in `mutes` survives restarts. `/mute` is always registered (plus the `silence` literal); `/unmute` and `/mutelist` are not attached if chat or their flag in `commands` is off. The duration in the first greedy word: the regexp has no `mo`/`y`, so `/mute Steve 1mo` takes `1mo` as the reason, not a month.",
+      "fix": "Grant moderators `neoessentials.chat.mute`. Offline mute — POST `/api/moderation/mute` by name."
+    },
+    {
+      "title": "Vanish is in vanishes; viewer priority is session-only and has no command",
+      "body": "The vanished UUID+`priority` are persisted. `viewerPriorities` (\"see vanished\" mode) is deliberately not written and not migrated from the legacy file. `enableSeeVanished` / `toggleSeeVanished` exist in the manager, but nothing in Brigadier calls them — there is no `/vanish see`. Actual viewing: `neoessentials.vanish.priority.<tier>` via `hasPermissionStrict` (no OP bypass, no bare `neoessentials.*`). Tier 0 does not see vanished players. `vanishOnJoin` vanishes staff with `neoessentials.moderation.vanish` on join; this is not the same as restoring an already recorded vanishes entry.",
+      "fix": "Give staff who must see colleagues a specific `neoessentials.vanish.priority.50` (or higher than the target). Do not count on OP by itself seeing vanished players."
+    },
+    {
+      "title": "Jail duration and auto-escalation",
+      "body": "`expireAt` is in the `jails` collection. Checked every second for online players and on login; an offline player stays jailed until they join, even if the time is up, until `checkJailTimeout` runs. `/jail <p> <jail> 2h reason` and `/jailfor` write the same path. The repeat-jailing counter (`jailCounts`) is not serialized: `/neoe reload`/a restart resets it, but within an uptime the 3rd jailing (template `maxJailsBeforeTempBan`) gives a temp ban of `tempBanDurationMinutes` (1440), the 6th a permanent ban by `System` / \"Exceeded maximum jailings\"; no jailing is created and the caller gets `auto_*ban_notice`. The perm check runs first: if both thresholds are equal, the temp branch is dead.",
+      "fix": "Keep `maxJailsBeforePermBan` strictly above temp. When testing `/jail` on a single account, either raise the thresholds or restart to reset the counter."
+    },
+    {
+      "title": "/jaillist is not a list of cells; /deljail does not release",
+      "body": "`executeJailList` prints `getAllJailedPlayers()`. Locations — `/jailinfo` without an argument. `/jails` — the same list of inmates. `/deljail` deletes from `jail_locations`, inmates stay in `jails`: movement no longer returns them to the cell (`canPlayerMove` is true if there is no location), breaking/attacking are still blocked by `isPlayerJailed`. On the next login without a location the player is released automatically.",
+      "fix": "Before removing a cell go through `/jaillist` and `/unjail`. Check cell coordinates with `/jailinfo`, not `/jaillist`."
+    },
+    {
+      "title": "Who resolves offline and who does not",
+      "body": "`/ban`/`/tempban`/`/jail`/`/report`/`/modhistory` — online, then the profile cache. `/warn`/`/note` — online, then only existing warns/notes: there will be no first warning or note for someone who is not in game and has no history, even if they are in the cache. `/freeze`/`/vanish`/`/kick`/`/mute`/`/togglejail` — online only. `/unfreeze` checks the freeze list first (offline players can be unfrozen).",
+      "fix": "Issue the first `/warn`/`/note` while the target is in game, or straight through the panel (it resolves the name by its own rules)."
+    },
+    {
+      "title": "/banip accepts neither a name nor IPv6",
+      "body": "The in-game `isValidIP` accepts only dotted IPv4. The panel also lets IPv6 through before BanManager/MuteManager. You cannot ban a \"player's IP\" by passing a name to `/banip`: you get `invalid_ip`. Kicking by IP compares the `getPlayerIP` string as is.",
+      "fix": "Take the address from the login log or the panel. IPv6 bans — only via dashboard `/api/moderation/ipban`."
+    },
+    {
+      "title": "A frozen player cannot chat; vanish silences footsteps",
+      "body": "`ChatHandler` cancels chat if `FreezeManager.isPlayerFrozen`. Vanish sets `setSilent(true)` — neighbours do not hear footsteps. Freeze survives restarts (`freezes`) and sends a reminder on join; the freeze position is filled in if it was empty.",
+      "fix": "Nothing to fix; if a player \"cannot chat\" after `/freeze`, that is by design — do not confuse it with a mute."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "An IP mute from the panel does not block chat",
+      "body": "`MuteManager.muteIP` / the `ip_mutes` collection / the `/api/moderation/ipmute` routes exist, and `isIPMuted` is declared. `ChatMuteGuard` and `ChatHandler` check only `isMuted` by player name; there are no other `isIPMuted` calls in the mod. There is no in-game IP mute command either. A record appears in storage, while chat, `/msg` and mail work as usual.",
+      "fix": "Mute the name via `/mute` or POST `/api/moderation/mute`. An IP ban (`/banip`) still keeps the player off the server — that is a different mechanism."
+    },
+    {
+      "title": "The staff ping for /report is not localized",
+      "body": "`/modhistory` uses localized strings and a calm format with the reason, issuer and date. After `/report`, online players with `neoessentials.moderation.reports` still get the raw line `[Report] <nick> reported <nick>: <reason>`, bypassing lang.",
+      "fix": "View punishment history with `/modhistory <player>`. For pings about new reports use the panel if you need a Russian-language interface."
+    }
+  ]
+}

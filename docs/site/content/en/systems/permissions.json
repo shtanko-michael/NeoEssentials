@@ -1,0 +1,124 @@
+{
+  "commands": [
+    "permissions",
+    "pex"
+  ],
+  "commandDetails": {
+    "permissions": {
+      "syntax": "/permissions [reload | list groups | list users | info group <group> | info user <player> | check user <player> <permission> | check group <group> <permission> | search <pattern> | create group <group> | delete group <group> | rename group <oldName> <newName> | clone group <source> <newGroup> | debug <player> | group <group> setprefix <prefix> | group <group> setsuffix <suffix> | group <group> setpriority <priority> | group <group> getpriority | group <group> add <permission> | group <group> remove <permission> | group <group> clear | group <group> inherit add <inheritGroup> | group <group> inherit remove <inheritGroup> | group <group> addtemp <permission> <duration> | group <group> removetemp <permission> | group <group> listtemp | group <group> context add <contextKey> <permission> allow|deny | group <group> context remove <contextKey> <permission> | group <group> context list | user <player> setgroup <group> | user <player> add <permission> | user <player> remove <permission> | user <player> clear | user <player> addtemp <permission> <duration> | user <player> removetemp <permission> | user <player> listtemp | user <player> context add <contextKey> <permission> allow|deny | user <player> context remove <contextKey> <permission> | user <player> context list]",
+      "notes": "The root has no .requires and no .executes — Brigadier rejects bare /permissions as incomplete; each branch checks its own node (reload → neoessentials.permissions.reload, group add → .group.permissions, setgroup → .user.groups, etc.). The /help catalog shows the tree by neoessentials.permissions.admin. Branches with validateAdminPermission let a level-2 operator through even before PermissionAPI, even with opsBypassPermissions: false. <prefix>/<suffix> — greedy (up to 64 characters); <permission> for add/remove — greedy, for addtemp — string, for context — word; <duration> — a single word like 1d12h30m, not 1d 12h; setpriority accepts an integer from −999 to 999. The modules.permissionsEnabled module and the commands.permissions / commands.pex flags are read at registration: with both off there is no tree at all."
+    },
+    "pex": {
+      "syntax": "/pex [reload | list groups | list users | info group <group> | info user <player> | check user <player> <permission> | check group <group> <permission> | search <pattern> | create group <group> | delete group <group> | rename group <oldName> <newName> | clone group <source> <newGroup> | debug <player> | group <group> setprefix <prefix> | group <group> setsuffix <suffix> | group <group> setpriority <priority> | group <group> getpriority | group <group> add <permission> | group <group> remove <permission> | group <group> clear | group <group> inherit add <inheritGroup> | group <group> inherit remove <inheritGroup> | group <group> addtemp <permission> <duration> | group <group> removetemp <permission> | group <group> listtemp | group <group> context add <contextKey> <permission> allow|deny | group <group> context remove <contextKey> <permission> | group <group> context list | user <player> setgroup <group> | user <player> add <permission> | user <player> remove <permission> | user <player> clear | user <player> addtemp <permission> <duration> | user <player> removetemp <permission> | user <player> listtemp | user <player> context add <contextKey> <permission> allow|deny | user <player> context remove <contextKey> <permission> | user <player> context list]",
+      "notes": "This is not a PermissionsEX imitation: PermissionsCommand.register attaches the same createRoot tree to the pex literal if commands.pex is on. The FakePermissionsEXCommand class with a \"fake\" /pex is not registered at runtime — registerFakePexCommand is never called."
+    }
+  },
+  "examples": [
+    {
+      "title": "Build internal groups without LuckPerms",
+      "goal": "The server has permissions.useExternalPermissions: false; you need a default / vip / admin set with prefixes and node grants — everything lives in the internal PermissionManager and is written via DataStore (collections permission_groups / permission_users).",
+      "commands": [
+        "/permissions create group vip",
+        "/permissions group vip setpriority 10",
+        "/permissions group vip setprefix &b[VIP] ",
+        "/permissions group vip add neoessentials.teleport.home",
+        "/permissions group vip inherit add default",
+        "/permissions user Steve setgroup vip",
+        "/permissions info group vip"
+      ],
+      "result": "create makes an empty group. setpriority accepts −999…999; with inheritance, parents are traversed by descending priority. setprefix goes straight to chat/tab via PermissionAPI.getPrefix. inherit add default attaches a parent; vip's own nodes are checked before inherited ones. setgroup writes the player's primary group. info group prints the prefix, suffix, priority and up to ten nodes (the rest — a more_count line)."
+    },
+    {
+      "title": "A temporary permission for a day, and checking it",
+      "goal": "Grant a player a node for a limited time and make sure the live check goes through the same chain as real commands.",
+      "commands": [
+        "/permissions user Steve addtemp neoessentials.fly 1d",
+        "/permissions user Steve listtemp",
+        "/permissions check user Steve neoessentials.fly",
+        "/permissions user Steve removetemp neoessentials.fly"
+      ],
+      "result": "addtemp parses duration as one token (1d, 12h, 30m, 1d12h30m; no spaces inside). An online player gets a notification. listtemp shows the remaining time; every 600 ticks PermissionExpiryHandler purges expired ones. check user calls PermissionAPI.hasPermission — i.e. emergency → opsBypassPermissions → external adapter → internal manager → vanillaOpFallback. removetemp revokes early."
+    },
+    {
+      "title": "LuckPerms as the only permission source",
+      "goal": "The shipped config has useExternalPermissions: true. If LuckPerms is on the classpath, the internal permissions.json is ignored for checks; manage groups in LP.",
+      "commands": [
+        "/permissions debug Steve",
+        "/permissions check user Steve neoessentials.moderation.kick",
+        "/lp group moderator permission set neoessentials.moderation.kick true",
+        "/permissions check user Steve neoessentials.moderation.kick"
+      ],
+      "result": "debug prints mode_external and the adapter name (LuckPerms), health/version, opsBypassPermissions, vanillaOpFallback, requireExplicitGrant and OP status. With requireExplicitGrant (shipped true), a node missing in LP is a deny; the registry default is not used. kick has defaultValue false anyway. After /lp (player in the moderator group) check becomes has. Prefixes are also read from the adapter: /permissions group vip setprefix with an active external engine replies internal_manager_unavailable."
+    },
+    {
+      "title": "neoessentials.admin is not a wildcard",
+      "goal": "Understand why /lp group admin permission set neoessentials.admin true opens the full /help but does not grant /eco and does not enable ×3 on /sell.",
+      "commands": [
+        "/permissions check user Steve neoessentials.admin",
+        "/permissions check user Steve neoessentials.economy.eco",
+        "/permissions check user Steve neoessentials.economy.sellmultiplier.300",
+        "/help"
+      ],
+      "result": "The neoessentials.admin node is an ordinary literal, \"Administrative access\". HelpCommand shows the full list if you have neoessentials.admin or neoessentials.*. Executing each command still checks its own node: eco does not pass on admin alone. The neoessentials.* wildcard in the built-in engine covers eco and admin, but graded modifiers (sellmultiplier.*, maxbalance.*, paylimit.*, taxexempt, nopaycooldown) only with permissions.wildcardsGrantEconomyModifierPermissions: true (shipped false). The neoessentials.vanish.priority family is never opened by that flag: only the exact node or the wildcard exactly neoessentials.vanish.priority.*."
+    },
+    {
+      "title": "Context: flight only in the End",
+      "goal": "Allow neoessentials.fly for the vip group only in the_end, without touching other worlds.",
+      "commands": [
+        "/permissions group vip context add world:the_end neoessentials.fly allow",
+        "/permissions group vip context list",
+        "/permissions group vip context remove world:the_end neoessentials.fly"
+      ],
+      "result": "Completion keys: world:overworld, world:the_end, world:the_nether, time:day, time:night, gamemode:survival|creative|spectator|adventure. allow/deny are required literals after the node. It applies when PermissionAPI.hasPermission receives a live PermissionContext (an online player); the console's context is EMPTY and world: keys do not match. list prints the key → node → allow/deny map."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "The check chain and two different OP bypasses",
+      "body": "PermissionAPI.hasPermission works like this: (1) emergency mode — after an initialization failure only vanilla OP; fixed by `/permissions reload` / `/neoe reload`; (2) `opsBypassPermissions` (shipped `true`) — OP level 2+ gets true **before** LuckPerms and the internal engine; (3) the external adapter, if `useExternalPermissions` and it is healthy; an explicit deny from the adapter suppresses the registry default; (4) the internal PermissionManager, if present; (5) the registry default (`defaultValue: true` on the node in PermissionRegistry) — **only if** `permissions.requireExplicitGrant` is off (shipped `true`, so the step is skipped: without an explicit grant a node does not light up by itself); (6) `vanillaOpFallback` — the last chance for an OP when all previous steps said no. `hasPermissionStrict` disables steps 2 and 6 — graded economy bonuses are computed this way so an OP does not accidentally get ×3 on selling. `validateAdminPermission` (branches like reload, group add) checks `source.hasPermission(2)` **even earlier** and lets an operator through even with `opsBypassPermissions: false`.",
+      "fix": "To give a regular player a command, grant its node in LuckPerms (`/lp group default permission set neoessentials.ah true`) or via the internal `/permissions`. To make OPs obey LuckPerms like everyone else: `opsBypassPermissions: false`, keep `vanillaOpFallback: true` as a safety net. The old \"everyone gets /home without a grant\" behaviour — `requireExplicitGrant: false`. Do not rely on `/permissions check` for a graded node: check calls the regular hasPermission, not Strict."
+    },
+    {
+      "title": "LuckPerms / FTB Ranks disable the internal manager",
+      "body": "Detection at startup: LuckPerms (`net.luckperms.api.LuckPerms`) → FTB Ranks (`dev.ftb.mods.ftbranks.api.FTBRanksAPI`) → Arclight. Success sets the adapter, `manager = null`, and `PermissionStorage.save/load` become no-ops. Shipped: `useExternalPermissions: true`. Then `setprefix`/`setsuffix` honestly reply `internal_manager_unavailable`. Other mutations (`group add`, `user setgroup`, `create group`, temp, context) call `getManager()` without that check and fail with an NPE as unexpected_error. In external mode `reload` only calls the adapter's `PermissionAPI.reload()` and does not read internal groups from disk. Discord role sync also writes only to internal groups and exits if an adapter is active.",
+      "fix": "With LuckPerms/FTB, manage nodes with their commands (`/lp`, FTB ranks). `/permissions debug` and `/permissions check user` are fine here — they go through PermissionAPI. The built-in `/permissions group|user …` only makes sense with `useExternalPermissions: false`."
+    },
+    {
+      "title": "`neoessentials.*` in the internal engine ≠ the same in LuckPerms",
+      "body": "The built-in `wildcardCanGrant`: `neoessentials.*` and `neoessentials.economy.*` do **not** cover `sellmultiplier.*` / `maxbalance.*` / `paylimit.*` while `wildcardsGrantEconomyModifierPermissions` is false; `taxexempt` and `nopaycooldown` are never granted by any wildcard, only by the exact literal. `neoessentials.vanish.priority.*` — the same rule without a config flag. The `neoessentials.admin` node is not affected by this filter: both the literal `neoessentials.admin` and the wildcard `neoessentials.*` cover it, but the literal does **not** expand into the mod's other nodes. The LuckPerms adapter returns its Tristate as is — the `wildcardsGrantEconomyModifierPermissions` flag has no effect on LP: `/lp ... permission set neoessentials.* true` grants sellmultiplier too, if that is how LP resolves it.",
+      "fix": "Internal engine: grant admins the needed nodes explicitly (or `neoessentials.admin` plus specific economy commands) rather than a single `neoessentials.*`, if you do not want selling bonuses. In LuckPerms, restrict wildcards yourself and do not expect the NeoEssentials config to trim them."
+    },
+    {
+      "title": "`/permissions check group` ignores wildcards and inheritance",
+      "body": "`check user` runs the full PermissionAPI chain (including the OP bypass: an operator almost always gets has). `check group` does `group.getPermissions().contains(permission.toLowerCase())` — only the exact literal in the group's own list, without `.*`, without inherit parents, without temp, without context. A group with just `neoessentials.teleport.*` gets missing for a query of `neoessentials.teleport.home`.",
+      "fix": "Check a player's live permission with `check user` or `debug`. Group contents — `info group` and `listtemp`/`context list`."
+    },
+    {
+      "title": "Negations, parent priority and node format",
+      "body": "A literal prefixed with `-` is a deny (`-neoessentials.teleport.tpr`); `isValidPermission` accepts `[a-z0-9._-]`, a wildcard only as `prefix.*` with a non-empty prefix and no `..`. With several inherits, parents are sorted by descending priority: the higher parent wins. `search <pattern>` looks for a substring in the ExternalPermissionProvider list and prints at most 20 lines. `<player>` completion is online only, but the UUID is taken via EconomyPlayerUtil.getUUIDByName (a player who has joined before may resolve offline).",
+      "fix": "Resolve a conflict between two parents with different priorities, not the order of inherit add. To find a node before granting: `/permissions search fly`."
+    },
+    {
+      "title": "`/pex` is an alias of the internal tree, not PermissionsEX",
+      "body": "`FakePermissionsEXCommand.registerFakePexCommand` and `PermissionCommandInjector.injectPermissionCommands` (plus the `neoessentials-pex-bridge` literal) exist in the code but are never called. The live `/pex` is a second `dispatcher.register(createRoot(\"pex\"))`. With `commands.pex: false` only `/permissions` remains. There is no real PermissionsEX for NeoForge 1.21.1; do not count on a \"fake pex\" suggesting nodes to an external plugin.",
+      "fix": "For node completion use `/permissions group <g> add` (it has ExternalPermissionProvider) or LuckPerms. Do not install PermissionsEX \"to make /pex work\" — the command is already built in."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "With LuckPerms/FTB almost all /permissions mutations fail with an NPE",
+      "body": "The `getManager() == null` guard exists only in `setPrefix`/`setSuffix`. `addGroupPermission`, `setUserGroup`, `createGroup`, temp and context immediately call `PermissionAPI.getManager().getGroup/getUser`. In external mode the manager is null on purpose — you get unexpected_error with a NullPointerException, even though the log says \"internal groups loaded but NOT USED\". `PermissionStorage.save` is a no-op anyway, even if the NPE did not happen.",
+      "fix": "Do not use `/permissions group|user|create|delete` with an active adapter. Grant the node in LuckPerms/FTB Ranks. The prefix is set there too, not via setprefix."
+    },
+    {
+      "title": "FakePermissionsEX and pex-bridge are dead code",
+      "body": "`registerFakePexCommand` was meant to attach a trimmed `/pex group|user add|remove` with a simulation_notice message and an OP 2 requirement. `injectPermissionCommands` — a separate `neoessentials-pex-bridge` command with OP 4. A grep of the repository finds no calls. The generator inventory marks `/pex` as implementedIn FakePermissionsEXCommand.java only because the file contains `Commands.literal(\"pex\")`.",
+      "fix": "Ignore javadoc/wiki about \"fake PEX until the real plugin loads\". The working `/pex` = `/permissions`."
+    },
+    {
+      "title": "canModifyPermissions is not wired to anything",
+      "body": "PermissionManager has a 1000 ms cooldown on \"permission modifications\", but `canModifyPermissions` is not called from PermissionsCommand or anywhere else. You can spam `group add` without that pause; the audit is written to `permissions_audit.log` with `permissions.auditLogging: true`.",
+      "fix": "Do not count on a server-side rate limit for the command. If you need one, restrict it by permission and OP, not by this method."
+    }
+  ]
+}

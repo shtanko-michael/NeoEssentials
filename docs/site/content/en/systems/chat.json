@@ -1,0 +1,241 @@
+{
+  "commands": [
+    "ac",
+    "amsg",
+    "chatformat",
+    "helpop",
+    "ignore",
+    "mail",
+    "me",
+    "message",
+    "msg",
+    "msgtoggle",
+    "nick",
+    "nickname",
+    "r",
+    "reply",
+    "socialspy",
+    "tell",
+    "unignore",
+    "w",
+    "whisper"
+  ],
+  "commandDetails": {
+    "msg": {
+      "syntax": "/msg <target> <message>",
+      "notes": "Brigadier registers the same tree as /tell, /w, /message, /me and /pm too (the last one is not in the mod's command registry). <target> — EntityArgument.player(), online only. The root is gated by neoessentials.chat.msg (the console passes). You cannot message yourself. If the target ignores the sender — refused, SocialSpy does not fire. If the target has /msgtoggle on — refused, except for OP 4 and neoessentials.chat.msgtoggle.bypass. A muted sender is blocked too. LastMessageManager records the pair only on the recipient. Formats: chat.messaging.msgFormatTo / msgFormatFrom, otherwise lang."
+    },
+    "me": {
+      "syntax": "/me <target> <message>",
+      "notes": "Alias of /msg: sends a private message, not an action to public chat. Uses the same checks: neoessentials.chat.msg permission, mute, ignore and /msgtoggle."
+    },
+    "message": {
+      "syntax": "/message <target> <message>",
+      "notes": "A full copy of /msg: the same registerCommand in MsgCommand.java, the same neoessentials.chat.msg checks."
+    },
+    "tell": {
+      "syntax": "/tell <target> <message>",
+      "notes": "A full copy of /msg (vanilla is overridden by the same tree)."
+    },
+    "w": {
+      "syntax": "/w <target> <message>",
+      "notes": "A full copy of /msg (vanilla is overridden by the same tree)."
+    },
+    "whisper": {
+      "syntax": "/whisper <target> <message>",
+      "notes": "The command is declared in the registry in NeoEssentials.java, but MsgCommand.register does not call it — there is no Commands.literal(\"whisper\") in the sources. It will not appear in Brigadier completion until it is registered alongside msg/tell/w/message/pm."
+    },
+    "reply": {
+      "syntax": "/reply <message>",
+      "notes": "The same tree is attached to /r. The target comes from LastMessageManager: only the person who was messaged is recorded there, not the sender of the outgoing /msg. The target must be online; either side leaving clears the map. Permission neoessentials.chat.reply, plus the same mute / ignore / msgtoggle as /msg. Formats: chat.messaging.replyFormatTo / replyFormatFrom."
+    },
+    "r": {
+      "syntax": "/r <message>",
+      "notes": "Alias of /reply, the same ReplyCommand."
+    },
+    "msgtoggle": {
+      "syntax": "/msgtoggle",
+      "notes": "There are no on|off arguments — only a toggle. Same tree: /togglemsg and /mt (not in the registry). Registered only with chatEnabled and commands.msgtoggle. Permission neoessentials.chat.msgtoggle; OP 4 bypasses. State is in MsgToggleManager memory and is not written to disk."
+    },
+    "ignore": {
+      "syntax": "/ignore <target>",
+      "notes": "Same tree: /block (not in the registry). <target> online only. You cannot ignore yourself. Permission neoessentials.chat.ignore. A target with neoessentials.chat.ignore.exempt is not ignored (the node is not declared in PermissionRegistry, but the code checks it). Ignoring the same name again is an error. The list is the DataStore collection ignore_lists, key = lowercase name, not UUID. IgnoreManager does not filter public chat."
+    },
+    "unignore": {
+      "syntax": "/unignore <target>",
+      "notes": "Same tree: /unblock. The root is gated by neoessentials.chat.unignore; execute still checks neoessentials.chat.ignore — you need both nodes. The target must be online. If the name is not in the list — error."
+    },
+    "socialspy": {
+      "syntax": "/socialspy",
+      "notes": "No on|off. Same tree: /ss and /spy (not in the registry). Permission neoessentials.chat.socialspy. State is an in-memory ConcurrentHashMap; a restart resets it. Broadcasting happens only after a successful /msg|/reply; a sender with neoessentials.chat.socialspy.exempt is not monitored. Format: chat.messaging.socialspyFormat."
+    },
+    "chatformat": {
+      "syntax": "/chatformat set <player> <format> | clear <player> | check <player> | list | reload",
+      "notes": "The root and all branches require neoessentials.chat.format.set (the node is not in PermissionRegistry — it will not be in the site's permission table; LuckPerms accepts the string). <player> — online only. set/clear/check/reload write to the DataStore collection chat_formats; list prints only online players who have an override, although getCount() counts everyone. Branch messages are hardcoded English Component.literal, not lang. The tree is not registered if chatEnabled or commands.chatformat is off."
+    },
+    "mail": {
+      "syntax": "/mail | /mail read [page] | /mail send <player> <message> | /mail sendtemp <player> <duration> <message> | /mail sendall <message> | /mail sendtempall <duration> <message> | /mail delete <id> | /mail clear [index|player [index]] | /mail clearall",
+      "notes": "Root /mail and read/delete — neoessentials.mail; send — neoessentials.mail.send; sendtemp — sendtemp; sendall/sendtempall — the corresponding admin nodes; clearing your own — neoessentials.mail.clear, others' — clear.others; clearall — clearall. <player> in send — StringArgumentType.word() plus the profile cache; offline with a known UUID works. sendall sends only to the online list. The mailbox is config/neoessentials/mail_data.json, not DataStore. Limits: 100 mails, 1000 characters, 9 per page, a global rate limit of 10/min (mailsPerMinute is not in the shipped config)."
+    },
+    "nick": {
+      "syntax": "/nick | /nick <nickname> | /nick reset | /nick off",
+      "notes": "Permission neoessentials.nick. Nickname 3–16 characters without colour codes, pattern ^[a-zA-Z0-9_&§#]{1,32}$ — Cyrillic and spaces do not pass. Colours require neoessentials.nick.color. off/reset as literals and as a greedy string remove the nickname. Storage: config/neoessentials/nickname_data.json, not DataStore. Someone else's nickname is the separate /setnick (neoessentials.nick.others); this page does not cover it."
+    },
+    "nickname": {
+      "syntax": "/nickname …",
+      "notes": "A redirect to /nick, only if both commands.nick and commands.nickname are on. Same permission: neoessentials.nick (the registry lists neoessentials.nickname for the alias — that is a derived node; Brigadier does not check it)."
+    },
+    "helpop": {
+      "syntax": "/helpop <message>",
+      "notes": "Without an argument — usage. Sender permission neoessentials.helpop; only online players with neoessentials.helpop.receive receive it. A muted player is blocked. The [Reply] buttons insert /msg <name> ; teleporting to the coordinates / to the player — if you have neoessentials.teleport.admin.tp / tphere. This is not a staff channel: /ac and /amsg are helpop aliases, not ChannelCommands."
+    },
+    "ac": {
+      "syntax": "/ac <message>",
+      "notes": "Alias of /helpop (HelpopCommand), not a channel switch. The shipped staff channel is /staff."
+    },
+    "amsg": {
+      "syntax": "/amsg <message>",
+      "notes": "Alias of /helpop, not a private message and not a channel."
+    }
+  },
+  "examples": [
+    {
+      "title": "Private messages with /msg and replying with /r",
+      "goal": "Check that a private message reaches only the two players and that /r replies to whoever messaged you, not to whoever you messaged.",
+      "commands": [
+        "/msg Alex Hi, this is a DM test",
+        "/r Got it, replying"
+      ],
+      "result": "The sender sees a line from chat.messaging.msgFormatTo (an empty string in the config = lang commands.neoessentials.msg.format.to), Alex sees msgFormatFrom. LastMessageManager.setLastMessager is called only for the target: after the first /msg Alex can reply with /r, but the sender cannot. When Alex runs /r, the pair flips — then /r works for the first player too. A target offline at the moment of /r gives reply.target_offline and the record is cleared."
+    },
+    {
+      "title": "Ignoring DMs and what SocialSpy sees",
+      "goal": "Make sure ignore blocks /msg before it reaches the spies, but does not hide public chat and does not filter others' DMs for a spy.",
+      "commands": [
+        "/ignore Steve",
+        "/socialspy",
+        "/msg Steve this should not arrive"
+      ],
+      "result": "Steve ignores you — /msg replies target_ignoring, broadcastSocialSpy is not called, and spies do not see the failed attempt. A reverse /msg from Steve to you is blocked too (isIgnoring(target, sender)). Steve's public chat is still visible: ChatHandler does not call IgnoreManager. If a third player messages someone who is not ignoring them, a spy with /socialspy on sees the socialspyFormat line even if the spy ignores one of the pair — spy broadcasting does not read ignore lists. A sender with neoessentials.chat.socialspy.exempt is excluded from monitoring entirely."
+    },
+    {
+      "title": "A personal chat format with a gradient",
+      "goal": "Give a player a format above group/world/default and understand when <gradient> actually colours and when tags are stripped.",
+      "commands": [
+        "/chatformat set Steve <gradient:FFD700-FF8C00>[VIP]</gradient> &f{neoessentials_displayname}&7: &f{MESSAGE}",
+        "/chatformat check Steve",
+        "/chatformat list"
+      ],
+      "result": "set replies with the English line \"Set custom chat format for Steve.\" and writes the chat_formats collection. Priority: per-player → group:world → group → world → default. The <gradient>/<rainbow>/<red>/<hover> tags in the template go through RichTextFormatter.preprocessTags only with chat.richText.enabled: true (false by default — tags are stripped, the template's &-codes remain). {animation:NAME} frames are coloured earlier, via processAnimationFrameGradients, and survive disabled richText. /chatformat list prints only online players with an override; offline ones are in the count but not in the list. Remove: /chatformat clear Steve."
+    },
+    {
+      "title": "Mail to an offline player and reading it",
+      "goal": "Mail must reach someone who is not on the server and survive a restart — it is not in DataStore.",
+      "commands": [
+        "/mail send Steve Drop by, the kit was updated",
+        "/mail",
+        "/mail read",
+        "/mail delete a1b2c3d4"
+      ],
+      "result": "send resolves the UUID via the online list, otherwise the profile cache — \"player not found\" only if the name has never existed. Steve is offline: the mail is not in chat, it sits in config/neoessentials/mail_data.json; on join — login_notification with the unread count. /mail without arguments — status (total / unread). read marks the page as read (9 mails) and saves the file immediately. Clicking a line suggests /mail delete <id> (short 8 hex). If Steve ignores you and is online, send falsely says \"sent\" and nothing goes into the mailbox; an offline ignore skips this check."
+    },
+    {
+      "title": "A nickname in chat and calling staff via /helpop",
+      "goal": "The nickname should be substituted into {neoessentials_displayname}, and /ac should not send the message to the staff channel.",
+      "commands": [
+        "/nick &6Steve",
+        "/helpop I can't get to the spawn warp",
+        "/ac Same thing via another alias"
+      ],
+      "result": "/nick requires neoessentials.nick; with & you need nick.color, otherwise no_color_permission. The nickname is written to nickname_data.json and sent to the tab list in a packet. In the chat template {neoessentials_displayname} is the nickname without the group prefix; the prefix only via {prefix}. /helpop (and /ac, /amsg) sends a block to staff with neoessentials.helpop.receive: time, name, world+coordinates, text, reply buttons. This is not ChannelCommands: only /staff or the @ prefix from chat.channels.staff goes to the staff channel. If no staff is online — helpop.no_staff; the request is logged to the console only when staffCount > 0."
+    },
+    {
+      "title": "Command reply prefix (chat.modMessagePrefix)",
+      "goal": "Remove or restore the [NE] tag on the mod's success/error/warning/info messages without touching the player chat format.",
+      "commands": [
+        "/neoe reload"
+      ],
+      "result": "The `chat.modMessagePrefix` key in `config.json`; with split configs — `config/neoessentials/chat.json`. The shipped value is an empty string — no prefix. To restore the old tag: `\"&8[&bNE&8] &r\"` (a trailing space is needed, otherwise the text sticks to it). `MessageUtil.success/error/warning/info`, `SupportLinks` and several commands with `prefixedLiteral` read the key from disk for every message, so `/neoe reload` is enough. `MessageUtil.component()` and the `chat-format` template do not read this key."
+    },
+    {
+      "title": "Custom join and quit messages without vanilla duplicates",
+      "goal": "Hide Minecraft's \"joined the game\" / \"left the game\" lines and show your own coloured messages.",
+      "commands": [
+        "In config/neoessentials/config.json, inside the chat object: `suppressVanillaJoinQuitMessages: true`",
+        "Same place: `customJoinMessage: \"&a[+] &e{neoessentials_displayname} &fjoined the server\"`",
+        "Same place: `customQuitMessage: \"&c[-] &e{neoessentials_displayname} &fleft the server\"`",
+        "Restart the server"
+      ],
+      "result": "NeoEssentials intercepts the vanilla join/leave broadcasts and sends only the configured template. PlaceholderAPI placeholders are available, including `{neoessentials_displayname}`, `{neoessentials_username}`, `{neoessentials_prefix}`, `{neoessentials_suffix}` and `{neoessentials_world}`. Colours: the usual `&0`–`&f`, styles `&k`–`&r`, and hex `&#RRGGBB`, for example `&#FFD700Gold`."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "Join/quit messages require a restart",
+      "body": "`suppressVanillaJoinQuitMessages` is `false` by default: after an update the mod does not change an existing server's familiar behaviour. With `true` both vanilla lines are turned off. The template `none` for a specific event means NeoEssentials sends nothing; this works, for example, to hide only quits. The interception itself is hooked at Minecraft startup, so `/neoe reload` alone is not enough after installing a new mod version.",
+      "fix": "Add the key and templates to the `chat` object of the active `config/neoessentials/config.json`, check the JSON commas and restart the server. Changes to already loaded templates can be applied with a normal `/neoe reload`."
+    },
+    {
+      "title": "The chat.richText.enabled gate (the \"config ignored\" bug is fixed)",
+      "body": "Previously preprocessTags coloured `<red>`/`<bold>` even with rich text off, and the path without enableChatEnhancements called processRichText on the raw string. Now with `chat.richText.enabled: false` (default) `RichTextFormatter.preprocessTags` calls `stripAllRichTags`: gradient/rainbow/named-color/format/`<color:#>`/`<hover>`/`<click>` are removed, the template's `&`-codes remain. With `true` the tags are converted; `allowGradients`/`allowRainbow` (default true) apply only within that branch. The English wiki's claim that hover/click are \"not gated by the flag\" is outdated.\n\nException: `{animation:NAME}` goes through `processAnimationFrameGradients` **before** the gate — a frame from `animations.json` with `<gradient>` is coloured in chat even with richText off. The player's message is additionally filtered by `restrictPlayerMessageColors`: without `neoessentials.chat.namedcolors`, `<tag>`s in the player's text are stripped before insertion into `{MESSAGE}`. The `neoessentials.chat.richtext` / `gradient` / `rainbow` nodes are not read anywhere in the pipeline.",
+      "fix": "Gradients in `chat-format` and `/chatformat set` need `chat.richText.enabled: true`. For animations in the template this flag is not required. For tags in their own text give players `neoessentials.chat.namedcolors`, not richtext."
+    },
+    {
+      "title": "Ignore vs SocialSpy",
+      "body": "`/msg` and `/reply` call `IgnoreManager.isIgnoring(target, sender)` and exit with an error **before** `ChatAPI.broadcastSocialSpy`. An attempt to message someone ignoring you does not reach SocialSpy. Conversely: `SocialSpyManager.broadcast` does not look at the spy's ignore lists — `/socialspy` on shows others' successful DMs even if the spy ignores the sender or recipient (the broadcast skips the spy themselves and the pair's participants). Ignore does not filter public chat at all: `ChatHandler.onServerChat` never reaches `IgnoreManager`. Mail: ignore applies only if the target is **online**; an offline mail goes into the mailbox. `socialspy.exempt` on the sender suppresses monitoring regardless of ignore.",
+      "fix": "Do not promise players that `/ignore` hides someone from regular chat — only DMs (and online mail). There is no separate gate for spies to \"not see ignored players\"."
+    },
+    {
+      "title": "Mail lives in mail_data.json, not DataStore",
+      "body": "`MailCommand` writes `config/neoessentials/mail_data.json` (atomic rename). `storage.type` (JSON/SQLite/MySQL) does not migrate this file — unlike `ignore_lists` and `chat_formats`. `/neoe reload` does not re-read the mailbox: `loadMailData()` is called at command registration. The global `mailsThisMinute` counter is shared across the whole server, not per player; the shipped config has no `mail.mailsPerMinute` key, the code looks at a nonexistent root `mail` object and falls back to the default of 10. `sendall`/`sendtempall` iterate only `getPlayers()` — offline mailboxes are not filled.",
+      "fix": "Back up `config/neoessentials/mail_data.json` separately from `neoessentials/store/`. There is no network-wide mail via MySQL. This command cannot send to everyone including offline players."
+    },
+    {
+      "title": "/r replies only to incoming messages",
+      "body": "`LastMessageManager.setLastMessager(recipient, sender)` is written on the /msg target, not the sender. The map is in memory, keyed by lowercase names; either side leaving clears the records. So right after your own `/msg`, `/r` for the sender gives `reply.no_target` until the target replies.",
+      "fix": "Use a second `/msg`, or wait for a reply. There is no two-way \"last conversation partner\"."
+    },
+    {
+      "title": "Permissions the code checks but PermissionRegistry does not declare",
+      "body": "`neoessentials.chat.namedcolors`, `neoessentials.chat.format.set`, `neoessentials.chat.ignore.exempt`, `neoessentials.chat.socialspy.exempt` are used in ChatFormatter / ChatFormatCommand / IgnoreCommand / SocialSpyManager, but there is no `PermissionRegistry.register(...)` for them — they will not be in the site's permission table or in `/permissions search`. Granting through LuckPerms/FTB still works: `PermissionAPI.hasPermission` checks the string. Without an external grant the OP bypass (level 2) applies; the nodes are not given to the default group. `/unignore`: the root requires `neoessentials.chat.unignore`, execute — `neoessentials.chat.ignore`.",
+      "fix": "Grant namedcolors/format.set/ignore.exempt/socialspy.exempt explicitly as strings. To remove an ignore you need both `neoessentials.chat.unignore` and `neoessentials.chat.ignore`."
+    },
+    {
+      "title": "/msgtoggle and /socialspy have no on|off; state is not on disk",
+      "body": "The English wiki promises `/msgtoggle [on|off]` and `/socialspy [on|off]`. The tree has only `.executes` without arguments — each call inverts the flag. `MsgToggleManager` and `SocialSpyManager` keep names in a ConcurrentHashMap; a restart resets both. The roots are gated by the nodes `neoessentials.chat.msgtoggle` / `neoessentials.chat.socialspy` / `neoessentials.chat.msg`. `/msgtoggle` is not registered if the chat module or `commands.msgtoggle` is off.",
+      "fix": "Do not document on|off arguments. After a restart, moderators turn `/socialspy` on again. To bypass someone else's toggle: OP 4 or `neoessentials.chat.msgtoggle.bypass`."
+    },
+    {
+      "title": "/chatformat list misreports its contents; set cannot target offline players",
+      "body": "`<player>` is `EntityArgument.player()` everywhere — offline gives \"not found\". `list`, after a header with `getCount()` (all UUIDs in the store), prints only online players. Branch messages are English `Component.literal`, with no lang keys. After editing the store by hand you need `/chatformat reload`, not `/neoe reload` (the command's reload is what calls `PlayerChatFormatManager.load()`).",
+      "fix": "An override for an offline player — edit the `chat_formats` collection + `/chatformat reload`. Do not rely on list while people are offline."
+    },
+    {
+      "title": "Nickname: Latin letters, length, a separate file",
+      "body": "`VALID_NICK_PATTERN` allows only `a-zA-Z0-9_&§#`. A Cyrillic nickname gives `invalid_format`. Length without codes is 3–16, with codes the string can be up to 32. Uniqueness is compared in lowercase without colour codes. The file `config/neoessentials/nickname_data.json` does not move to DataStore. `/nickname` is a `redirect` to `nick`, without its own tree.",
+      "fix": "Coloured nickname: first `neoessentials.nick.color`. To change someone else's — `/setnick` (a different command, `commands.setnick`)."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "/whisper is in the registry but not in Brigadier",
+      "body": "`registry.registerCommandWithPermission(\"whisper\", …)` ends up in the inventory and in the site's command table, but `MsgCommand.register` attaches trees only to `msg`, `tell`, `w`, `message`, `pm`. There is no `whisper` literal — the command does not run and does not complete. `/pm`, on the contrary, works but is not in the mod's registry.",
+      "fix": "Use `/msg` / `/tell` / `/w` / `/message`. Do not promise `/whisper` until it is registered in `MsgCommand`."
+    },
+    {
+      "title": "/ignore does not hide public chat",
+      "body": "`IgnoreManager` is called from `/msg`, `/reply` and the online branch of `/mail send`. `ChatHandler` does not read the ignore list on `ServerChatEvent` — the player keeps seeing channel messages (local/global/staff/team). There is no `/ignorelist` command: `getIgnoreList()` is not exposed anywhere.",
+      "fix": "Ignore does not work for \"not seeing someone in chat\". To remove an ignore — `/unignore` with an online name; you need both nodes `neoessentials.chat.unignore` and `neoessentials.chat.ignore`. A forgotten name — edit DataStore by hand."
+    },
+    {
+      "title": "/ac is helpop, not admin chat",
+      "body": "The HelpopCommand comment calls the alias \"admin chat\", the inventory says \"Request help from staff\". The actual registration: the same `helpop`/`ac`/`amsg` → `sendHelpRequest`. The `staff` channel from `chat.channels` is registered by `ChannelCommands` as `/staff` (aliases `mod`, `admin`, `s`) and requires `neoessentials.chat.staff`.",
+      "fix": "Staff channel: `/staff` or the `@` prefix. Calling for help: `/helpop`/`/ac`/`/amsg` and the `neoessentials.helpop.receive` permission for moderators."
+    },
+    {
+      "title": "Mail sendall does not write offline mailboxes",
+      "body": "The comment promises a broadcast \"to all players\", but the loop runs over `server.getPlayerList().getPlayers()`. Anyone not online at that second does not get the mail and will not see it on join. `clearall`, on the contrary, clears the whole loaded MAIL_BOX (the entire file).",
+      "fix": "Do mass mailing to offline players with an external script over `mail_data.json` on a stopped server, or `/mail send` to each player."
+    }
+  ]
+}

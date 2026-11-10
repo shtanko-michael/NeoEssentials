@@ -1,0 +1,60 @@
+{
+  "commands": ["ah"],
+  "commandDetails": {
+    "ah": {
+      "syntax": "/ah | /ah sell <price> | /ah selling | /ah expired | /ah reload | /ah help",
+      "notes": "The auctionhouse alias is registered only if both ah and auctionhouse are enabled in commands. The root requires neoessentials.ah (the console passes). sell additionally requires neoessentials.ah.sell and a player; selling/expired require a player. reload requires neoessentials.ah.reload. The sell price is a DoubleArgumentType from 0.01. The whole stack in the main hand goes into the listing in one call."
+    }
+  },
+  "examples": [
+    {
+      "title": "List an item and buy it from another account",
+      "goal": "Check that the economy and the GUI are connected: the seller loses the item from their hand, the buyer pays, and the seller gets the money even while offline.",
+      "commands": [
+        "/ah sell 250",
+        "/ah selling",
+        "/ah"
+      ],
+      "result": "sell takes the whole stack from the main hand (an empty hand gives \"need_item\"; a price ≤ 0 is rejected already at the Brigadier level). In /ah selling the seller sees the listing with a timer; in /ah everyone sees it. Buying is a click in the GUI, not a command. If the player already has maxItemsPerPlayer active listings, sell replies with a limit error and the item stays in the hand."
+    },
+    {
+      "title": "Collect unsold items after expiry",
+      "goal": "A listing stayed up for a week (auctionSecondsDuration, 604800 s by default) and disappeared from the storefront — it must not be lost silently.",
+      "commands": [
+        "/ah expired"
+      ],
+      "result": "Opens the unsold items GUI. You can collect only your own listings. The item returns to the inventory or drops at your feet if there is no room. Until the player collects it, the record lives in the auction_expired collection of the same storage.type as the rest of the mod."
+    },
+    {
+      "title": "Reload the listing limit without a restart",
+      "goal": "You changed maxItemsPerPlayer in config/auctionhouse.json and want the new cap to apply immediately.",
+      "commands": [
+        "/ah reload"
+      ],
+      "result": "Only config/auctionhouse.json is re-read (not config.json and not crates.json). Requires neoessentials.ah.reload (or OP with opsBypassPermissions). Existing listings are not trimmed — the limit is checked only on a new /ah sell."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "The config is not in config/neoessentials/",
+      "body": "AuctionConfig writes `config/auctionhouse.json` at the root of the server's configs, not in `config/neoessentials/`. It has three keys: `maxItemsPerPlayer` (10), `auctionSecondsDuration` (604800), `maxPages` (50). `/neoe reload` does not touch this file.",
+      "fix": "Edit `config/auctionhouse.json` and run `/ah reload`. The whole module is enabled by `modules` + `commands.ah` — changing those needs a restart."
+    },
+    {
+      "title": "A double click in two GUIs no longer duplicates an item",
+      "body": "`cancelListing` and `buyItem` first atomically remove the listing from `activeListings`, and only then move items and money. Previously two windows on one listing gave two items or a double payment. If the removal fails, the method returns false and changes nothing. If the buyer does not have enough money, the listing is put back.",
+      "fix": "If a player swears they \"bought it but have no item\", check `logs/debug.log` with the `auctionHouse.debug` category instead of relying on chat: the GUI may close before the message arrives."
+    },
+    {
+      "title": "The seller is paid even if the deposit was cancelled",
+      "body": "After a successful withdraw from the buyer, the listing is already removed. `EconomyAPI.deposit` to the seller may be cancelled by an `EconomyDepositEvent` listener or hit the balance cap. In that case the manager sets the balance via `setBalance`, bypassing the cancellable event — otherwise the buyer's money would vanish.",
+      "fix": "Do not count on an economy protection plugin blocking auction payouts. The seller's balance cap can be exceeded this way."
+    },
+    {
+      "title": "Shared DataStore, not a separate auctionhouse.db",
+      "body": "Active listings are the `auction_listings` collection, expired ones are `auction_expired`, on the same backend as `storage.type`. The old `auctionhouse.db` is imported once if the collection is empty and `autoMigrate` is on. The listing's numeric id is kept when it moves to expired.",
+      "fix": "After changing `storage.type`, do not copy `auctionhouse.db` by hand — wait for the migration or check `neoessentials/store/`."
+    }
+  ],
+  "knownIssues": []
+}

@@ -1,0 +1,141 @@
+{
+  "commands": [
+    "crate"
+  ],
+  "commandDetails": {
+    "crate": {
+      "syntax": "/crate [list | open <crate> | preview <crate> | keys [player] | key give|take|giveitem <player> <crate> <amount> | admin create <id> <displayName> | admin delete <crate> | admin addreward <crate> <weight> | admin setanimation <crate> <animation> | admin setkey <crate> | admin setchatname <crate> <name> | admin setkeyname <crate> <name> | admin setblock <crate> | admin removeblock | admin reload]",
+      "notes": "The /crate root node is gated entirely by neoessentials.crate.open (without it even /crate preview does not work, although it has its own permission neoessentials.crate.preview), the key and admin branches additionally require neoessentials.crate.admin, and every <player> argument is looked up among online players only."
+    }
+  },
+  "examples": [
+    {
+      "title": "Build your first crate entirely in-game",
+      "goal": "You need a working crate and do not want to edit crates.json by hand. All admin commands write straight to the config, so you can build a crate without leaving the game.",
+      "commands": [
+        "/crate admin create vote &6Vote Crate",
+        "/crate admin addreward vote 50",
+        "/crate admin addreward vote 30",
+        "/crate admin addreward vote 5",
+        "/crate admin setanimation vote roulette",
+        "/crate admin setkey vote",
+        "/crate key give Steve vote 1",
+        "/crate open vote"
+      ],
+      "result": "After create, chat shows \"Created crate vote. Saved to config/neoessentials/crates.json\". Each addreward takes the item from your **main hand** — hold the right item before each call (the item itself is not consumed); the weight is relative and does not need to sum to 100. setkey likewise takes the item from your hand and makes it the key. A freshly created crate is empty: if you open it before the first addreward, you get not \"no keys\" but \"Crate ... has no rewards configured yet\" — and the key is not consumed. The last command opens a CS:GO-style scrolling GUI; after the reel stops you get \"You opened ... and won: ...\", and the reward lands in your inventory."
+    },
+    {
+      "title": "Place a physical crate at spawn",
+      "goal": "Players should open the crate by clicking a chest, not with a command — and see a label above it.",
+      "commands": [
+        "/crate admin setblock vote",
+        "/hologram setline crate_vote 2 &eRight-click to open, left-click for odds",
+        "/hologram setscale crate_vote 1.3"
+      ],
+      "result": "Stand so that the block (any block; the type in the block field is purely decorative) is exactly in your crosshair no farther than 6 blocks, and run setblock: you get \"That block is now a physical ...\", and an ordinary hologram with id crate_vote appears 1.5 blocks above it — it shows up in /hologram completion and can be changed with any subcommand. Now right-clicking the block opens the crate (a key is consumed), left-clicking opens the free odds window; shift+left-click falls through to normal block breaking. Remove the binding with /crate admin removeblock while facing the same block; the hologram goes with it."
+    },
+    {
+      "title": "Give keys that can be passed to another player",
+      "goal": "Keys as a donation reward or a prize the winner can gift or sell. A virtual balance does not work this way — it is bound to the player for good.",
+      "commands": [
+        "/crate admin setkeyname vote &eVote Crate Key",
+        "/crate key giveitem Steve vote 5",
+        "/crate keys Steve"
+      ],
+      "result": "Steve receives 5 real key items (the stack is split by the key item's max stack size; extras drop at his feet). They can be dropped, put in a chest, traded — whoever holds them can open the crate. Meanwhile /crate keys Steve still shows 0 for vote: the virtual balance and key items are two independent accounts. Command order matters: the key name is \"baked\" into the item at the moment it is given, so run setkeyname **before** giveitem — already issued keys keep the old name."
+    },
+    {
+      "title": "Add a rare reward with a broadcast and a command",
+      "goal": "You need a reward you cannot hold in your hands — granting a permission, a role or money — plus a server-wide announcement. addreward cannot do this: it only takes the item in hand.",
+      "commands": [
+        "/crate admin reload",
+        "/crate preview vote"
+      ],
+      "result": "Add an entry like {\"id\": \"vip\", \"weight\": 1, \"commands\": [\"lp user {player} parent addtemp vip 7d\"], \"broadcastRare\": true, \"broadcastMessage\": \"&6{player} &7won VIP!\"} to the rewards array of the crate in crates.json and run /crate admin reload — \"Crates config reloaded\". Commands run as the console with {player} substituted; broadcastMessage goes to all online players. Note two details: /neoe reload does not re-read crates, only /crate admin reload does; and a reward without an item field shows as an empty slot in /crate preview and in the animation — if you want it visible, give it an \"icon\" item."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "The preview permission alone is useless",
+      "body": "The `/crate` root node is declared with a `neoessentials.crate.open` check, and Brigadier applies it to the **whole** subtree. A player granted only `neoessentials.crate.preview` can neither see nor run `/crate preview` or `/crate list`. Meanwhile left-clicking a physical block bypasses the command and checks exactly `neoessentials.crate.preview`, and right-clicking checks `neoessentials.crate.open`.",
+      "fix": "Grant the regular group the pair `neoessentials.crate.open` + `neoessentials.crate.preview`. If you want \"look only\", that is possible only via a physical block, not a command."
+    },
+    {
+      "title": "All targets are online only, and anyone can see other players' key balances",
+      "body": "`/crate keys <player>`, `/crate key give`, `take` and `giveitem` look up the player via `getPlayerByName`, i.e. **online players only**. For a player who has left you get \"player not found\"; there is no deferred delivery queue. Separately: `/crate keys <player>` sits outside the `key` branch, so any player with `neoessentials.crate.open` can view other balances without admin rights.",
+      "fix": "Either postpone giving to an offline player until they join, or do it through a vote reward in `votifier.json` (it can catch the player on join). If you do not want other balances visible, there is nothing to close it with — this subnode has no separate permission."
+    },
+    {
+      "title": "Two independent key wallets and the selection rule",
+      "body": "The virtual balance (`/crate key give|take`, stored in `neoessentials/store/crate_keys.json`) is non-transferable and spent only by its owner. A key item (`/crate key giveitem`) is a standalone item with an NBT tag for a specific crate; on right-clicking a block the handler first checks the **main hand**, and only if there is no valid key there does it deduct a virtual one. So with a key in hand the virtual balance is not spent, and vice versa.",
+      "fix": "If a player complains that \"the key disappeared but the balance did not drop\" — that is normal: the item was consumed. Check the balance: `/crate keys <player>`, the placeholder `{crate_keys:<crateId>}` (shows only the viewer's own balance)."
+    },
+    {
+      "title": "What /crate admin reload re-reads and what it does not",
+      "body": "`/crate admin reload` clears the config cache, re-reads `crates.json` and cleans up holograms above blocks of nonexistent crates. It does **not** re-register commands: `modules.cratesEnabled` is read once at startup, so enabling the module requires a restart. `/neoe reload` does not touch `crates.json` at all — crates are not in its system list. Block bindings, key balances and open history are not in the config but in `neoessentials/store/` and are read live; they need no reload.",
+      "fix": "After editing `crates.json` by hand, always run `/crate admin reload`, not `/neoe reload`. After changing `modules.cratesEnabled` — restart the server."
+    },
+    {
+      "title": "Deleting a crate does not remove block bindings",
+      "body": "`/crate admin delete <crate>` removes the definition from `crates.json` and sweeps orphaned holograms, but the records in the `crate_blocks` collection remain. The block simply stops being a crate: the handler exits before cancelling the event, so the chest opens as a normal chest again. If you later create a crate with the same id, all the old blocks silently come back to life.",
+      "fix": "Before deleting a crate, go through its blocks with `/crate admin removeblock` — or remember that the id cannot be reused without surprises."
+    },
+    {
+      "title": "Hologram above the block: id, duplicates and a disabled module",
+      "body": "`setblock` creates a hologram with id `crate_<crate id>`; if that crate already has a block with that id, a suffix is added — `crate_common_2`, `crate_common_3`. The \"block → hologram\" link is stored separately, so a repeated `setblock` on the same block (even for another crate) reuses the existing hologram instead of creating a second one, and the link survives moving the hologram with `/hologram moveto|movehere`. With `modules.hologramEnabled: false` no hologram is created at all — the block works, but has no label.",
+      "fix": "Set your own label with the usual `/hologram setline|setscale|...` commands on id `crate_<id>`; it survives everything except `removeblock`, which deletes the hologram along with the binding."
+    },
+    {
+      "title": "Zero-weight rewards are visible but never drop",
+      "body": "Reward selection uses the sum of **positive** weights: an entry with `weight` ≤ 0 can never drop. But in `/crate preview` it still takes a slot labelled \"0.00% chance\", and it can flash by in the animation reel — the animation background is filled uniformly from the whole reward list, ignoring weights.",
+      "fix": "To temporarily disable a reward, cut it out of the `rewards` array (followed by `/crate admin reload`) rather than zeroing the weight. If the whole pool is zero, the crate counts as empty, the key is not consumed, and you get \"has no rewards configured yet\"."
+    },
+    {
+      "title": "What the preview shows and where the reward goes",
+      "body": "In `/crate preview` the reward item's own description (lore) is replaced with a single chance line, so the author's text is not visible there; a page holds 45 rewards, then paging buttons. The reward goes into the inventory, and if there is no room it drops at the player's feet. A reward without an `item` field (only `commands`) looks like an empty slot both in the preview and in the animation.",
+      "fix": "Nothing to fix — but if you rely on lore as the reward description, duplicate it in the item name or in the hologram above the block."
+    },
+    {
+      "title": "Both GUIs are view-only; item copies are purged",
+      "body": "The slots of both windows swap the container for a read-only one and mark every displayed item (including paging buttons and fillers) with a hidden tag. While the window is open, the player's inventory is scanned every 250 ms, and after closing a few more times over roughly 4 seconds: any tagged item pulled out by a client \"pull\" mod (confirmed with Quark) is silently removed.",
+      "fix": "If a player claims \"the item from the preview vanished from my inventory\" — that is by design. A real reward carries no tag and is not swept."
+    },
+    {
+      "title": "Vote keys go only to the virtual balance",
+      "body": "The `keys` section in `votifier.json` credits keys through the same account as `/crate key give` — it does not give key items. A vote for an offline player is queued and delivered on join. If `modules.cratesEnabled` is off, the key crediting block is skipped entirely and that part of the reward is lost without a trace.",
+      "fix": "Keep the module on for \"vote\" crates; if you specifically need a transferable key item, give it with a command in the same site's `commands` field: `crate key giveitem {player} vote 1`."
+    },
+    {
+      "title": "Any admin command rewrites crates.json entirely",
+      "body": "`create`, `delete`, `addreward`, `setkey`, `setanimation`, `setchatname`, `setkeyname` save the config via Gson — the file is overwritten with serialized JSON, and the comments from the shipped template are gone for good. Also: `setanimation` with an unknown value does not error but silently sets `sequential` (which is also the default for a new crate, although the template says `roulette`).",
+      "fix": "Keep your own copy of `crates.json` at hand, and after `setanimation` check the command's reply — it states the value actually applied."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "\"You have no keys\" when opening by command, although a key item is in your hand",
+      "body": "Contrary to the English wiki and the changelog, `/crate open <crate>` does not take key items into account: the command handler checks only the virtual balance and passes `null` instead of the item in hand. A physical key works **only** when right-clicking a block registered with `/crate admin setblock`.",
+      "fix": "Either place a physical block (then key items work as intended) or give virtual keys with `/crate key give`. If a crate is opened only by command, do not give key items for it."
+    },
+    {
+      "title": "Closing the window during a roulette animation before the reel stops eats the key without a reward",
+      "body": "The key is deducted **before** the GUI opens, and the reward is given at the end of the animation. In `roulette` each next step is scheduled from the previous one, and closing the window stops the scheduler — the chain breaks, the finale never comes, `grantReward` is not called (a RejectedExecutionException may appear in the console). In `sequential` all frames are scheduled up front, so the reward is given even if the window is closed early, and `instant` gives it before the window even appears.",
+      "fix": "Warn players not to close the window until the scroll ends; for an impatient audience use `/crate admin setanimation <crate> sequential` or `instant`. To return the key to an affected player: `/crate key give <player> <crate> 1`."
+    },
+    {
+      "title": "A typo in the crate id in votifier.json sends keys nowhere",
+      "body": "The comment in `votifier.json` promises that crediting is \"silently skipped\" without a matching crate, but there is no check in the code: `addKeys` creates a balance record for any identifier string. Keys for a nonexistent `vote_crate` really accumulate in storage, but are shown neither in `/crate keys` nor in the placeholder (both iterate only declared crates) and are never spent.",
+      "fix": "Compare the keys in the `keys` section with the output of `/crate list` — case does not matter, spelling does. Already \"lost\" keys are easier to reissue manually with `/crate key give`."
+    },
+    {
+      "title": "The open history file grows forever and nobody reads it",
+      "body": "Each opening writes a record to the `crate_history` collection (player, crate, reward, time). The mod has no command, web panel page or report that reads it, and on the default JSON backend each record rewrites the whole `neoessentials/store/crate_history.json` file — on an active server that is noticeable disk load and an ever-growing file.",
+      "fix": "Either switch storage to SQLite/MySQL, or periodically delete `neoessentials/store/crate_history.json` on a stopped server — it does not affect how crates work."
+    },
+    {
+      "title": "All crate system messages are in English",
+      "body": "The shipped `ru_ru.json` has no `commands.neoessentials.crate.*` keys at all. At startup missing keys are merged in from `en_us`, so on a server with `localization.language: ru_ru` players see English texts (\"You don't have any keys for ...\") rather than an untranslated key.",
+      "fix": "Translate them directly in your `neoessentials/languages/custom/ru_ru.json` — after the first start the English values are already there; the merge touches only missing keys and does not overwrite your edits."
+    }
+  ]
+}

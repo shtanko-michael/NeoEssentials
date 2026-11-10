@@ -1,0 +1,72 @@
+{
+  "groups": ["Getting started", "Reference", "Guides"],
+  "pages": [
+    {
+      "slug": "",
+      "source": "index.md",
+      "title": "Farmstead RegionGuard",
+      "navTitle": "Overview",
+      "group": "Getting started",
+      "lede": "Region protection for Minecraft 1.21.1: claims, owners, flags and WorldEdit integration.",
+      "keywords": ["RegionGuard", "claim", "region"]
+    },
+    {
+      "slug": "quickstart",
+      "title": "Quick start",
+      "group": "Getting started",
+      "lede": "Installation, permissions and creating your first protected region.",
+      "keywords": ["install RegionGuard", "create a claim", "/rg define"]
+    },
+    {
+      "slug": "commands",
+      "title": "RegionGuard commands",
+      "navTitle": "Commands",
+      "group": "Reference",
+      "lede": "Full /rg syntax: creation, member management, flags and teleportation.",
+      "keywords": ["/rg", "/rg claim", "/rg flag", "/rg info"],
+      "wide": true
+    },
+    {
+      "slug": "flags",
+      "title": "RegionGuard flags",
+      "navTitle": "Flags",
+      "group": "Reference",
+      "lede": "All region flags, default values, priorities and bypass rules.",
+      "keywords": ["pvp deny", "build deny", "entry deny", "interact", "mob-spawning"],
+      "wide": true
+    },
+    {
+      "slug": "permissions",
+      "title": "RegionGuard permissions",
+      "navTitle": "Permissions",
+      "group": "Reference",
+      "lede": "Command nodes, per-flag permissions, admin bypass and claim limits.",
+      "keywords": ["regionguard.command", "regionguard.admin", "regionguard.bypass.pvp", "regionguard.regions", "LuckPerms"],
+      "wide": true
+    },
+    {
+      "slug": "configuration",
+      "title": "RegionGuard configuration",
+      "navTitle": "Configuration",
+      "group": "Reference",
+      "lede": "Server TOML, localization, region storage and compatibility with other mods.",
+      "keywords": ["regionguard-server.toml", "defaultDeniedFlagsOnClaim", "Pixelmon", "WorldEdit"]
+    },
+    {
+      "slug": "regions",
+      "title": "How regions work",
+      "navTitle": "Regions and members",
+      "group": "Guides",
+      "lede": "Bounds, overlaps, owners, members, the global region and data storage.",
+      "keywords": ["__global__", "region owner", "region member", "region priority"]
+    },
+    {
+      "slug": "troubleshooting",
+      "title": "RegionGuard troubleshooting",
+      "navTitle": "Troubleshooting",
+      "group": "Guides",
+      "lede": "Common reasons a claim, flag, permission or integration does not behave as expected.",
+      "keywords": ["RegionGuard not working", "flag not working", "no permission", "WorldEdit selection"]
+    }
+  ]
+}

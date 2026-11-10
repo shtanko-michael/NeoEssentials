@@ -1,0 +1,36 @@
+{
+  "commands": [],
+  "commandDetails": {},
+  "examples": [
+    {
+      "title": "Tell \"port unreachable\" from \"key rejected\"",
+      "goal": "The external panel cannot connect, and both cases look like a timeout.",
+      "commands": [
+        "/dashboard status"
+      ],
+      "result": "From the machine running the panel: `curl http://<ip>:8080/api/ping`. A 200 with `{\"success\":true,\"mod\":\"neoessentials\",\"mode\":\"...\"}` means HTTP is alive — next, check pairing/the API key. Connection refused means a firewall, the bind address, or the dashboard did not start. `/dashboard status` in game shows whether the built-in HTTP server is up."
+    },
+    {
+      "title": "API only, without the built-in UI",
+      "goal": "You run the Laravel NeoEssentials-Dashboard, do not need the built-in page on :8080, and it spams the log about a missing index.html.",
+      "commands": [
+        "/dashboard status"
+      ],
+      "result": "`webDashboard.mode: \"external\"` (the default) registers only `/api/*`. Changing the mode requires a restart. `internal` and `both` also serve the UI bundle at `/` — for that the UI must be packaged into the jar."
+    }
+  ],
+  "edgeCases": [
+    {
+      "title": "mode is read at startup",
+      "body": "Like modules, `webDashboard.mode` does not change on `/neoe reload`. GET `/api/ping` needs no authorization and is registered in every mode — it is the probe for \"is the port alive\".",
+      "fix": "Changed the mode — restart. Diagnose the network with ping, not by logging in to the panel."
+    }
+  ],
+  "knownIssues": [
+    {
+      "title": "On old builds /dashboard start was dead code",
+      "body": "The class existed but was not registered in the dispatcher — the command was \"unknown\". In this branch /dashboard is wired up; if the server runs an ancient jar, status/start will be unknown regardless of the config.",
+      "fix": "Check the mod version. On the current fork the command should appear in /help when the module is enabled."
+    }
+  ]
+}
