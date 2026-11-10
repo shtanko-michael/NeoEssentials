@@ -27,7 +27,7 @@ A new claim does not make players invulnerable: `invincibility` is explicitly wr
 
 ## Additional JSON
 
-`config/RegionGuard/config.json` holds fields kept for compatibility with an early version. Only `enablePixelmonCompat` is actually used, duplicating the server TOML. The fields `createFallbackSelection`, `enableWorldEditBridge` and `localeOverridesDenyMessage` are currently not read by any handler.
+`config/RegionGuard/config.json` holds fields kept for compatibility with an early RegionGuard version (the path is kept for compatibility). Only `enablePixelmonCompat` is actually used, duplicating the server TOML. The fields `createFallbackSelection`, `enableWorldEditBridge` and `localeOverridesDenyMessage` are currently not read by any handler.
 
 ## Localization
 

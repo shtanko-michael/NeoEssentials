@@ -4,22 +4,22 @@
     {
       "slug": "",
       "source": "index.md",
-      "title": "Farmstead RegionGuard",
+      "title": "Farmstead Claims",
       "navTitle": "Overview",
       "group": "Getting started",
       "lede": "Region protection for Minecraft 1.21.1: claims, owners, flags and WorldEdit integration.",
-      "keywords": ["RegionGuard", "claim", "region"]
+      "keywords": ["Farmstead Claims", "RegionGuard", "farmstead_claims", "claim", "region"]
     },
     {
       "slug": "quickstart",
       "title": "Quick start",
       "group": "Getting started",
       "lede": "Installation, permissions and creating your first protected region.",
-      "keywords": ["install RegionGuard", "create a claim", "/rg define"]
+      "keywords": ["install Farmstead Claims", "create a claim", "/rg define"]
     },
     {
       "slug": "commands",
-      "title": "RegionGuard commands",
+      "title": "Farmstead Claims commands",
       "navTitle": "Commands",
       "group": "Reference",
       "lede": "Full /rg syntax: creation, member management, flags and teleportation.",
@@ -28,7 +28,7 @@
     },
     {
       "slug": "flags",
-      "title": "RegionGuard flags",
+      "title": "Farmstead Claims flags",
       "navTitle": "Flags",
       "group": "Reference",
       "lede": "All region flags, default values, priorities and bypass rules.",
@@ -37,7 +37,7 @@
     },
     {
       "slug": "permissions",
-      "title": "RegionGuard permissions",
+      "title": "Farmstead Claims permissions",
       "navTitle": "Permissions",
       "group": "Reference",
       "lede": "Command nodes, per-flag permissions, admin bypass and claim limits.",
@@ -46,7 +46,7 @@
     },
     {
       "slug": "configuration",
-      "title": "RegionGuard configuration",
+      "title": "Farmstead Claims configuration",
       "navTitle": "Configuration",
       "group": "Reference",
       "lede": "Server TOML, localization, region storage and compatibility with other mods.",
@@ -62,11 +62,11 @@
     },
     {
       "slug": "troubleshooting",
-      "title": "RegionGuard troubleshooting",
+      "title": "Farmstead Claims troubleshooting",
       "navTitle": "Troubleshooting",
       "group": "Guides",
       "lede": "Common reasons a claim, flag, permission or integration does not behave as expected.",
-      "keywords": ["RegionGuard not working", "flag not working", "no permission", "WorldEdit selection"]
+      "keywords": ["Farmstead Claims not working", "RegionGuard not working", "flag not working", "no permission", "WorldEdit selection"]
     }
   ]
 }

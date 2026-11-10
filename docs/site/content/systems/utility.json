@@ -107,7 +107,7 @@
   "commandDetails": {
     "bb": {
       "syntax": "/bb <player>",
-      "notes": "Команда RegionGuard, а не NeoEssentials. Нужна базовая нода regionguard.command, а также статус owner или member обычного региона (не __global__) под игроком. Указанный игрок должен быть онлайн и находиться в том же регионе; owner/member этого же региона остаётся на месте, гость немедленно телепортируется на настроенный spawn NeoEssentials (если он установлен) либо на ванильный spawn и получает сообщение о возврате. Warmup и сообщения обычной /spawn не вызываются. В /help описание команды показывается по-русски: «Вернуть гостя текущего привата на спавн»."
+      "notes": "Команда Farmstead Claims (или исходного RegionGuard), а не NeoEssentials. Нужна базовая нода regionguard.command, а также статус owner или member обычного региона (не __global__) под игроком. Указанный игрок должен быть онлайн и находиться в том же регионе; owner/member этого же региона остаётся на месте, гость немедленно телепортируется на настроенный spawn NeoEssentials (если он установлен) либо на ванильный spawn и получает сообщение о возврате. Warmup и сообщения обычной /spawn не вызываются. В /help описание команды показывается по-русски: «Вернуть гостя текущего привата на спавн»."
     },
     "help": {
       "syntax": "/help | /help <page_or_command> | /help <command> <page>",
@@ -511,7 +511,7 @@
     },
     "rg": {
       "syntax": "/rg define <id> | /rg claim <id> | /rg redefine <id> | /rg remove <id> | /rg delete <id> | /rg list | /rg tp <id> | /rg clearowners <id> | /rg clearmembers <id> | /rg info [id] | /rg addowner <id> <player> | /rg addmember <id> <player> | /rg delowner <id> <player> | /rg delmember <id> <player> | /rg flag <id> list | /rg flag <id> <flag> <value> | /rg flag <id> clear <flag> [value]",
-      "notes": "helpCatalogOnly: NeoEssentials не строит Brigadier для /rg. Дерево принадлежит моду «regionguard»; эти 17 строк, а также /bb <player>, попадают в /help только если ModList.isLoaded(\"regionguard\") на старте. В /help каждая ветка /rg получает своё переведённое описание (например, define, list и flag clear), а не общий текст для корня /rg. Без мода /rg и /bb в каталоге нет и NE их не регистрирует. Права и поведение — у RegionGuard, не у узлов neoessentials.rg."
+      "notes": "helpCatalogOnly: NeoEssentials не строит Brigadier для /rg. Дерево принадлежит моду приватов — Farmstead Claims («farmstead_claims») или исходному RegionGuard («regionguard»); эти 17 строк, а также /bb <player>, попадают в /help только если на старте загружен farmstead_claims или regionguard. В /help каждая ветка /rg получает своё переведённое описание (например, define, list и flag clear), а не общий текст для корня /rg. Без мода /rg и /bb в каталоге нет и NE их не регистрирует. Права и поведение — у мода приватов, не у узлов neoessentials.rg."
     }
   },
   "examples": [
@@ -560,13 +560,13 @@
       "result": "Смотрите в блок (луч 20). /antioch ставит TNT с запалом 80 тиков; любой хвост вроде holy дополнительно рассылает две строки Holy Hand Grenade. /kittycannon запускает котёнка, через секунду сущность пропадает и играет взрыв силы 0 (блоки целы). /beezooka 3 — три злые пчелы (лимит 20). Консоль на все три — player_only."
     },
     {
-      "title": "RegionGuard в справке, не в NeoEssentials",
+      "title": "Farmstead Claims в справке, не в NeoEssentials",
       "goal": "Понять, почему /rg то есть в /help, то нет, и кто на самом деле выполняет команду.",
       "commands": [
         "/help rg",
         "/rg list"
       ],
-      "result": "Если мод regionguard загружен, /help rg покажет 17 синтаксисов из каталога (define, claim, flag…). Сам /rg list выполняет RegionGuard: NeoEssentials только вызвал registerCommand(\"rg …\") при старте. Без regionguard этих строк в /help нет, а /rg list либо неизвестная команда, либо дерево другого мода — NeoEssentials его не создаёт."
+      "result": "Если загружен Farmstead Claims (или исходный RegionGuard), /help rg покажет 17 синтаксисов из каталога (define, claim, flag…). Сам /rg list выполняет мод приватов: NeoEssentials только вызвал registerCommand(\"rg …\") при старте. Без мода приватов этих строк в /help нет, а /rg list либо неизвестная команда, либо дерево другого мода — NeoEssentials его не создаёт."
     }
   ],
   "edgeCases": [

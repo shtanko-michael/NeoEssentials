@@ -1,4 +1,8 @@
-RegionGuard is a server-side, WorldGuard-style territory protection mod for **Minecraft 1.21.1** and **NeoForge 21.1.230+**. It stores cuboid regions, manages owners and members, and applies flags to building, PvP, mobs, explosions, weather and Pixelmon.
+Farmstead Claims is Farmstead's own server-side, WorldGuard-style territory protection mod for **Minecraft 1.21.1** and **NeoForge 21.1.230+**. It stores cuboid regions, manages owners and members, and applies flags to building, PvP, mobs, explosions, weather and Pixelmon.
+
+## A replacement for RegionGuard
+
+Farmstead Claims (modId `farmstead_claims`, MIT licence, made by Farmstead) is a drop-in replacement for the RegionGuard mod the server ran before. The `/rg` and `/bb` commands, the `regionguard.*` permission nodes, flags, texts, the `config/regionguard-server.toml` config and the `<world>/regionguard/regions/` data folder are unchanged, so existing claims load without migration. To switch, remove `regionguard-*.jar` from `mods` and drop in `farmstead_claims-*.jar`. Never install both: they register the same `/rg` and write the same files.
 
 ## What the mod does
 
@@ -13,7 +17,7 @@ RegionGuard is a server-side, WorldGuard-style territory protection mod for **Mi
 
 ## Getting started
 
-1. Install RegionGuard and WorldEdit.
+1. Install Farmstead Claims and WorldEdit.
 2. Grant the player the base and command permissions.
 3. Select an area with `//pos1` and `//pos2`.
 4. Run `/rg define home`.
@@ -29,6 +33,6 @@ Every dimension has a system region `__global__`. It covers the whole world at t
 
 ## Compatibility
 
-WorldEdit is used to select areas. NeoEssentials connects RegionGuard permissions to LuckPerms and lets you set the claim limit through a meta key. Pixelmon is optional: its integration turns on only when the mod is present and the matching setting is enabled.
+WorldEdit is used to select areas. NeoEssentials connects Farmstead Claims permissions to LuckPerms and lets you set the claim limit through a meta key. Pixelmon is optional: its integration turns on only when the mod is present and the matching setting is enabled.
 
-The RegionGuard source code lives in the [Farmstead monorepo](https://github.com/shtanko-michael/minecraft-api/tree/main/game/regionguard-mod).
+The Farmstead Claims source code lives in the [Farmstead monorepo](https://github.com/shtanko-michael/minecraft-api/tree/main/game/claims-mod). NeoEssentials works with both Farmstead Claims and the original RegionGuard: it checks for either mod.

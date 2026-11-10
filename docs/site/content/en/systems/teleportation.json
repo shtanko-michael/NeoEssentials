@@ -77,7 +77,7 @@
     },
     "sethome": {
       "syntax": "/sethome <name> | /sethome confirm | /sethome deny",
-      "notes": "There is no bare /sethome; the name is required. confirm and deny are sibling literals of the root; the name lives in a pending map, not on the command line. Overwriting an existing home always asks for confirmation (this is not the requireConfirmationForDelete key). The createhome alias — only without a conflicting mod. Name: ^[a-zA-Z0-9_-]+$, up to 20 characters, case as typed. With the RegionGuard flag teleport-escape deny, a home cannot be created in such a zone."
+      "notes": "There is no bare /sethome; the name is required. confirm and deny are sibling literals of the root; the name lives in a pending map, not on the command line. Overwriting an existing home always asks for confirmation (this is not the requireConfirmationForDelete key). The createhome alias — only without a conflicting mod. Name: ^[a-zA-Z0-9_-]+$, up to 20 characters, case as typed. With the Farmstead Claims (or original RegionGuard) flag teleport-escape deny, a home cannot be created in such a zone."
     },
     "delhome": {
       "syntax": "/delhome <name> | /delhome confirm | /delhome deny",
@@ -105,7 +105,7 @@
     },
     "tpa": {
       "syntax": "/tpa <player>",
-      "notes": "player — EntityArgument.player(), online only. Rejects yourself. A target with tptoggle off is unreachable unless the sender has neoessentials.teleport.tpo. For a target with tpauto no request is created — the teleport happens immediately. After /tpaccept the request also teleports immediately, exactly to the target's current position: no warmup and no search for a nearby \"safe\" point. If the landing falls into RegionGuard with teleport-escape deny, the teleport is cancelled. One outgoing request at a time (sentRequests)."
+      "notes": "player — EntityArgument.player(), online only. Rejects yourself. A target with tptoggle off is unreachable unless the sender has neoessentials.teleport.tpo. For a target with tpauto no request is created — the teleport happens immediately. After /tpaccept the request also teleports immediately, exactly to the target's current position: no warmup and no search for a nearby \"safe\" point. If the landing falls into a Farmstead Claims (or original RegionGuard) region with teleport-escape deny, the teleport is cancelled. One outgoing request at a time (sentRequests)."
     },
     "tpahere": {
       "syntax": "/tpahere <player>",
@@ -157,7 +157,7 @@
     },
     "back": {
       "syntax": "/back",
-      "notes": "The point is recorded before home/warp/spawn/tpa and before /tp|/tphere|/tpall|/tppos|/top|/jump|/jumpto. /tpo and /tpoffline from ServerAdminCommands do not record /back. Death — backSettings.enableDeathBack; the point is saved without a chat notification. Its own warmup: backSettings.teleportDelay, not generalSettings. enableBackSafety is false by default. A return into RegionGuard with teleport-escape deny is cancelled."
+      "notes": "The point is recorded before home/warp/spawn/tpa and before /tp|/tphere|/tpall|/tppos|/top|/jump|/jumpto. /tpo and /tpoffline from ServerAdminCommands do not record /back. Death — backSettings.enableDeathBack; the point is saved without a chat notification. Its own warmup: backSettings.teleportDelay, not generalSettings. enableBackSafety is false by default. A return into a Farmstead Claims (or original RegionGuard) region with teleport-escape deny is cancelled."
     },
     "top": {
       "syntax": "/top",

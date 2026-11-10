@@ -107,7 +107,7 @@
   "commandDetails": {
     "bb": {
       "syntax": "/bb <player>",
-      "notes": "A RegionGuard command, not a NeoEssentials one. Requires the base node regionguard.command plus owner or member status of a regular region (not __global__) under the player. The named player must be online and in the same region; an owner/member of that region stays put, while a guest is immediately teleported to the configured NeoEssentials spawn (if set) or the vanilla spawn and gets a message about being sent back. The warmup and messages of the regular /spawn are not used. In /help the command description is shown in Russian (\"Send a guest of the current claim back to spawn\")."
+      "notes": "A Farmstead Claims (or original RegionGuard) command, not a NeoEssentials one. Requires the base node regionguard.command plus owner or member status of a regular region (not __global__) under the player. The named player must be online and in the same region; an owner/member of that region stays put, while a guest is immediately teleported to the configured NeoEssentials spawn (if set) or the vanilla spawn and gets a message about being sent back. The warmup and messages of the regular /spawn are not used. In /help the command description is shown in Russian (\"Send a guest of the current claim back to spawn\")."
     },
     "help": {
       "syntax": "/help | /help <page_or_command> | /help <command> <page>",
@@ -511,7 +511,7 @@
     },
     "rg": {
       "syntax": "/rg define <id> | /rg claim <id> | /rg redefine <id> | /rg remove <id> | /rg delete <id> | /rg list | /rg tp <id> | /rg clearowners <id> | /rg clearmembers <id> | /rg info [id] | /rg addowner <id> <player> | /rg addmember <id> <player> | /rg delowner <id> <player> | /rg delmember <id> <player> | /rg flag <id> list | /rg flag <id> <flag> <value> | /rg flag <id> clear <flag> [value]",
-      "notes": "helpCatalogOnly: NeoEssentials does not build Brigadier for /rg. The tree belongs to the \"regionguard\" mod; these 17 lines, as well as /bb <player>, appear in /help only if ModList.isLoaded(\"regionguard\") at startup. In /help each /rg branch gets its own translated description (for example define, list and flag clear), not a shared text for the /rg root. Without the mod, /rg and /bb are not in the catalog and NE does not register them. Permissions and behaviour belong to RegionGuard, not to neoessentials.rg nodes."
+      "notes": "helpCatalogOnly: NeoEssentials does not build Brigadier for /rg. The tree belongs to the claims mod: Farmstead Claims (\"farmstead_claims\") or the original RegionGuard (\"regionguard\"); these 17 lines, as well as /bb <player>, appear in /help only if farmstead_claims or regionguard is loaded at startup. In /help each /rg branch gets its own translated description (for example define, list and flag clear), not a shared text for the /rg root. Without the mod, /rg and /bb are not in the catalog and NE does not register them. Permissions and behaviour belong to the claims mod, not to neoessentials.rg nodes."
     }
   },
   "examples": [
@@ -560,13 +560,13 @@
       "result": "Look at a block (20-block ray). /antioch places TNT with an 80-tick fuse; any tail like holy additionally broadcasts two Holy Hand Grenade lines. /kittycannon launches a kitten; a second later the entity vanishes with a power-0 explosion (blocks are intact). /beezooka 3 — three angry bees (limit 20). The console gets player_only for all three."
     },
     {
-      "title": "RegionGuard in help, not in NeoEssentials",
+      "title": "Farmstead Claims in help, not in NeoEssentials",
       "goal": "Understand why /rg is sometimes in /help and sometimes not, and who actually runs the command.",
       "commands": [
         "/help rg",
         "/rg list"
       ],
-      "result": "If the regionguard mod is loaded, /help rg shows 17 syntaxes from the catalog (define, claim, flag…). /rg list itself is executed by RegionGuard: NeoEssentials only called registerCommand(\"rg …\") at startup. Without regionguard these lines are not in /help, and /rg list is either an unknown command or another mod's tree — NeoEssentials does not create it."
+      "result": "If Farmstead Claims (or the original RegionGuard) is loaded, /help rg shows 17 syntaxes from the catalog (define, claim, flag…). /rg list itself is executed by the claims mod: NeoEssentials only called registerCommand(\"rg …\") at startup. Without a claims mod these lines are not in /help, and /rg list is either an unknown command or another mod's tree — NeoEssentials does not create it."
     }
   ],
   "edgeCases": [

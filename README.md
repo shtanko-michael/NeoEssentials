@@ -16,7 +16,7 @@
 - **Staff tools** — staff chat, admin notices, a moderation chat log, a staff compass teleport.
 - **Tablist** — per-player name colour from a LuckPerms meta key, rank colours in `/list`, a row anchored under another player's row.
 - **Quality of life** — player-name tab completion in every command that takes a player, `/repair all`, fly and god mode survive relogs, mobs ignore god-mode players, configurable join and quit announcements.
-- **Optional region integration** — when the RegionGuard mod is installed, `/home`, `/tpa` and `/back` refuse to land a player in a region that forbids teleporting in.
+- **Optional region integration** — when the Farmstead Claims mod (or the original RegionGuard) is installed, `/home`, `/tpa` and `/back` refuse to land a player in a region that forbids teleporting in.
 - **Fixes** — immediate TPA acceptance, jail durations, mute message line breaks, fly speed, stale nicknames after a rename, config-split data loss, vanilla `/help` hijacking `/help <page>`, command-name case handling, permission details leaking in denial messages.
 - **One shaded jar** — bundled libraries are relocated, so the mod cannot clash with another mod's copy of HikariCP, SnakeYAML or Java-WebSocket.
 - **A generated reference site** — command, permission and config tables are rebuilt from the source on every push, so they never drift from the code.

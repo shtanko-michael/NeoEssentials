@@ -45,7 +45,7 @@ OP уровня 2 может войти в любой регион, строит
 
 ## Доступ модератора без OP
 
-`regionguard.admin.access` даёт такой же доступ к действиям игрока внутри любого привата, включая обход `pvp deny`, но не открывает vanilla-команды и не отключает правила среды. Для управления чужими регионами выдаются отдельные ноды: `regionguard.admin.members`, `regionguard.admin.flags`, `regionguard.admin.remove` и `regionguard.admin.redefine`. Полный перечень и готовая команда LuckPerms находятся в разделе «Права RegionGuard».
+`regionguard.admin.access` даёт такой же доступ к действиям игрока внутри любого привата, включая обход `pvp deny`, но не открывает vanilla-команды и не отключает правила среды. Для управления чужими регионами выдаются отдельные ноды: `regionguard.admin.members`, `regionguard.admin.flags`, `regionguard.admin.remove` и `regionguard.admin.redefine`. Полный перечень и готовая команда LuckPerms находятся в разделе «Права Farmstead Claims».
 
 ## Переопределение региона
 

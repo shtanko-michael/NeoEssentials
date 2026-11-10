@@ -6,7 +6,7 @@
 - WorldEdit for creating and redefining regions;
 - optional: NeoEssentials and LuckPerms to grant permissions without OP.
 
-Put the RegionGuard JAR into the server's `mods` folder and restart the server. On first start the mod creates its config, language files and a global region for every loaded dimension.
+Put `farmstead_claims-<version>.jar` into the server's `mods` folder (if `regionguard-*.jar` is there, delete it — the two mods are never installed together) and restart the server. On first start the mod creates its config, language files and a global region for every loaded dimension.
 
 ## Permissions for a regular player
 

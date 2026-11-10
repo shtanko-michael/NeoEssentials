@@ -19,7 +19,8 @@ Sources
   docs/site/content/*.md ............... this fork's added guides / pitfalls / known issues
   docs/site/content/systems/*.json ..... verified syntax + examples per command
   docs/site/content/_meta.json ......... system taxonomy and navigation
-  docs/site/content/regionguard/ ....... curated RegionGuard reference pages
+  docs/site/content/claims/ ............ curated Farmstead Claims reference pages
+                                         (old regionguard/** URLs get redirect stubs)
 
 Usage:  python docs/site/generate.py [--out docs/site/_site]
 """
@@ -40,7 +41,7 @@ CONFIG_DIR = os.path.join(ROOT, 'src', 'main', 'resources', 'data', 'config', 'n
 LANG_DIR = os.path.join(ROOT, 'src', 'main', 'resources', 'data', 'lang')
 UPSTREAM_WIKI = os.path.join(ROOT, 'docs', 'Wiki')
 CONTENT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'content')
-REGIONGUARD_CONTENT_DIR = os.path.join(CONTENT_DIR, 'regionguard')
+CLAIMS_CONTENT_DIR = os.path.join(CONTENT_DIR, 'claims')
 ASSETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets')
 PUBLIC_SITE = 'https://shtanko-michael.github.io/NeoEssentials'
 
@@ -603,19 +604,19 @@ def page(rel, title, subtitle, body, toc=None, active='', wide=False, extra_head
             toc_html = ('<details class="toc"><summary class="toc-title">%s</summary>'
                         '<ul>%s</ul></details>' % (t('on_this_page'), items))
 
-    is_regionguard = product == 'regionguard'
-    product_name = 'RegionGuard' if is_regionguard else 'NeoEssentials'
-    product_home = 'regionguard/index.html' if is_regionguard else 'index.html'
+    is_claims = product == 'claims'
+    product_name = 'Claims' if is_claims else 'NeoEssentials'
+    product_home = 'claims/index.html' if is_claims else 'index.html'
     site_name = 'Farmstead ' + product_name
     doc_title = title if title == site_name else '%s · %s' % (title, site_name)
 
     product_switch = (
         '<nav class="product-switch" aria-label="%s">'
         '<a href="%sindex.html"%s>NeoEssentials</a>'
-        '<a href="%sregionguard/index.html"%s>RegionGuard</a>'
+        '<a href="%sclaims/index.html"%s>Farmstead Claims</a>'
         '</nav>' % (
-            t('product_switch'), up, '' if is_regionguard else ' class="on" aria-current="page"',
-            up, ' class="on" aria-current="page"' if is_regionguard else ''))
+            t('product_switch'), up, '' if is_claims else ' class="on" aria-current="page"',
+            up, ' class="on" aria-current="page"' if is_claims else ''))
 
     return """<!doctype html>
 <html lang="{lang}" data-base="{up}" data-alt="{alt}">
@@ -687,7 +688,7 @@ def page(rel, title, subtitle, body, toc=None, active='', wide=False, extra_head
            t_sections=t('sections'), t_footer=t('footer'), t_footer_server=t('footer_server'),
            footer_tail=(t('footer_upstream') +
                         '<a href="https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials">'
-                        'ZeroG NeoEssentials</a>.' if not is_regionguard else ''))
+                        'ZeroG NeoEssentials</a>.' if not is_claims else ''))
 
 
 ALT_HREF = '__ALT_HREF__'  # the same page in the other language; resolved per file in write()
@@ -702,6 +703,18 @@ EARLY_LANG_JS = (
     ".toLowerCase();s=/^(ru|uk|be|kk)/.test(n)?'ru':'en';}"
     "if(s!==l){location.replace(d.getAttribute('data-alt')+location.hash);}}catch(e){}})();"
 )
+
+
+def redirect_page(target_rel, href, title):
+    """A stub kept at an old URL that sends the reader to the new home of that page."""
+    canonical = PUBLIC_SITE + ('/en/' if LANG == 'en' else '/') + target_rel.replace('index.html', '')
+    return (
+        '<!doctype html>\n<html lang="%s">\n<head>\n<meta charset="utf-8">\n'
+        '<title>%s</title>\n<meta name="robots" content="noindex">\n'
+        '<link rel="canonical" href="%s">\n<meta http-equiv="refresh" content="0; url=%s">\n'
+        '<script>location.replace(%s + location.hash)</script>\n</head>\n'
+        '<body><p><a href="%s">%s</a></p></body>\n</html>\n'
+        % (LANG, e(title), e(canonical), e(href), json.dumps(href), e(href), e(title)))
 
 
 def write(out_dir, rel_path, content):
@@ -1164,11 +1177,13 @@ def build(out_dir, base, wiki_out=None, lang='ru'):
           page(1, t('ts_title'), t('ts_lede'),
                b, toc, active='troubleshooting'))
 
-    # ---- RegionGuard -------------------------------------------------------
-    # RegionGuard is maintained in the parent Farmstead monorepo, while this site is built from
-    # the standalone NeoEssentials repository on GitHub Actions. Keep its curated documentation
-    # here so Pages builds are self-contained and do not depend on a sibling checkout.
-    rg_meta = read_content_json_file('regionguard/_meta.json', {}) or {}
+    # ---- Farmstead Claims --------------------------------------------------
+    # Farmstead Claims (game/claims-mod, the drop-in replacement for RegionGuard) is maintained in
+    # the parent Farmstead monorepo, while this site is built from the standalone NeoEssentials
+    # repository on GitHub Actions. Keep its curated documentation here so Pages builds are
+    # self-contained and do not depend on a sibling checkout. The section used to live at
+    # regionguard/; every old page gets a redirect stub to its claims/ twin.
+    rg_meta = read_content_json_file('claims/_meta.json', {}) or {}
     rg_pages = rg_meta.get('pages', [])
     rg_groups = []
     for group_name in rg_meta.get('groups', []):
@@ -1180,7 +1195,7 @@ def build(out_dir, base, wiki_out=None, lang='ru'):
             items.append({
                 'id': 'rg-' + (slug or 'index'),
                 'title': item.get('navTitle') or item['title'],
-                'href': 'regionguard/%s' % (('%s/index.html' % slug) if slug else 'index.html'),
+                'href': 'claims/%s' % (('%s/index.html' % slug) if slug else 'index.html'),
             })
         if items:
             rg_groups.append({'title': group_name, 'items': items})
@@ -1188,22 +1203,24 @@ def build(out_dir, base, wiki_out=None, lang='ru'):
     for item in rg_pages:
         slug = item.get('slug', '')
         source = item.get('source') or ((slug or 'index') + '.md')
-        source_path = content_path('regionguard/' + source)
+        source_path = content_path('claims/' + source)
         if not os.path.exists(source_path):
-            warn('RegionGuard page "%s" points at missing content %s' % (slug or 'index', source))
+            warn('Farmstead Claims page "%s" points at missing content %s' % (slug or 'index', source))
             continue
         body, toc = add_heading_ids(md_to_html(read(source_path)))
-        out_path = 'regionguard/%s' % (('%s/index.html' % slug) if slug else 'index.html')
+        out_path = 'claims/%s' % (('%s/index.html' % slug) if slug else 'index.html')
         rel = 2 if slug else 1
+        write(out_dir, 'regionguard/%s' % (('%s/index.html' % slug) if slug else 'index.html'),
+              redirect_page(out_path, '../' * rel + out_path, item['title']))
         write(out_dir, out_path,
               page(rel, item['title'], item.get('lede', ''), body, toc,
                    active='rg-' + (slug or 'index'), wide=item.get('wide', False),
-                   product='regionguard', nav=rg_groups))
+                   product='claims', nav=rg_groups))
         search.append({'t': item['title'], 'd': item.get('lede', ''), 'u': out_path,
-                       'k': 'RegionGuard'})
+                       'k': 'Claims'})
         for keyword in item.get('keywords', []):
             search.append({'t': keyword, 'd': item.get('lede', ''), 'u': out_path,
-                           'k': 'RegionGuard'})
+                           'k': 'Claims'})
 
     # ---- assets & search ---------------------------------------------------
     os.makedirs(os.path.join(out_dir, 'assets'), exist_ok=True)
@@ -1269,10 +1286,10 @@ def write_github_wiki(out_dir, cat):
     ]
     updates = [
         _wiki_link('Защита платных зон', 'systems/teleportation/',
-                   'если в RegionGuard у региона стоит `teleport-escape deny`, NeoEssentials не создаёт там `/sethome`, не выполняет TPA с посадкой в зоне и не даёт `/back` вернуться в неё. Настройка флага доступна только OP или с `regionguard.admin.flag.teleport-escape`.'),
+                   'если в Farmstead Claims (или исходном RegionGuard) у региона стоит `teleport-escape deny`, NeoEssentials не создаёт там `/sethome`, не выполняет TPA с посадкой в зоне и не даёт `/back` вернуться в неё. Настройка флага доступна только OP или с `regionguard.admin.flag.teleport-escape`.'),
         _wiki_link('Команды без учёта регистра', 'systems/utility/',
                    'корневые команды NeoEssentials и их алиасы можно вводить как /HOME, /Home или /home; аргументы и подкоманды не меняются.'),
-        _wiki_link('Русская справка RegionGuard', 'systems/utility/',
+        _wiki_link('Русская справка Farmstead Claims', 'systems/utility/',
                    'в /help каждая из 17 веток /rg показывает своё русское описание, включая claim, list и flag clear.'),
         _wiki_link('Личные сообщения и TAB', 'quickstart/',
                    '/me — алиас личного сообщения; ники в базовых командах подсказываются по Tab.'),

@@ -1,4 +1,8 @@
-RegionGuard — серверный мод защиты территорий в духе WorldGuard для **Minecraft 1.21.1** и **NeoForge 21.1.230+**. Он хранит кубоидные регионы, управляет владельцами и участниками и применяет флаги к строительству, PvP, мобам, взрывам, погоде и Pixelmon.
+Farmstead Claims — собственный серверный мод Farmstead для защиты территорий в духе WorldGuard для **Minecraft 1.21.1** и **NeoForge 21.1.230+**. Он хранит кубоидные регионы, управляет владельцами и участниками и применяет флаги к строительству, PvP, мобам, взрывам, погоде и Pixelmon.
+
+## Замена RegionGuard
+
+Farmstead Claims (modId `farmstead_claims`, лицензия MIT, автор Farmstead) — прямая замена мода RegionGuard, который раньше стоял на сервере. Команды `/rg` и `/bb`, узлы прав `regionguard.*`, флаги, тексты, конфиг `config/regionguard-server.toml` и папка с приватами `<мир>/regionguard/regions/` остались прежними, поэтому существующие приваты читаются без миграции. Чтобы перейти, уберите `regionguard-*.jar` из `mods` и положите `farmstead_claims-*.jar`. Ставить оба мода одновременно нельзя: они регистрируют один и тот же `/rg` и пишут одни и те же файлы.
 
 ## Что умеет мод
 
@@ -13,7 +17,7 @@ RegionGuard — серверный мод защиты территорий в �
 
 ## С чего начать
 
-1. Установите RegionGuard и WorldEdit.
+1. Установите Farmstead Claims и WorldEdit.
 2. Выдайте игроку базовые и командные права.
 3. Выделите территорию через `//pos1` и `//pos2`.
 4. Выполните `/rg define home`.
@@ -29,6 +33,6 @@ RegionGuard — серверный мод защиты территорий в �
 
 ## Совместимость
 
-WorldEdit используется для выделения территории. NeoEssentials подключает права RegionGuard к LuckPerms и позволяет задавать лимит приватов через meta-ключ. Pixelmon необязателен: его интеграция включается только при наличии мода и соответствующей настройки.
+WorldEdit используется для выделения территории. NeoEssentials подключает права Farmstead Claims к LuckPerms и позволяет задавать лимит приватов через meta-ключ. Pixelmon необязателен: его интеграция включается только при наличии мода и соответствующей настройки.
 
-Исходный код RegionGuard хранится в [монорепозитории Farmstead](https://github.com/shtanko-michael/minecraft-api/tree/main/game/regionguard-mod).
+Исходный код Farmstead Claims хранится в [монорепозитории Farmstead](https://github.com/shtanko-michael/minecraft-api/tree/main/game/claims-mod). NeoEssentials работает и с Farmstead Claims, и с исходным RegionGuard: он проверяет оба мода.

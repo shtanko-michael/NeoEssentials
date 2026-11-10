@@ -85,7 +85,7 @@ A member bypasses build protection but gets no management rights. The last owner
 
 ## Moderation without `/op`
 
-The nodes in this section work only in RegionGuard: they do not grant vanilla operator commands and do not give access to other mods. Each node opens its own `/rg` branch, so `regionguard.command` and the regular command node are not needed alongside it.
+The nodes in this section work only in Farmstead Claims: they do not grant vanilla operator commands and do not give access to other mods. Each node opens its own `/rg` branch, so `regionguard.command` and the regular command node are not needed alongside it.
 
 | Node | Access to other players' claims |
 |---|---|

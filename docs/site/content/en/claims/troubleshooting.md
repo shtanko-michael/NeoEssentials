@@ -1,12 +1,12 @@
 ## `/rg define` does not see the selection
 
-Install a compatible WorldEdit build and repeat `//pos1` and `//pos2` in the same dimension. The internal fallback store exists, but the current version of RegionGuard has no command or tool that writes points into it.
+Install a compatible WorldEdit build and repeat `//pos1` and `//pos2` in the same dimension. The internal fallback store exists, but the current version of Farmstead Claims has no command or tool that writes points into it.
 
 ## The player has the subcommand permission, but the command is unavailable
 
 Check the base node `regionguard.command`. For example, `regionguard.command.list` alone is not enough — both nodes are needed.
 
-If you use LuckPerms, NeoEssentials must be installed: its PermissionAPI is what connects RegionGuard to the external adapter. Without the bridge a non-OP player is denied.
+If you use LuckPerms, NeoEssentials must be installed: its PermissionAPI is what connects Farmstead Claims to the external adapter. Without the bridge a non-OP player is denied.
 
 The `regionguard.admin.*` nodes work differently: they do not need a separate base `regionguard.command`. Check that the node granted is exactly the one for the operation you need, for example `regionguard.admin.members` for region membership or `regionguard.admin.access` for entry and building.
 
@@ -44,13 +44,13 @@ Sophisticated Backpacks also has its own server setting `allowOpeningOtherPlayer
 
 ## `item-drop deny` shows a message, but the item does not come back
 
-Update RegionGuard to the current JAR and restart the server. The flag cancels the drop, then returns the stack on the next server tick; test in survival, not creative. In creative the item is not consumed when dropped in the first place, so that mode is no good for testing the return.
+Update Farmstead Claims to the current JAR and restart the server. The flag cancels the drop, then returns the stack on the next server tick; test in survival, not creative. In creative the item is not consumed when dropped in the first place, so that mode is no good for testing the return.
 
 ## `pvp deny` blocks only one side
 
 In the current version this is considered a bug. `pvp deny` is checked at the victim's position and must symmetrically block attacks from the owner, members and guests, including a player's arrows.
 
-If one player still deals damage, check their OP level, `regionguard.bypass.pvp` and `regionguard.admin.access`. Also make sure the server actually loaded the new JAR and there is no second copy of RegionGuard in `mods`.
+If one player still deals damage, check their OP level, `regionguard.bypass.pvp` and `regionguard.admin.access`. Also make sure the server actually loaded the new JAR and there is no old `regionguard-*.jar` in `mods`.
 
 ## A flag has no effect where regions overlap
 

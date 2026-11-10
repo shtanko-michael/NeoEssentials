@@ -4,22 +4,22 @@
     {
       "slug": "",
       "source": "index.md",
-      "title": "Farmstead RegionGuard",
+      "title": "Farmstead Claims",
       "navTitle": "Обзор",
       "group": "Начало",
       "lede": "Защита регионов для Minecraft 1.21.1: приваты, владельцы, флаги и интеграция с WorldEdit.",
-      "keywords": ["RegionGuard", "приват", "регион"]
+      "keywords": ["Farmstead Claims", "RegionGuard", "farmstead_claims", "приват", "регион"]
     },
     {
       "slug": "quickstart",
       "title": "Быстрый старт",
       "group": "Начало",
       "lede": "Установка, права и создание первого защищённого региона.",
-      "keywords": ["установка RegionGuard", "создать приват", "/rg define"]
+      "keywords": ["установка Farmstead Claims", "создать приват", "/rg define"]
     },
     {
       "slug": "commands",
-      "title": "Команды RegionGuard",
+      "title": "Команды Farmstead Claims",
       "navTitle": "Команды",
       "group": "Справочник",
       "lede": "Полный синтаксис /rg: создание, управление участниками, флаги и телепортация.",
@@ -28,7 +28,7 @@
     },
     {
       "slug": "flags",
-      "title": "Флаги RegionGuard",
+      "title": "Флаги Farmstead Claims",
       "navTitle": "Флаги",
       "group": "Справочник",
       "lede": "Все флаги региона, значения по умолчанию, приоритеты и правила обхода.",
@@ -37,7 +37,7 @@
     },
     {
       "slug": "permissions",
-      "title": "Права RegionGuard",
+      "title": "Права Farmstead Claims",
       "navTitle": "Права",
       "group": "Справочник",
       "lede": "Командные ноды, права на отдельные флаги, административный bypass и лимиты приватов.",
@@ -46,7 +46,7 @@
     },
     {
       "slug": "configuration",
-      "title": "Конфигурация RegionGuard",
+      "title": "Конфигурация Farmstead Claims",
       "navTitle": "Конфигурация",
       "group": "Справочник",
       "lede": "Серверный TOML, локализация, хранение регионов и совместимость с другими модами.",
@@ -62,11 +62,11 @@
     },
     {
       "slug": "troubleshooting",
-      "title": "Решение проблем RegionGuard",
+      "title": "Решение проблем Farmstead Claims",
       "navTitle": "Решение проблем",
       "group": "Руководства",
       "lede": "Частые причины, по которым приват, флаг, право или интеграция работает не так, как ожидается.",
-      "keywords": ["RegionGuard не работает", "флаг не работает", "нет прав", "WorldEdit selection"]
+      "keywords": ["Farmstead Claims не работает", "RegionGuard не работает", "флаг не работает", "нет прав", "WorldEdit selection"]
     }
   ]
 }

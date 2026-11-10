@@ -27,7 +27,7 @@ defaultAllowedFlagsOnClaim = ["use", "entry", "pvp", "mob-damage", "mob-spawning
 
 ## Дополнительный JSON
 
-`config/RegionGuard/config.json` содержит совместимые с ранней версией поля. Реально используется `enablePixelmonCompat`, дублирующий серверный TOML. Поля `createFallbackSelection`, `enableWorldEditBridge` и `localeOverridesDenyMessage` сейчас не читаются обработчиками.
+`config/RegionGuard/config.json` содержит поля, совместимые с ранней версией RegionGuard (путь сохранён ради совместимости). Реально используется `enablePixelmonCompat`, дублирующий серверный TOML. Поля `createFallbackSelection`, `enableWorldEditBridge` и `localeOverridesDenyMessage` сейчас не читаются обработчиками.
 
 ## Локализация
 

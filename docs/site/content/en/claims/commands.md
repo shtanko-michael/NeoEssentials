@@ -2,7 +2,7 @@ All commands start with `/rg`. A non-operator usually needs the base node `regio
 
 ## Sending a guest back to spawn
 
-`/bb <player>` is available to an owner or member of the claim they are currently standing in, and to a moderator with `regionguard.admin.access`. The named online player must also be in the same claim. If they are neither an owner nor a member of that claim, RegionGuard immediately sends them to the configured server spawn and shows them the message "You were removed from the region." The usual warmup and `/spawn` messages are not used. For an owner or member of the claim the command does nothing. In the NeoEssentials `/help` catalogue it is listed with the description "Return a guest of the current claim to spawn".
+`/bb <player>` is available to an owner or member of the claim they are currently standing in, and to a moderator with `regionguard.admin.access`. The named online player must also be in the same claim. If they are neither an owner nor a member of that claim, Farmstead Claims immediately sends them to the configured server spawn and shows them the message "You were removed from the region." The usual warmup and `/spawn` messages are not used. For an owner or member of the claim the command does nothing. In the NeoEssentials `/help` catalogue it is listed with the description "Return a guest of the current claim to spawn".
 
 ## Managing regions
 
@@ -27,7 +27,7 @@ For `/rg info <id>` and `/rg size <id>`, a regular player can name only a region
 
 `/rg s [id]` restores the claim's saved bounds as a cuboid WorldEdit selection. It can be used by an owner, a member, or a moderator with `regionguard.admin.info`; for another player's region you must give the `id` explicitly. The command replaces the current WorldEdit selection, and `//sel` clears the grid.
 
-Right-clicking a block with a plain stick shows brief info about the claim at the clicked point. An owner sees that the region belongs to them. A moderator with `regionguard.admin.info` sees the region ID, owners and members. RegionGuard does not reveal this information to outsiders.
+Right-clicking a block with a plain stick shows brief info about the claim at the clicked point. An owner sees that the region belongs to them. A moderator with `regionguard.admin.info` sees the region ID, owners and members. Farmstead Claims does not reveal this information to outsiders.
 
 ## Owners and members
 

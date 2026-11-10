@@ -45,7 +45,7 @@ OP level 2 can enter any region, build, interact with blocks and containers, dro
 
 ## Moderator access without OP
 
-`regionguard.admin.access` gives the same access to player actions inside any claim, including bypassing `pvp deny`, but does not open vanilla commands and does not disable environment rules. To manage other players' regions, separate nodes are granted: `regionguard.admin.members`, `regionguard.admin.flags`, `regionguard.admin.remove` and `regionguard.admin.redefine`. The full list and a ready-made LuckPerms command are in "RegionGuard permissions".
+`regionguard.admin.access` gives the same access to player actions inside any claim, including bypassing `pvp deny`, but does not open vanilla commands and does not disable environment rules. To manage other players' regions, separate nodes are granted: `regionguard.admin.members`, `regionguard.admin.flags`, `regionguard.admin.remove` and `regionguard.admin.redefine`. The full list and a ready-made LuckPerms command are in "Farmstead Claims permissions".
 
 ## Redefining a region
 
