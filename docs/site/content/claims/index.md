@@ -35,4 +35,4 @@ Farmstead Claims (modId `farmstead_claims`, лицензия MIT, автор Far
 
 WorldEdit используется для выделения территории. NeoEssentials подключает права Farmstead Claims к LuckPerms и позволяет задавать лимит приватов через meta-ключ. Pixelmon необязателен: его интеграция включается только при наличии мода и соответствующей настройки.
 
-Исходный код Farmstead Claims хранится в [монорепозитории Farmstead](https://github.com/shtanko-michael/minecraft-api/tree/main/game/claims-mod). NeoEssentials работает и с Farmstead Claims, и с исходным RegionGuard: он проверяет оба мода.
+Исходный код и релизы Farmstead Claims — в репозитории [shtanko-michael/farmstead-claims](https://github.com/shtanko-michael/farmstead-claims) (MIT); скачать последнюю версию: [farmstead-claims-neoforge-1.21.1.jar](https://github.com/shtanko-michael/farmstead-claims/releases/latest/download/farmstead-claims-neoforge-1.21.1.jar). NeoEssentials работает и с Farmstead Claims, и с исходным RegionGuard: он проверяет оба мода.

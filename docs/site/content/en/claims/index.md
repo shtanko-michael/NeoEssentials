@@ -35,4 +35,4 @@ Every dimension has a system region `__global__`. It covers the whole world at t
 
 WorldEdit is used to select areas. NeoEssentials connects Farmstead Claims permissions to LuckPerms and lets you set the claim limit through a meta key. Pixelmon is optional: its integration turns on only when the mod is present and the matching setting is enabled.
 
-The Farmstead Claims source code lives in the [Farmstead monorepo](https://github.com/shtanko-michael/minecraft-api/tree/main/game/claims-mod). NeoEssentials works with both Farmstead Claims and the original RegionGuard: it checks for either mod.
+Farmstead Claims source code and releases live in [shtanko-michael/farmstead-claims](https://github.com/shtanko-michael/farmstead-claims) (MIT); download the latest version: [farmstead-claims-neoforge-1.21.1.jar](https://github.com/shtanko-michael/farmstead-claims/releases/latest/download/farmstead-claims-neoforge-1.21.1.jar). NeoEssentials works with both Farmstead Claims and the original RegionGuard: it checks for either mod.
