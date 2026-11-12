@@ -1,0 +1,124 @@
+{
+  "groups": [
+    "Начало",
+    "Справочник",
+    "Помощь"
+  ],
+  "pages": [
+    {
+      "slug": "",
+      "title": "Fart Together",
+      "group": "Начало",
+      "lede": "Мультяшные залпы с настоящим геймплеем: удержание для силы, газ от бобов, облака, пугающие мобов, реактивный прыжок и комбо с друзьями. Fabric, Forge и NeoForge от 1.20.1 до 26.3.",
+      "keywords": [
+        "Fart Together",
+        "farmstead_fart_together",
+        "/fart",
+        "toot",
+        "залп",
+        "Fart Together"
+      ],
+      "source": "index.md",
+      "navTitle": "Обзор"
+    },
+    {
+      "slug": "installation",
+      "title": "Установка и версии",
+      "group": "Начало",
+      "lede": "Какой jar для какой игры, что ещё нужно (Fabric API на Fabric) и проверка обновлений при запуске.",
+      "keywords": [
+        "Fart Together",
+        "farmstead_fart_together",
+        "/fart",
+        "toot",
+        "залп",
+        "Установка и версии"
+      ]
+    },
+    {
+      "slug": "settings",
+      "title": "Настройки",
+      "group": "Справочник",
+      "lede": "Все ключи config/farmstead_fart_together-client.toml, пресеты и свой стиль.",
+      "keywords": [
+        "Fart Together",
+        "farmstead_fart_together",
+        "/fart",
+        "toot",
+        "залп",
+        "Настройки"
+      ],
+      "wide": true
+    },
+    {
+      "slug": "server",
+      "title": "Правила сервера и права",
+      "group": "Справочник",
+      "lede": "Серверный конфиг, данные газа, узлы и meta LuckPerms.",
+      "keywords": [
+        "Fart Together",
+        "farmstead_fart_together",
+        "/fart",
+        "toot",
+        "залп",
+        "Правила сервера и права"
+      ]
+    },
+    {
+      "slug": "commands",
+      "title": "Команды",
+      "group": "Справочник",
+      "lede": "Команды /fart и /farttogether.",
+      "keywords": [
+        "Fart Together",
+        "farmstead_fart_together",
+        "/fart",
+        "toot",
+        "залп",
+        "Команды"
+      ]
+    },
+    {
+      "slug": "faq",
+      "title": "Вопросы",
+      "group": "Помощь",
+      "lede": "Дети и стримы, другие моды анимаций, модовая еда.",
+      "keywords": [
+        "Fart Together",
+        "farmstead_fart_together",
+        "/fart",
+        "toot",
+        "залп",
+        "Вопросы"
+      ]
+    },
+    {
+      "slug": "building",
+      "title": "Сборка из исходников",
+      "group": "Помощь",
+      "lede": "Сборка 22 jar, инструменты арта и звука, лицензия.",
+      "keywords": [
+        "Fart Together",
+        "farmstead_fart_together",
+        "/fart",
+        "toot",
+        "залп",
+        "Сборка из исходников"
+      ]
+    },
+    {
+      "slug": "changelog",
+      "title": "История версий",
+      "group": "Помощь",
+      "lede": "Что менялось в каждом релизе.",
+      "keywords": [
+        "Fart Together",
+        "farmstead_fart_together",
+        "/fart",
+        "toot",
+        "залп",
+        "История версий"
+      ]
+    }
+  ]
+}

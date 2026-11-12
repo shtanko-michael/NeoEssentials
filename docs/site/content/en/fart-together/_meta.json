@@ -1,0 +1,124 @@
+{
+  "groups": [
+    "Start",
+    "Reference",
+    "Help"
+  ],
+  "pages": [
+    {
+      "slug": "",
+      "title": "Fart Together",
+      "group": "Start",
+      "lede": "Cartoon toots with real gameplay: hold to charge, gas from beans, clouds that scare mobs, jet jumps and team combos. Fabric, Forge and NeoForge from 1.20.1 to 26.3.",
+      "keywords": [
+        "Fart Together",
+        "farmstead_fart_together",
+        "/fart",
+        "toot",
+        "залп",
+        "Fart Together"
+      ],
+      "source": "index.md",
+      "navTitle": "Overview"
+    },
+    {
+      "slug": "installation",
+      "title": "Installation and versions",
+      "group": "Start",
+      "lede": "Which jar for which game, what else you need (Fabric API on Fabric) and the once-per-start update check.",
+      "keywords": [
+        "Fart Together",
+        "farmstead_fart_together",
+        "/fart",
+        "toot",
+        "залп",
+        "Installation and versions"
+      ]
+    },
+    {
+      "slug": "settings",
+      "title": "Settings",
+      "group": "Reference",
+      "lede": "Every key of config/farmstead_fart_together-client.toml, the presets and your own style.",
+      "keywords": [
+        "Fart Together",
+        "farmstead_fart_together",
+        "/fart",
+        "toot",
+        "залп",
+        "Settings"
+      ],
+      "wide": true
+    },
+    {
+      "slug": "server",
+      "title": "Server rules and permissions",
+      "group": "Reference",
+      "lede": "The server file, gas food data, LuckPerms nodes and meta.",
+      "keywords": [
+        "Fart Together",
+        "farmstead_fart_together",
+        "/fart",
+        "toot",
+        "залп",
+        "Server rules and permissions"
+      ]
+    },
+    {
+      "slug": "commands",
+      "title": "Commands",
+      "group": "Reference",
+      "lede": "The /fart and /farttogether commands.",
+      "keywords": [
+        "Fart Together",
+        "farmstead_fart_together",
+        "/fart",
+        "toot",
+        "залп",
+        "Commands"
+      ]
+    },
+    {
+      "slug": "faq",
+      "title": "FAQ",
+      "group": "Help",
+      "lede": "Kids and streams, other animation mods, modded food.",
+      "keywords": [
+        "Fart Together",
+        "farmstead_fart_together",
+        "/fart",
+        "toot",
+        "залп",
+        "FAQ"
+      ]
+    },
+    {
+      "slug": "building",
+      "title": "Building from source",
+      "group": "Help",
+      "lede": "Building the 22 jars, the art and sound tools, and the license.",
+      "keywords": [
+        "Fart Together",
+        "farmstead_fart_together",
+        "/fart",
+        "toot",
+        "залп",
+        "Building from source"
+      ]
+    },
+    {
+      "slug": "changelog",
+      "title": "Changelog",
+      "group": "Help",
+      "lede": "What changed in each release.",
+      "keywords": [
+        "Fart Together",
+        "farmstead_fart_together",
+        "/fart",
+        "toot",
+        "залп",
+        "Changelog"
+      ]
+    }
+  ]
+}

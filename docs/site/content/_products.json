@@ -33,6 +33,13 @@
       "tab": "Footprints",
       "name": "Footprints",
       "summary": "Реалистичные следы игроков и всех мобов на снегу, песке и грязи: только клиент, Fabric, Forge и NeoForge от 1.20.1 до 26.3."
+    },
+    {
+      "id": "fart-together",
+      "dir": "fart-together",
+      "tab": "Fart Together",
+      "name": "Fart Together",
+      "summary": "Залпы со стилем: позы, облака газа, 8 звуков, бобы и капуста, реактивный прыжок и комбо с друзьями. Fabric, Forge и NeoForge от 1.20.1 до 26.3."
     }
   ]
 }

@@ -20,6 +20,11 @@
       "summary": "Realistic footprints for players and every mob in snow, sand and mud: client-side, Fabric, Forge and NeoForge from 1.20.1 to 26.3."
     },
     {
+      "tab": "Fart Together",
+      "name": "Fart Together",
+      "summary": "Toots with style: poses, gas clouds, 8 sounds, beans and cabbage, jet jumps and combos with friends. Fabric, Forge and NeoForge from 1.20.1 to 26.3."
+    },
+    {
       "tab": "Utilities",
       "name": "Utilities",
       "summary": "Small server mods: an animal breeding cap per chunk or region, and a trade chat."

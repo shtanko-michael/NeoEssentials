@@ -1,0 +1,4 @@
+- **Is it safe for kids and streams?** Yes: no damage by default, cartoon sounds, no gross pictures, and `general.streamerSafe` swaps every sound for a soft puff.
+- **Does it work with other animation mods?** The pose is laid over the vanilla model after it is posed, so it does not replace other animations; it is short (just over a second).
+- **Can I add gas to modded food?** Yes, with a datapack: `data/<any>/gas_foods/<any>.json`, ids or `#tags`.
+- **Why does Fabric need Fabric API?** For networking (styles and toots go through the server), the mod's own sounds, textures and crops, and registry sync. NeoForge and Forge have all of that built in.
