@@ -4,7 +4,7 @@
 
 **Farmstead NeoEssentials** is the essentials mod behind the [Farmstead Minecraft](https://farmsteadminecraft.online) server: homes, warps, TPA, economy, kits, moderation, chat and tablist in one server-side jar. Players join with a vanilla client; nothing to install on their side.
 
-> **A fork, not the original.** Farmstead NeoEssentials is a fork of [NeoEssentials by ZeroG Network](https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials) (MIT), kept in sync with its `1.21.x` branch. It is not made, endorsed or supported by the original authors: report problems with this build on [our issue tracker](https://github.com/shtanko-michael/NeoEssentials/issues). It keeps the mod id `neoessentials`, so it **replaces** the original: remove the original jar before installing this one.
+> **A fork, not the original.** Farmstead NeoEssentials is a fork of **NeoEssentials** by MrWhiteFlamesYT and ZeroG Network (MIT). Original project: [CurseForge](https://www.curseforge.com/minecraft/mc-mods/neoessentials) · [Modrinth](https://modrinth.com/mod/neoessentials) · [GitHub](https://github.com/ZeroG-Network/NeoEssentials). This fork is kept in sync with its `1.21.x` branch. It is not made, endorsed or supported by the original authors: report problems with this build on [our issue tracker](https://github.com/shtanko-michael/NeoEssentials/issues). It keeps the mod id `neoessentials`, so it **replaces** the original: remove the original jar before installing this one.
 
 ---
 
@@ -57,4 +57,4 @@ Every command, permission node and config key, generated from the source on ever
 
 ---
 
-NeoEssentials was created by **MrWhiteFlamesYT** and **ZeroG Network**: see [the original project](https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials). The Farmstead fork is made by **[Farmstead](https://farmsteadminecraft.online)** · [Source](https://github.com/shtanko-michael/NeoEssentials) · [Issues](https://github.com/shtanko-michael/NeoEssentials/issues) · [Documentation](https://shtanko-michael.github.io/NeoEssentials/) · MIT
+NeoEssentials was created by **MrWhiteFlamesYT** and **ZeroG Network**: see the original project on [CurseForge](https://www.curseforge.com/minecraft/mc-mods/neoessentials), [Modrinth](https://modrinth.com/mod/neoessentials) and [GitHub](https://github.com/ZeroG-Network/NeoEssentials). The Farmstead fork is made by **[Farmstead](https://farmsteadminecraft.online)** · [Source](https://github.com/shtanko-michael/NeoEssentials) · [Issues](https://github.com/shtanko-michael/NeoEssentials/issues) · [Documentation](https://shtanko-michael.github.io/NeoEssentials/) · MIT
