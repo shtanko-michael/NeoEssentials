@@ -4,18 +4,9 @@
 
 ## See it
 
-| | |
-| --- | --- |
-| ![A trail toward the mountains](https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gifs/snow_hero.gif) | ![A wolf pack in fresh snow](https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gifs/wolves.gif) |
-| Your trail grows behind you | Every mob has its own tracks |
-| ![Prints crumbling away](https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gifs/crumble.gif) | ![Detailed and pixel style](https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gifs/styles.gif) |
-| Old prints crumble from the edges in | Two looks: detailed and pixel |
-| ![A boat's foam wake](https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gifs/wake.gif) | ![Rings where a villager wades](https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gifs/ripples.gif) |
-| Boats leave a wake | Rings where you wade |
-| ![Try it from the settings](https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gifs/tryit.gif) | ![Searching blocks in the settings](https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gifs/picker.gif) |
-| "Try it" stamps prints where you look | Searchable block and mob lists |
+<div class="gallery"><figure><img src="https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gifs/snow_hero.gif" alt="A trail toward the mountains" loading="lazy"><figcaption>Your trail grows behind you</figcaption></figure><figure><img src="https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gifs/wolves.gif" alt="A wolf pack in fresh snow" loading="lazy"><figcaption>Every mob has its own tracks</figcaption></figure><figure><img src="https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gifs/crumble.gif" alt="Prints crumbling away" loading="lazy"><figcaption>Old prints crumble from the edges in</figcaption></figure><figure><img src="https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gifs/styles.gif" alt="Detailed and pixel style" loading="lazy"><figcaption>Two looks: detailed and pixel</figcaption></figure><figure><img src="https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gifs/wake.gif" alt="A boat's foam wake" loading="lazy"><figcaption>Boats leave a wake</figcaption></figure><figure><img src="https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gifs/ripples.gif" alt="Rings where a villager wades" loading="lazy"><figcaption>Rings where you wade</figcaption></figure><figure><img src="https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gifs/tryit.gif" alt="Try it from the settings" loading="lazy"><figcaption>"Try it" stamps prints where you look</figcaption></figure><figure><img src="https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gifs/picker.gif" alt="Searching blocks in the settings" loading="lazy"><figcaption>Searchable block and mob lists</figcaption></figure></div>
 
-More pictures in [docs/media/gallery](https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gallery).
+More pictures in the [gallery](https://github.com/shtanko-michael/farmstead-footprints/tree/main/docs/media/gallery).
 
 ## Features
 

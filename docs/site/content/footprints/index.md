@@ -4,18 +4,9 @@
 
 ## Как это выглядит
 
-| | |
-| --- | --- |
-| ![A trail toward the mountains](https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gifs/snow_hero.gif) | ![A wolf pack in fresh snow](https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gifs/wolves.gif) |
-| Ваша тропа тянется следом | У каждого моба свои следы |
-| ![Prints crumbling away](https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gifs/crumble.gif) | ![Detailed and pixel style](https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gifs/styles.gif) |
-| Старые следы осыпаются от краёв | Два вида: детальный и пиксельный |
-| ![A boat's foam wake](https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gifs/wake.gif) | ![Rings where a villager wades](https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gifs/ripples.gif) |
-| За лодкой остаётся пена | Круги там, где идут вброд |
-| ![Try it from the settings](https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gifs/tryit.gif) | ![Searching blocks in the settings](https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gifs/picker.gif) |
-| «Показать» печатает следы там, куда вы смотрите | Поиск блоков и мобов |
+<div class="gallery"><figure><img src="https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gifs/snow_hero.gif" alt="A trail toward the mountains" loading="lazy"><figcaption>Ваша тропа тянется следом</figcaption></figure><figure><img src="https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gifs/wolves.gif" alt="A wolf pack in fresh snow" loading="lazy"><figcaption>У каждого моба свои следы</figcaption></figure><figure><img src="https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gifs/crumble.gif" alt="Prints crumbling away" loading="lazy"><figcaption>Старые следы осыпаются от краёв</figcaption></figure><figure><img src="https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gifs/styles.gif" alt="Detailed and pixel style" loading="lazy"><figcaption>Два вида: детальный и пиксельный</figcaption></figure><figure><img src="https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gifs/wake.gif" alt="A boat's foam wake" loading="lazy"><figcaption>За лодкой остаётся пена</figcaption></figure><figure><img src="https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gifs/ripples.gif" alt="Rings where a villager wades" loading="lazy"><figcaption>Круги там, где идут вброд</figcaption></figure><figure><img src="https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gifs/tryit.gif" alt="Try it from the settings" loading="lazy"><figcaption>«Показать» печатает следы там, куда вы смотрите</figcaption></figure><figure><img src="https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gifs/picker.gif" alt="Searching blocks in the settings" loading="lazy"><figcaption>Поиск блоков и мобов</figcaption></figure></div>
 
-Больше картинок в [docs/media/gallery](https://raw.githubusercontent.com/shtanko-michael/farmstead-footprints/main/docs/media/gallery).
+Больше картинок в [галерее](https://github.com/shtanko-michael/farmstead-footprints/tree/main/docs/media/gallery).
 
 ## Возможности
 
