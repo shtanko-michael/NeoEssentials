@@ -1,6 +1,6 @@
 ## Server file
 
-`config/farmstead_fart_together-server.toml`, presets `default`, `family` (longer cooldown, no effects), `plain` (no personal styles), `chaos` (fast toots, big clouds with nausea that reach other players, stronger jet jumps, a wider combo window).
+`config/farmstead_fart_together-server.toml`, presets `default`, `family` (longer cooldown, no effects), `plain` (no personal styles), `cosmetic` (pure decoration: no gas needed, mobs are not scared, no cloud effects, no jet push, no combo glow; the toot only looks and sounds), `chaos` (fast toots, big clouds with nausea that reach other players, stronger jet jumps, a wider combo window).
 
 | Section | Keys |
 | --- | --- |

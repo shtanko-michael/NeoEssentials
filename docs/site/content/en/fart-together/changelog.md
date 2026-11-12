@@ -14,7 +14,7 @@ First release.
 - Nine advancements in the Husbandry tab.
 - Beans and cabbage seeds from grass, farmer villagers trading beans, cabbage and bowls of beans, beans in village, dungeon, mineshaft and shipwreck chests (1.20.1–26.2).
 - **Your own style**, seen by your friends: cloud colour (presets, hex, gradients, random, rainbow), particle shape, size, amount, spread, duration, sound, pitch, volume and pose, with a "My style" tab and a live preview. The server clamps styles to its rules.
-- Server rules in `farmstead_fart_together-server.toml` (presets `default`, `family`, `plain`, `chaos`), `/fart info|reload|charge|toggle`, LuckPerms nodes for every action and meta for cooldown, cloud radius and meter size.
+- Server rules in `farmstead_fart_together-server.toml` (presets `default`, `family`, `plain`, `cosmetic` — the toot is pure decoration, `chaos`), `/fart info|reload|charge|toggle`, LuckPerms nodes for every action and meta for cooldown, cloud radius and meter size.
 - Streamer-safe mode (every sound becomes a soft "puff"), a particle limit for others' toots, 12 languages.
 - Farmstead start-up line and a once-per-session update check against Modrinth.
 - Minecraft 1.20.1 (Fabric, Forge); 1.21–1.21.5, 1.21.7–1.21.11, 26.1–26.3 (Fabric, NeoForge). Fabric needs Fabric API.
