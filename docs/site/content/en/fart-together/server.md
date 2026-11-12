@@ -16,7 +16,7 @@ Gas weights live in `data/<namespace>/gas_foods/*.json`, for example `{"foods": 
 
 ## Permissions
 
-LuckPerms or any permission mod of the loader.
+LuckPerms or any permission mod of the loader. Checked live with LuckPerms on Fabric and NeoForge. On NeoForge 1.21.1 use LuckPerms 5.4.150 or newer from [luckperms.net](https://luckperms.net/download): 5.4.140, the newest NeoForge build on Modrinth, kicks every player on join ("Invalid player data") (a LuckPerms bug, fixed in later builds).
 
 | Node | Default | What it allows |
 | --- | --- | --- |

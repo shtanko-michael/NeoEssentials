@@ -16,7 +16,7 @@
 
 ## Права
 
-LuckPerms или любой мод прав лоадера.
+LuckPerms или любой мод прав лоадера. Проверено вживую с LuckPerms на Fabric и NeoForge. На NeoForge 1.21.1 ставьте LuckPerms 5.4.150 или новее с [luckperms.net](https://luckperms.net/download): 5.4.140, последняя сборка для NeoForge на Modrinth, выкидывает каждого игрока при входе («Invalid player data») (ошибка LuckPerms, исправлена в более новых сборках).
 
 | Узел | По умолчанию | Что даёт |
 | --- | --- | --- |
