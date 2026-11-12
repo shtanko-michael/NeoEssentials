@@ -2,7 +2,7 @@
   "site": {
     "title": "Farmstead mods",
     "name": "Mods",
-    "lede": "Documentation for the Farmstead Minecraft server mods for NeoForge 1.21.1: commands, permissions, configuration and troubleshooting."
+    "lede": "Documentation for the Farmstead Minecraft mods: commands, permissions, configuration and troubleshooting."
   },
   "products": [
     {
@@ -13,6 +13,11 @@
     },
     {
       "summary": "Builds from a text prompt: an aiming hologram, block-by-block placement, full undo and spend limits."
+    },
+    {
+      "tab": "Footprints",
+      "name": "Footprints",
+      "summary": "Realistic footprints for players and every mob in snow, sand and mud: client-side, Fabric, Forge and NeoForge from 1.20.1 to 26.3."
     },
     {
       "tab": "Utilities",

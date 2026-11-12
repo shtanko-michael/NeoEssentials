@@ -1,0 +1,7 @@
+- **Pictures.** Put a PNG into `config/farmstead_footprints/textures/` (one foot, toes up, dark on white or a shape on transparent). The file name is the shape name. Give it to a mob or a #tag in `footprints.profiles`: `"minecraft:player = shape:wolf_paw"`, `"#minecraft:skeletons = shape:bone size:0.8"`. `/footprints reload` picks up new files.
+- **Variants.** `shape:paw|star|bird` picks one per print.
+- **Profiles.** `<id or #tag> = shape:<name> size:<x> legs:<2|4|6|8> stride:<blocks> stance:<blocks> length:<blocks>`, any part optional. An exact id beats a tag; otherwise the first matching line wins.
+- **Resource packs and mods** can ship:
+  - shapes: `assets/<ns>/textures/farmstead_footprints/shapes/<name>.png`;
+  - replacements for `assets/farmstead_footprints/textures/footprints_shadow.png` and `footprints_rim.png` (256x256, 4x4 cells);
+  - rules: `assets/<ns>/farmstead_footprints/profiles/<any>.json` with `{"profiles": [...], "surfaces": {"include": [...], "exclude": [...]}}` in the config's syntax. The player's own config lines come first. F3+T reloads everything.

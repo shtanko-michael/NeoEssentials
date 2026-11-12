@@ -1,0 +1,124 @@
+{
+  "groups": [
+    "Start",
+    "Reference",
+    "Help"
+  ],
+  "pages": [
+    {
+      "slug": "",
+      "title": "Footprints",
+      "group": "Start",
+      "lede": "Realistic footprints for players and every mob, client-side, on Fabric, Forge and NeoForge from 1.20.1 to 26.3.",
+      "keywords": [
+        "Footprints",
+        "farmstead_footprints",
+        "/footprints",
+        "footprint",
+        "следы",
+        "Footprints"
+      ],
+      "source": "index.md",
+      "navTitle": "Overview"
+    },
+    {
+      "slug": "installation",
+      "title": "Installation and versions",
+      "group": "Start",
+      "lede": "Which jar for which game, what else you need (nothing), and the once-per-start update check.",
+      "keywords": [
+        "Footprints",
+        "farmstead_footprints",
+        "/footprints",
+        "footprint",
+        "следы",
+        "Installation and versions"
+      ]
+    },
+    {
+      "slug": "settings",
+      "title": "Settings",
+      "group": "Reference",
+      "lede": "Every key of config/farmstead_footprints-client.toml, the presets and the settings screen.",
+      "keywords": [
+        "Footprints",
+        "farmstead_footprints",
+        "/footprints",
+        "footprint",
+        "следы",
+        "Settings"
+      ],
+      "wide": true
+    },
+    {
+      "slug": "own-prints",
+      "title": "Your own prints",
+      "group": "Reference",
+      "lede": "PNG pictures as prints, random variants, per-mob profiles and what resource packs and mods can add.",
+      "keywords": [
+        "Footprints",
+        "farmstead_footprints",
+        "/footprints",
+        "footprint",
+        "следы",
+        "Your own prints"
+      ]
+    },
+    {
+      "slug": "commands",
+      "title": "Commands",
+      "group": "Reference",
+      "lede": "The /footprints client commands.",
+      "keywords": [
+        "Footprints",
+        "farmstead_footprints",
+        "/footprints",
+        "footprint",
+        "следы",
+        "Commands"
+      ]
+    },
+    {
+      "slug": "faq",
+      "title": "Compatibility and FAQ",
+      "group": "Help",
+      "lede": "Shaders, other footprint mods, modded blocks and mobs, and common questions.",
+      "keywords": [
+        "Footprints",
+        "farmstead_footprints",
+        "/footprints",
+        "footprint",
+        "следы",
+        "Compatibility and FAQ"
+      ]
+    },
+    {
+      "slug": "building",
+      "title": "Building from source",
+      "group": "Help",
+      "lede": "Building the 22 jars and the license.",
+      "keywords": [
+        "Footprints",
+        "farmstead_footprints",
+        "/footprints",
+        "footprint",
+        "следы",
+        "Building from source"
+      ]
+    },
+    {
+      "slug": "changelog",
+      "title": "Changelog",
+      "group": "Help",
+      "lede": "What changed in each release.",
+      "keywords": [
+        "Footprints",
+        "farmstead_footprints",
+        "/footprints",
+        "footprint",
+        "следы",
+        "Changelog"
+      ]
+    }
+  ]
+}

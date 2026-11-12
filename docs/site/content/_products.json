@@ -2,7 +2,7 @@
   "site": {
     "title": "Моды Farmstead",
     "name": "Mods",
-    "lede": "Документация серверных модов Farmstead Minecraft для NeoForge 1.21.1: команды, права, конфигурация и разбор проблем."
+    "lede": "Документация модов Farmstead Minecraft: команды, права, конфигурация и разбор проблем."
   },
   "products": [
     {
@@ -26,6 +26,13 @@
       "tab": "AI Builder",
       "name": "AI Builder",
       "summary": "Постройки по текстовому описанию: голограмма-прицел, укладка блок за блоком, полная отмена и лимиты расходов."
+    },
+    {
+      "id": "footprints",
+      "dir": "footprints",
+      "tab": "Footprints",
+      "name": "Footprints",
+      "summary": "Реалистичные следы игроков и всех мобов на снегу, песке и грязи: только клиент, Fabric, Forge и NeoForge от 1.20.1 до 26.3."
     }
   ]
 }

@@ -1,0 +1,124 @@
+{
+  "groups": [
+    "Начало",
+    "Справочник",
+    "Помощь"
+  ],
+  "pages": [
+    {
+      "slug": "",
+      "title": "Footprints",
+      "group": "Начало",
+      "lede": "Реалистичные следы игроков и всех мобов, только клиент, Fabric, Forge и NeoForge от 1.20.1 до 26.3.",
+      "keywords": [
+        "Footprints",
+        "farmstead_footprints",
+        "/footprints",
+        "footprint",
+        "следы",
+        "Footprints"
+      ],
+      "source": "index.md",
+      "navTitle": "Обзор"
+    },
+    {
+      "slug": "installation",
+      "title": "Установка и версии",
+      "group": "Начало",
+      "lede": "Какой jar для какой игры, что ещё нужно (ничего) и проверка обновлений при запуске.",
+      "keywords": [
+        "Footprints",
+        "farmstead_footprints",
+        "/footprints",
+        "footprint",
+        "следы",
+        "Установка и версии"
+      ]
+    },
+    {
+      "slug": "settings",
+      "title": "Настройки",
+      "group": "Справочник",
+      "lede": "Все ключи config/farmstead_footprints-client.toml, пресеты и экран настроек.",
+      "keywords": [
+        "Footprints",
+        "farmstead_footprints",
+        "/footprints",
+        "footprint",
+        "следы",
+        "Настройки"
+      ],
+      "wide": true
+    },
+    {
+      "slug": "own-prints",
+      "title": "Свои следы",
+      "group": "Справочник",
+      "lede": "PNG-картинки как следы, случайные варианты, профили мобов и что могут добавить ресурспаки и моды.",
+      "keywords": [
+        "Footprints",
+        "farmstead_footprints",
+        "/footprints",
+        "footprint",
+        "следы",
+        "Свои следы"
+      ]
+    },
+    {
+      "slug": "commands",
+      "title": "Команды",
+      "group": "Справочник",
+      "lede": "Клиентские команды /footprints.",
+      "keywords": [
+        "Footprints",
+        "farmstead_footprints",
+        "/footprints",
+        "footprint",
+        "следы",
+        "Команды"
+      ]
+    },
+    {
+      "slug": "faq",
+      "title": "Совместимость и FAQ",
+      "group": "Помощь",
+      "lede": "Шейдеры, другие моды следов, модовые блоки и мобы, частые вопросы.",
+      "keywords": [
+        "Footprints",
+        "farmstead_footprints",
+        "/footprints",
+        "footprint",
+        "следы",
+        "Совместимость и FAQ"
+      ]
+    },
+    {
+      "slug": "building",
+      "title": "Сборка из исходников",
+      "group": "Помощь",
+      "lede": "Сборка 22 jar и лицензия.",
+      "keywords": [
+        "Footprints",
+        "farmstead_footprints",
+        "/footprints",
+        "footprint",
+        "следы",
+        "Сборка из исходников"
+      ]
+    },
+    {
+      "slug": "changelog",
+      "title": "История версий",
+      "group": "Помощь",
+      "lede": "Что менялось в каждом релизе.",
+      "keywords": [
+        "Footprints",
+        "farmstead_footprints",
+        "/footprints",
+        "footprint",
+        "следы",
+        "История версий"
+      ]
+    }
+  ]
+}

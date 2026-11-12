@@ -1,0 +1,7 @@
+- **Картинки.** Положите PNG в `config/farmstead_footprints/textures/` (одна стопа, пальцы вверх, тёмное на белом или фигура на прозрачном). Имя файла — имя формы. Назначьте её мобу или #тегу в `footprints.profiles`: `"minecraft:player = shape:wolf_paw"`, `"#minecraft:skeletons = shape:bone size:0.8"`. `/footprints reload` подхватит новые файлы.
+- **Варианты.** `shape:paw|star|bird` — для каждого следа случайный.
+- **Профили.** `<id или #тег> = shape:<имя> size:<x> legs:<2|4|6|8> stride:<блоки> stance:<блоки> length:<блоки>`, любая часть необязательна. Точный id сильнее тега, иначе побеждает первая подходящая строка.
+- **Ресурспаки и моды** могут добавить:
+  - формы: `assets/<ns>/textures/farmstead_footprints/shapes/<имя>.png`;
+  - замену `assets/farmstead_footprints/textures/footprints_shadow.png` и `footprints_rim.png` (256x256, сетка 4x4);
+  - правила: `assets/<ns>/farmstead_footprints/profiles/<любое>.json` вида `{"profiles": [...], "surfaces": {"include": [...], "exclude": [...]}}` в синтаксисе конфига. Строки из конфига игрока идут первыми. F3+T перечитывает всё.
