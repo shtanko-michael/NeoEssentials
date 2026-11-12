@@ -1,0 +1,22 @@
+{
+  "title": "Farmstead NeoEssentials",
+  "summary": "Essentials for NeoForge 1.21.1 servers: homes, warps, TPA, economy, kits, moderation, chat, tablist. A maintained fork of NeoEssentials with full Russian localization.",
+  "categories": ["management", "utility", "economy"],
+  "additional_categories": ["social"],
+  "client_side": "unsupported",
+  "server_side": "required",
+  "license_id": "MIT",
+  "license_url": "https://github.com/shtanko-michael/NeoEssentials/blob/farmstead-monorepo-build/LICENSE",
+  "source_url": "https://github.com/shtanko-michael/NeoEssentials",
+  "issues_url": "https://github.com/shtanko-michael/NeoEssentials/issues",
+  "wiki_url": "https://shtanko-michael.github.io/NeoEssentials/",
+  "body": "listing/modrinth.md",
+  "icon": "docs/publish/images/icon.png",
+  "gallery": [
+    {"file": "docs/publish/images/gallery-1-hero.png", "title": "Essentials for NeoForge 1.21.1", "description": "Teleports, economy, moderation, chat, kits, tablist, permissions and languages in one server-side jar.", "featured": true},
+    {"file": "docs/publish/images/gallery-2-chat.png", "title": "Speaks your players' language", "description": "Every message, /help entry and command hint: English out of the box, a complete Russian translation one config line away."},
+    {"file": "docs/publish/images/gallery-3-tablist.png", "title": "Tablist with ranks", "description": "Animated header and footer, rank colours, a per-player name colour from LuckPerms, anchored rows."},
+    {"file": "docs/publish/images/gallery-4-docs.png", "title": "Every command documented", "description": "Commands, permission nodes and config keys, generated from the source on every change."},
+    {"file": "docs/publish/images/gallery-5-fork.png", "title": "What the fork adds", "description": "Russian localization, staff tools, tablist features, quality-of-life commands and fixes on top of NeoEssentials."}
+  ]
+}

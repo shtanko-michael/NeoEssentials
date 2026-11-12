@@ -12,12 +12,22 @@ name: Release Farmstead NeoEssentials
 #   2. creates a GitHub release in this repository with the jar, SHA256SUMS and the notes from
 #      docs/publish/releases/<version>.md;
 #   3. uploads the same jar to Modrinth and to CurseForge — each one only when its token secret
-#      and its project id variable are set, so the first runs can be GitHub-only.
+#      and its project id variable are set.
+#
+# Run it by hand (Actions -> Release Farmstead NeoEssentials -> Run workflow):
+#   - dry_run (default): build, check the version and the notes, print the upload plan. Nothing is
+#     published; the jar is kept as a workflow artifact for a look.
+#   - catalogues_only: the GitHub release already exists, (re)upload to the catalogues only;
+#     `platforms` narrows it to one of them (e.g. `curseforge` after a failed CurseForge upload).
+#
+# Game versions are listed one per line: mc-publish does not split them on spaces (a space-separated
+# list failed 10 of 22 Footprints uploads). Declare only versions that were actually run: the jar
+# loads on [1.21.1,1.21.11) per minecraft_version_range, but only 1.21.1 is tested.
 #
 # Secrets:   MODRINTH_TOKEN (scope: write versions), CURSEFORGE_TOKEN
 # Variables: MODRINTH_PROJECT_ID, CURSEFORGE_PROJECT_ID
-# The projects themselves are created by hand once (docs/publish/LISTING.md); this workflow only
-# ever adds versions to them.
+# The project pages are synced separately (listing.yml, Modrinth only; CurseForge by hand, see
+# docs/publish/LISTING.md); this workflow only ever adds versions.
 
 on:
   push:
@@ -26,37 +36,50 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Public version to build, e.g. 1.0.6-fs1"
+        description: "Public version, e.g. 1.0.6-fs1"
         required: true
+      dry_run:
+        description: "Build and plan only: no GitHub release, no uploads"
+        type: boolean
+        default: true
+      catalogues_only:
+        description: "Upload to Modrinth/CurseForge only (the GitHub release already exists)"
+        type: boolean
+        default: false
+      platforms:
+        description: "Catalogues to upload to: modrinth,curseforge (empty: both)"
+        type: string
+        default: ""
 
 permissions:
-  contents: write
+  contents: read
+
+env:
+  # one per line, see the header
+  GAME_VERSIONS: |
+    1.21.1
+  LOADERS: neoforge
+  JAVA: "21"
 
 jobs:
-  release:
+  build:
     runs-on: ubuntu-latest
-    env:
-      MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
-      CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
-      MODRINTH_PROJECT_ID: ${{ vars.MODRINTH_PROJECT_ID }}
-      CURSEFORGE_PROJECT_ID: ${{ vars.CURSEFORGE_PROJECT_ID }}
+    timeout-minutes: 45
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      notes: ${{ steps.ver.outputs.notes }}
+      asset: ${{ steps.ver.outputs.asset }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-
-      - uses: gradle/actions/setup-gradle@v4
-
       - name: Resolve version
         id: ver
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ github.event.inputs.version }}"
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            VERSION="$INPUT_VERSION"
           else
             VERSION="${GITHUB_REF_NAME#farmstead-v}"
           fi
@@ -67,7 +90,7 @@ jobs:
           BASE="${BASH_REMATCH[1]}"
           MOD_VERSION="$(sed -n 's/^mod_version=//p' gradle.properties | tr -d '\r')"
           if [ "$BASE" != "$MOD_VERSION" ]; then
-            echo "::error::tag is based on $BASE but gradle.properties says mod_version=$MOD_VERSION"
+            echo "::error::version $VERSION is based on $BASE but gradle.properties says mod_version=$MOD_VERSION"
             exit 1
           fi
           NOTES="docs/publish/releases/${VERSION}.md"
@@ -75,9 +98,21 @@ jobs:
             echo "::error::release notes $NOTES are missing - write them before tagging"
             exit 1
           fi
+          MC="$(sed -n 's/^minecraft_version=//p' gradle.properties | tr -d '\r')"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "notes=${NOTES}" >> "$GITHUB_OUTPUT"
-          echo "asset=farmstead-neoessentials-${VERSION}-neoforge-1.21.1.jar" >> "$GITHUB_OUTPUT"
+          echo "asset=farmstead-neoessentials-${VERSION}-neoforge-${MC}.jar" >> "$GITHUB_OUTPUT"
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Language files
+        run: python3 tools/lang_check.py
 
       # CI=true is set by Actions, so build.gradle does not bump build_number.txt; the committed
       # value is what ends up in the jar's version string, which is fine — the public version lives
@@ -88,52 +123,112 @@ jobs:
           ./gradlew build -x test --console=plain --no-daemon
 
       - name: Stage asset
-        id: jar
         run: |
-          JAR="$(ls build/libs/*-all.jar | head -n 1)"
+          JAR="$(ls build/libs/*-all.jar 2>/dev/null | head -n 1)"
           if [ -z "$JAR" ]; then echo "::error::no shaded -all jar in build/libs"; ls -la build/libs; exit 1; fi
           mkdir -p dist
           cp "$JAR" "dist/${{ steps.ver.outputs.asset }}"
           (cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS)
-          echo "path=dist/${{ steps.ver.outputs.asset }}" >> "$GITHUB_OUTPUT"
+          ls -la dist
+          # the jar must carry what the catalogues will claim
+          unzip -p "dist/${{ steps.ver.outputs.asset }}" META-INF/neoforge.mods.toml | grep -E '^(modId|version|displayName)=|versionRange'
 
+      - name: Plan
+        env:
+          DRY: ${{ inputs.dry_run }}
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+          CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+          MODRINTH_PROJECT_ID: ${{ vars.MODRINTH_PROJECT_ID }}
+          CURSEFORGE_PROJECT_ID: ${{ vars.CURSEFORGE_PROJECT_ID }}
+        run: |
+          echo "version:       ${{ steps.ver.outputs.version }}"
+          echo "asset:         ${{ steps.ver.outputs.asset }}"
+          echo "notes:         ${{ steps.ver.outputs.notes }}"
+          echo "loaders:       $LOADERS"
+          echo "game versions: $(echo "$GAME_VERSIONS" | xargs | sed 's/ /, /g')"
+          echo "java:          $JAVA"
+          [ -n "$MODRINTH_TOKEN" ] && [ -n "$MODRINTH_PROJECT_ID" ] && echo "modrinth:      project $MODRINTH_PROJECT_ID, token set" || echo "modrinth:      SKIPPED (token or project id missing)"
+          [ -n "$CURSEFORGE_TOKEN" ] && [ -n "$CURSEFORGE_PROJECT_ID" ] && echo "curseforge:    project $CURSEFORGE_PROJECT_ID, token set" || echo "curseforge:    SKIPPED (token or project id missing)"
+          if [ "$DRY" = "true" ]; then echo "dry run: nothing will be published"; fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 3
+
+  github:
+    needs: build
+    if: github.event_name == 'push' || (!inputs.dry_run && !inputs.catalogues_only)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: dist
       - name: GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: farmstead-v${{ steps.ver.outputs.version }}
-          name: Farmstead NeoEssentials ${{ steps.ver.outputs.version }}
-          body_path: ${{ steps.ver.outputs.notes }}
+          tag_name: farmstead-v${{ needs.build.outputs.version }}
+          name: Farmstead NeoEssentials ${{ needs.build.outputs.version }}
+          body_path: ${{ needs.build.outputs.notes }}
           files: |
-            dist/${{ steps.ver.outputs.asset }}
+            dist/${{ needs.build.outputs.asset }}
             dist/SHA256SUMS
           make_latest: true
 
+  catalogues:
+    needs: [build, github]
+    # runs after the GitHub release, or on its own with catalogues_only
+    if: >-
+      always() && needs.build.result == 'success' &&
+      (needs.github.result == 'success' || (needs.github.result == 'skipped' && inputs.catalogues_only && !inputs.dry_run))
+    runs-on: ubuntu-latest
+    # job-level env, because a step's `if:` cannot read secrets directly
+    env:
+      MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+      CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+      MODRINTH_PROJECT_ID: ${{ vars.MODRINTH_PROJECT_ID }}
+      CURSEFORGE_PROJECT_ID: ${{ vars.CURSEFORGE_PROJECT_ID }}
+      VERSION: ${{ needs.build.outputs.version }}
+      PLATFORMS: ${{ inputs.platforms || 'modrinth,curseforge' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: dist
+
       - name: Modrinth
-        if: env.MODRINTH_TOKEN != '' && env.MODRINTH_PROJECT_ID != ''
+        if: contains(env.PLATFORMS, 'modrinth') && env.MODRINTH_TOKEN != '' && env.MODRINTH_PROJECT_ID != ''
         uses: Kira-NT/mc-publish@v3.3
         with:
           modrinth-id: ${{ env.MODRINTH_PROJECT_ID }}
           modrinth-token: ${{ env.MODRINTH_TOKEN }}
-          files: ${{ steps.jar.outputs.path }}
-          name: Farmstead NeoEssentials ${{ steps.ver.outputs.version }}
-          version: ${{ steps.ver.outputs.version }}
+          files: dist/${{ needs.build.outputs.asset }}
+          name: Farmstead NeoEssentials ${{ env.VERSION }}
+          version: ${{ env.VERSION }}
           version-type: release
-          changelog-file: ${{ steps.ver.outputs.notes }}
-          loaders: neoforge
-          game-versions: 1.21.1
-          java: 21
+          changelog-file: ${{ needs.build.outputs.notes }}
+          loaders: ${{ env.LOADERS }}
+          game-versions: ${{ env.GAME_VERSIONS }}
+          java: ${{ env.JAVA }}
 
       - name: CurseForge
-        if: env.CURSEFORGE_TOKEN != '' && env.CURSEFORGE_PROJECT_ID != ''
+        if: contains(env.PLATFORMS, 'curseforge') && env.CURSEFORGE_TOKEN != '' && env.CURSEFORGE_PROJECT_ID != ''
         uses: Kira-NT/mc-publish@v3.3
         with:
           curseforge-id: ${{ env.CURSEFORGE_PROJECT_ID }}
           curseforge-token: ${{ env.CURSEFORGE_TOKEN }}
-          files: ${{ steps.jar.outputs.path }}
-          name: Farmstead NeoEssentials ${{ steps.ver.outputs.version }}
-          version: ${{ steps.ver.outputs.version }}
+          files: dist/${{ needs.build.outputs.asset }}
+          name: Farmstead NeoEssentials ${{ env.VERSION }}
+          version: ${{ env.VERSION }}
           version-type: release
-          changelog-file: ${{ steps.ver.outputs.notes }}
-          loaders: neoforge
-          game-versions: 1.21.1
-          java: 21
+          changelog-file: ${{ needs.build.outputs.notes }}
+          loaders: ${{ env.LOADERS }}
+          game-versions: ${{ env.GAME_VERSIONS }}
+          java: ${{ env.JAVA }}

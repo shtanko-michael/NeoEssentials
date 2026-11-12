@@ -1,0 +1,35 @@
+name: Listing
+
+# By hand (Actions -> Listing -> Run workflow): makes the Modrinth project page match the repository
+# (listing/modrinth.json + listing/modrinth.md: title, summary, description, categories, sides,
+# links, license, icon, gallery). Run with dry_run first: it reads the live page and prints what
+# would change. The token stays a secret here; nothing is published as a version.
+# CurseForge has no API for project pages: paste listing/curseforge.md there by hand and upload the
+# gallery folder from `python3 tools/modrinth_listing.py --curseforge-gallery` (docs/publish/LISTING.md).
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Only show what would change"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  modrinth:
+    runs-on: ubuntu-latest
+    env:
+      MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+      MODRINTH_PROJECT_ID: ${{ vars.MODRINTH_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Missing token or project id
+        if: env.MODRINTH_TOKEN == '' || env.MODRINTH_PROJECT_ID == ''
+        run: |
+          echo "::error::MODRINTH_TOKEN secret and MODRINTH_PROJECT_ID variable are both required"
+          exit 1
+      - name: Sync the Modrinth page
+        run: python3 tools/modrinth_listing.py ${{ inputs.dry_run && '--dry-run' || '' }}

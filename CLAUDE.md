@@ -10,6 +10,7 @@ Farmstead, собирается как подпроект `:neoessentials` ре�
 | Не синкать | `26.1.x` (MC 26.1.2) и `26.2.x` (MC 26.2) сломают сервер; `Released` — только документация |
 | Сборка | `cd ../ && ./gradlew :neoessentials:jar` (или `npm run game:build-dev` из `runner/`) |
 | Документация | https://shtanko-michael.github.io/NeoEssentials/ |
+| Публикация | Modrinth `farmstead-neoessentials` / CurseForge `farmstead-neoessentials`: тег `farmstead-v<mod_version>-fs<N>` → `farmstead-release.yml`; страница Modrinth — workflow `Listing`; всё по шагам — `docs/publish/LISTING.md` |
 
 ## Документацию обновляем в той же задаче, что и код
 
