@@ -1249,6 +1249,11 @@ def build(out_dir, base, wiki_out=None, lang='ru'):
             shutil.copy2(src, dest)
         else:
             write(out_dir, 'assets/' + name, read(src))
+    # The Farmstead Telegram bot's banners (copy of client/landing/public/telegram in the monorepo). Telegram's
+    # servers cannot fetch pictures from the Russian VPS, so the bot reads them from here (Telegram:AssetsUrl).
+    telegram_dir = os.path.join(ASSETS_DIR, 'telegram')
+    if os.path.isdir(telegram_dir):
+        shutil.copytree(telegram_dir, os.path.join(out_dir, 'assets', 'telegram'), dirs_exist_ok=True)
     write(out_dir, 'search.json', json.dumps(search, ensure_ascii=False))
     write(out_dir, '.nojekyll', '')
 
