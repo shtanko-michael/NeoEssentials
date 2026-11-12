@@ -117,7 +117,7 @@ def sync_modrinth():
         print(f"  {mark} {key}: {before!r} -> {patch[key]!r}")
     print(f"  {'=' if project.get('body') == patch['body'] else '~'} body: {len(project.get('body') or '')} -> {len(patch['body'])} chars")
     call("PATCH", f"/project/{PROJECT}", body=patch)
-    print("details and description updated")
+    print("details and description " + ("would be updated" if DRY else "updated"))
 
     icon = ROOT / cfg["icon"]
     call("PATCH", f"/project/{PROJECT}/icon?ext={icon.suffix[1:]}", data=icon.read_bytes(),

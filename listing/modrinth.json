@@ -1,6 +1,6 @@
 {
   "title": "Farmstead NeoEssentials",
-  "summary": "Essentials for NeoForge 1.21.1 servers: homes, warps, TPA, economy, kits, moderation, chat, tablist. A maintained fork of NeoEssentials with full Russian localization.",
+  "summary": "Essentials for NeoForge 1.21.1 servers: homes, warps, TPA, economy, kits, moderation, chat and an animated tablist. A maintained fork of NeoEssentials with complete Russian localization and nine languages. Server-side only.",
   "categories": ["management", "utility", "economy"],
   "additional_categories": ["social"],
   "client_side": "unsupported",

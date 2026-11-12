@@ -13,7 +13,7 @@
 |---|---|
 | Название | `Farmstead NeoEssentials` |
 | Slug / URL | `farmstead-neoessentials` (на Modrinth свободен; `neoessentials` занят оригиналом) |
-| Краткое описание (summary) | `Essentials for NeoForge 1.21.1 servers: homes, warps, TPA, economy, kits, moderation, chat, tablist. A maintained fork of NeoEssentials with full Russian localization.` |
+| Краткое описание (summary) | `Essentials for NeoForge 1.21.1 servers: homes, warps, TPA, economy, kits, moderation, chat and an animated tablist. A maintained fork of NeoEssentials with complete Russian localization and nine languages. Server-side only.` (как в [modrinth.json](../../listing/modrinth.json); CurseForge — тот же текст) |
 | Описание | Modrinth — ставит workflow `Listing`; CurseForge — вставить [curseforge.md](../../listing/curseforge.md) руками (тип описания Markdown) |
 | Категории Modrinth | `management`, `utility`, `economy` (дополнительно: `social`) |
 | Категории CurseForge | Server Utility, Miscellaneous |
