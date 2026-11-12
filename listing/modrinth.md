@@ -57,4 +57,4 @@ Every command, permission node and config key, generated from the source on ever
 
 ---
 
-NeoEssentials was created by **MrWhiteFlamesYT** and **ZeroG Network**: support the original work on [Ko-fi](https://ko-fi.com/mrwhiteflamesyt). The Farmstead fork is made by **[Farmstead](https://farmsteadminecraft.online)** · [Source](https://github.com/shtanko-michael/NeoEssentials) · [Issues](https://github.com/shtanko-michael/NeoEssentials/issues) · [Documentation](https://shtanko-michael.github.io/NeoEssentials/) · MIT
+NeoEssentials was created by **MrWhiteFlamesYT** and **ZeroG Network**: see [the original project](https://github.com/ZeroG-Network-PTY-LTD/NeoEssentials). The Farmstead fork is made by **[Farmstead](https://farmsteadminecraft.online)** · [Source](https://github.com/shtanko-michael/NeoEssentials) · [Issues](https://github.com/shtanko-michael/NeoEssentials/issues) · [Documentation](https://shtanko-michael.github.io/NeoEssentials/) · MIT
