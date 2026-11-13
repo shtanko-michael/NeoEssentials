@@ -2,8 +2,8 @@
 
 | В логе или в чате | Что это значит |
 |---|---|
-| `[hello] … rejected this server's token` | Токен неверный или отозван — проверьте `bearer_token` |
-| `[hello] /aibuild is not configured` | В конфиге пусты `api_base_url` или `bearer_token` |
+| `[Farmstead] … rejected this server's token` | Токен неверный или отозван — проверьте `bearer_token` |
+| `[Farmstead] /aibuild is not configured` | В конфиге пусты `api_base_url` или `bearer_token` |
 | `Ваш лимит на сегодня исчерпан` | Дневной лимит игрока — поднимите в кабинете или подождите до полуночи UTC |
 | `Дневной лимит сервера исчерпан` | Общий лимит сервера — то же |
 | `Администратор сервера закрыл вам генерацию` | Игрок в списке запрещённых |

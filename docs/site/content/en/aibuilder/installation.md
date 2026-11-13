@@ -28,11 +28,11 @@ A player **without** the mod can join, but the build just appears in front of th
 After the restart two lines appear in the log:
 
 ```text
-[hello] AI service OK: server='Main server' mode=external apiVersion=1 …
+[Farmstead] AI service OK: server='Main server' mode=external apiVersion=1 …
 [regionguard] API available (ClaimsApi) — claims are enforced for non-operators
 ```
 
-The first means the token was accepted. If you see `[hello] the AI service rejected this server's token` instead, the token is wrong or revoked. `[hello] /aibuild is not configured` means `api_base_url` or `bearer_token` is empty.
+The first means the token was accepted. If you see `[Farmstead] the AI service rejected this server's token` instead, the token is wrong or revoked. `[Farmstead] /aibuild is not configured` means `api_base_url` or `bearer_token` is empty.
 
 The second is about claims: whether Farmstead Claims or the original RegionGuard was found. See [Land protection](../land-protection/).
 

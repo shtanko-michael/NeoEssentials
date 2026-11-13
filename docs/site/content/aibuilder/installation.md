@@ -28,11 +28,11 @@
 После перезапуска в логе появятся две строки:
 
 ```text
-[hello] AI service OK: server='Основной сервер' mode=external apiVersion=1 …
+[Farmstead] AI service OK: server='Основной сервер' mode=external apiVersion=1 …
 [regionguard] API available (ClaimsApi) — claims are enforced for non-operators
 ```
 
-Первая — токен принят. Если вместо неё `[hello] the AI service rejected this server's token`, токен вписан неверно или отозван. Если `[hello] /aibuild is not configured`, в конфиге пусты `api_base_url` или `bearer_token`.
+Первая — токен принят. Если вместо неё `[Farmstead] the AI service rejected this server's token`, токен вписан неверно или отозван. Если `[Farmstead] /aibuild is not configured`, в конфиге пусты `api_base_url` или `bearer_token`.
 
 Вторая — про приваты: найден ли Farmstead Claims или исходный RegionGuard. Подробнее — в разделе [«Защита территорий»](../land-protection/).
 

@@ -40,7 +40,7 @@ One `*_level` per subcommand (`0` — everyone, `2` — operators, `4` — conso
 |---|---|---|
 | `announce_builds` | `true` | Tell the players online that somebody's build has finished, and how to make their own |
 | `announce_min_blocks` | `200` | Smallest build worth announcing, in blocks |
-| `notify_updates` | `true` | Tell operators once, on login, that a newer release is out; the `[hello]` log line is always written |
+| `notify_updates` | `true` | Tell operators once, on login, that a newer release is out; the `[Farmstead]` log line is always written |
 
 ## `[region]` — the `/aibuild area` selection
 

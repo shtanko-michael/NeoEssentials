@@ -2,8 +2,8 @@
 
 | In the log or in chat | What it means |
 |---|---|
-| `[hello] … rejected this server's token` | The token is wrong or revoked — check `bearer_token` |
-| `[hello] /aibuild is not configured` | `api_base_url` or `bearer_token` is empty in the config |
+| `[Farmstead] … rejected this server's token` | The token is wrong or revoked — check `bearer_token` |
+| `[Farmstead] /aibuild is not configured` | `api_base_url` or `bearer_token` is empty in the config |
 | `Your limit for today is used up` | The player's daily cap — raise it in the cabinet or wait for midnight UTC |
 | `The server's daily limit is used up` | The server's daily cap — same |
 | `The server administrator has turned off build generation for you` | The player is on the deny list |
