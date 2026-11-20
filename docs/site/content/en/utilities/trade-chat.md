@@ -48,4 +48,4 @@ LuckPerms is an optional dependency: without it no group prefix is shown and the
 
 ## Language
 
-The empty-message hint and the cooldown notice are translated into Russian and English and follow the client's language when the client has the translation. Since the mod is server-only, a regular client has none, so players see the Russian text.
+The empty-message hint, the cooldown notice and the channel tag (with `channelPrefix = "auto"`) are translated into Russian and English. The mod is server-only, so the server picks the language: a player whose game is in Russian, Ukrainian, Belarusian or Kazakh reads Russian, everyone else English. Each recipient sees the tag as `[Trade]` or `[Торговля]` in their own language.
