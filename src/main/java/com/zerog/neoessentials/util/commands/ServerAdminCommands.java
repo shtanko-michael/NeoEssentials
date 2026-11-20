@@ -7,6 +7,7 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.authlib.GameProfile;
 import com.zerog.neoessentials.api.permissions.PermissionAPI;
 import com.zerog.neoessentials.util.MessageUtil;
+import com.zerog.neoessentials.util.ReaderLanguage;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
@@ -73,11 +74,19 @@ public class ServerAdminCommands {
                     String message = StringArgumentType.getString(ctx, "message");
                     ServerPlayer sender = ctx.getSource().getPlayer();
                     String resolved = com.zerog.neoessentials.api.PlaceholderAPI.setPlaceholders(sender, message);
-                    Component notice = MessageUtil.coloredText("§c[Объявление] §7>> §r" + resolved);
-
-                    ctx.getSource().getServer().getPlayerList().getPlayers()
-                        .forEach(player -> player.sendSystemMessage(notice));
-                    ctx.getSource().getServer().sendSystemMessage(notice);
+                    // Each player reads the label in their own language (ReaderLanguage, Farmstead fork):
+                    // a broadcast is one text for everyone only in what the admin typed.
+                    ctx.getSource().getServer().getPlayerList().getPlayers().forEach(player -> {
+                        ReaderLanguage.set(player);
+                        try {
+                            player.sendSystemMessage(MessageUtil.coloredText(
+                                MessageUtil.localize("commands.neoessentials.broadcast.notice", resolved)));
+                        } finally {
+                            ReaderLanguage.clear();
+                        }
+                    });
+                    ctx.getSource().getServer().sendSystemMessage(MessageUtil.coloredText(
+                        MessageUtil.localize("commands.neoessentials.broadcast.notice", resolved)));
                     NeoLog.info(LOGGER, LogCategory.GENERAL, "[Notice] {}: {}",
                         sender != null ? sender.getName().getString() : "Console", resolved);
                     return 1;

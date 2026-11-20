@@ -27,7 +27,7 @@ After the first start `config/farmstead_tradechat-server.toml` appears.
 
 | Key | Default | What it sets |
 |---|---|---|
-| `channelPrefix` | `"[Торговля] "` | The full channel prefix. Brackets and spaces are written explicitly |
+| `channelPrefix` | `"auto"` | `auto` — the tag in each player's own language (`[Trade] ` / `[Торговля] `, from the mod's language files; the old default `"[Торговля] "` is read the same way). Any other text is the full prefix for everybody; brackets and spaces are written explicitly |
 | `cooldownSeconds` | `30` | Cooldown between one player's trade messages, 0–86400 s; `0` turns it off |
 | `showGroupPrefix` | `true` | Show the LuckPerms group prefix before the player's name |
 | `tagColor` | `"gold"` | Colour of the channel tag |
@@ -36,7 +36,7 @@ After the first start `config/farmstead_tradechat-server.toml` appears.
 
 Colours are the English names of the standard Minecraft colours: `gold`, `yellow`, `white`, `green`, `aqua` and so on. The config rejects an unknown name.
 
-For an English-speaking server set, for example, `channelPrefix = "&6[Trade]&r "`.
+With `auto` English players already see `[Trade]`. To force one tag for everyone set, for example, `channelPrefix = "&6[Trade]&r "`.
 
 ## Colours and prefixes
 

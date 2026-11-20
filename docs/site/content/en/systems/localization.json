@@ -1,5 +1,7 @@
 {
-  "commands": ["language"],
+  "commands": [
+    "language"
+  ],
   "commandDetails": {
     "language": {
       "syntax": "/language <code> | /language set <code> | /language list | /language reload | /language stats | /language info | /language template <code> | /language exportmissing | /language clearmissing | /language validate <code> | /language regenerate <code> | /language override set <key> <value> | /language override get <key> | /language override remove <key> | /language override list | /language override clear | /language override reload",
@@ -48,6 +50,11 @@
       "title": "reload does not re-register commands",
       "body": "`/language reload` re-reads catalogues and overrides. The `commands.language` section is read at startup: a disabled command will not appear after reload.",
       "fix": "Enabling `/language` itself needs a server restart."
+    },
+    {
+      "title": "Each player reads their own language (Farmstead fork)",
+      "body": "`localization.perPlayerLanguage` (default true): replies to a player's commands and what they are told on joining come in their client's language — any of the nine in the jar; Ukrainian, Belarusian and Kazakh clients get Russian, unknown languages English. Everything else (broadcasts, delayed teleports, background tasks) uses `localization.language`. A message one player's command sends to another (/tpa, /pay) is in the sender's language. Your own `languages/custom/<code>.json` applies on top of the player's language too.",
+      "fix": "Want one language for everyone — set `\"perPlayerLanguage\": false` in the `localization` section, then `/language reload`."
     }
   ],
   "knownIssues": [

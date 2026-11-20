@@ -13,6 +13,7 @@
     "_comment_utilities":  "=== Komendy narzędziowe ===",
     "_comment_farmstead":  "=== Farmstead fork additions (keys upstream does not ship) ===",
     "commands.neoessentials.balance":  "Saldo: {0}{1}",
+    "commands.neoessentials.broadcast.notice":  "§c[Ogłoszenie] §7>> §r{0}",
     "commands.neoessentials.balance.player_not_found":  "Gracz nie znaleziony.",
     "commands.neoessentials.baltop.header":  "§6══════ §eNajwyższe salda §7(Strona §f{0}§7/§f{1}§7, zaktualizowano §f{2}s§7 temu) §6══════",
     "commands.neoessentials.baltop.no_permission":  "§cNie masz uprawnień do używania /baltop.",

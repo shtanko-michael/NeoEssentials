@@ -6,7 +6,7 @@ The main settings are in `config/regionguard-server.toml`:
 [general]
 allowFallbackSelection = true
 enablePixelmonCompat = true
-language = "ru_ru"
+language = "auto"
 maxRegionsPerPlayer = 3
 defaultDeniedFlagsOnClaim = ["build", "block-break", "block-place", "interact", "chest-access", "tnt", "invincibility"]
 defaultAllowedFlagsOnClaim = ["use", "entry", "pvp", "mob-damage", "mob-spawning", "mob-entry", "passive-entity-damage", "fall-damage", "item-drop", "potion-splash", "fire-spread", "creeper-explosion", "other-explosion", "thunder", "pixelmon-spawn", "pixelmon-entry", "pixelmon-player"]
@@ -16,7 +16,7 @@ defaultAllowedFlagsOnClaim = ["use", "entry", "pvp", "mob-damage", "mob-spawning
 |---|---:|---|
 | `allowFallbackSelection` | `true` | Allow the internal selection store when WorldEdit is absent. The current version has no command that fills this store. |
 | `enablePixelmonCompat` | `true` | Enable the Pixelmon bridge if Pixelmon itself is installed. |
-| `language` | `ru_ru` | Message language: `ru_ru` or `en_us`. An unknown value falls back to English. |
+| `language` | `auto` | Message language. `auto` — each player reads their own client language (Russian for ru/uk/be/kk, English for everyone else); `ru_ru` or `en_us` — one language for everybody. An unknown value falls back to English. In `auto`, command replies and protection warnings follow the player, logs stay Russian. |
 | `maxRegionsPerPlayer` | `3` | Per-owner region limit; `-1` means unlimited. Can be overridden by a LuckPerms meta key. |
 | `defaultDeniedFlagsOnClaim` | list | Boolean flags written as `false` when a region is created. |
 | `defaultAllowedFlagsOnClaim` | list | Boolean flags written as `true` after the deny list. On a repeat, allow wins. |

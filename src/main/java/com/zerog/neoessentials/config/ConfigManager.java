@@ -1667,6 +1667,26 @@ public class ConfigManager {
      * Reads from localization.preserveCustomTranslations in config.json. Defaults to false.
      * When true, the mod will not merge in new keys or auto-fix legacy placeholders on startup.
      */
+    /**
+     * Farmstead fork: whether each player reads messages in their own client language
+     * (localization.perPlayerLanguage, default true). False — everything in localization.language, as upstream.
+     * See {@link com.zerog.neoessentials.util.ReaderLanguage}.
+     */
+    public static boolean isPerPlayerLanguageEnabled() {
+        try {
+            JsonObject config = getInstance().getConfig(MAIN_CONFIG);
+            if (config.has("localization")) {
+                JsonObject loc = config.getAsJsonObject("localization");
+                if (loc.has("perPlayerLanguage")) {
+                    return loc.get("perPlayerLanguage").getAsBoolean();
+                }
+            }
+        } catch (Exception e) {
+            NeoLog.debug(LOGGER, LogCategory.CONFIG, "Invalid value for localization.perPlayerLanguage, using default true", e);
+        }
+        return true;
+    }
+
     public static boolean isPreserveCustomTranslationsEnabled() {
         try {
             JsonObject config = getInstance().getConfig(MAIN_CONFIG);

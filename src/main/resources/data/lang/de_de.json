@@ -14,6 +14,7 @@
     "_comment_utilities":  "=== Hilfsbefehle ===",
     "_comment_farmstead":  "=== Farmstead fork additions (keys upstream does not ship) ===",
     "commands.neoessentials.balance":  "Kontostand: {0}{1}",
+    "commands.neoessentials.broadcast.notice":  "§c[Ankündigung] §7>> §r{0}",
     "commands.neoessentials.balance.player_not_found":  "Spieler nicht gefunden.",
     "commands.neoessentials.baltop.header":  "§6══════ §eTop-Guthaben §7(Seite §f{0}§7/§f{1}§7, aktualisiert vor §f{2}s§7) §6══════",
     "commands.neoessentials.baltop.no_permission":  "Du hast keine Berechtigung für /baltop.",

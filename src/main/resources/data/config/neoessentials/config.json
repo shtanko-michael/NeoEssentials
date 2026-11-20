@@ -395,6 +395,9 @@
     // Language code (e.g. "fr_fr", "de_de"). Leave empty for "en_us". Change with /language <code>.
     "language": "",
 
+    // Answer each player in their own game language (any bundled one; Ukrainian, Belarusian and Kazakh clients read Russian, other unknown ones English). Covers replies to their commands and what they are told on joining; everything else stays in "language". false — everyone reads "language".
+    "perPlayerLanguage": true,
+
     /* If true, the mod will never modify the on-disk language file after first
      * creation — not even to add newly translated keys or auto-fix legacy
      * {NAME}/{HOME} placeholders left over from older versions.

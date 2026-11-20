@@ -10,7 +10,7 @@ Regions come from Farmstead Claims only: this mod does not ask the original Regi
 
 ## What is limited
 
-- **Breeding.** No new baby appears when the area already holds the cap or more. The player who fed the animals sees above the hotbar: `Лимит животных в регионе 'cows' уже достигнут: 15/15.` ("The animal limit in region 'cows' is reached: 15/15.")
+- **Breeding.** No new baby appears when the area already holds the cap or more. The player who fed the animals sees above the hotbar: `The animal limit in region 'cows' is already reached: 15/15.` — in their own game language when the mod is also installed on their client (English without it).
 - **Spawn eggs** (`spawnEggsRespectLimit = true`). A passive mob's egg used on a block or on an animal does not create an animal over the cap. Spawners configured with an egg are covered too: the extra animal from such a spawner does not appear. Hostile mob eggs and dispensers are not affected.
 - Adults and babies of every `Animal` mob count.
 

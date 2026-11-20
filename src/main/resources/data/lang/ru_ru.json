@@ -6,6 +6,7 @@
     "_author":  "NeoEssentials (машинный перевод, исправления от сообщества приветствуются)",
     "_comment_economy":  "=== Экономическая система ===",
     "commands.neoessentials.balance":  "Баланс: {0}{1}",
+    "commands.neoessentials.broadcast.notice":  "§c[Объявление] §7>> §r{0}",
     "commands.neoessentials.balance.player_not_found":  "Игрок не найден.",
     "commands.neoessentials.baltop.header":  "§6══════ §eТоп балансов §7(Стр. §f{0}§7/§f{1}§7, обновлено §f{2}с§7 назад) §6══════",
     "commands.neoessentials.baltop.no_permission":  "§cУ вас нет прав на использование /baltop.",

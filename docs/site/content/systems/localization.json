@@ -1,5 +1,7 @@
 {
-  "commands": ["language"],
+  "commands": [
+    "language"
+  ],
   "commandDetails": {
     "language": {
       "syntax": "/language <code> | /language set <code> | /language list | /language reload | /language stats | /language info | /language template <code> | /language exportmissing | /language clearmissing | /language validate <code> | /language regenerate <code> | /language override set <key> <value> | /language override get <key> | /language override remove <key> | /language override list | /language override clear | /language override reload",
@@ -48,6 +50,11 @@
       "title": "reload команд не перерегистрирует",
       "body": "`/language reload` перечитывает каталоги и оверрайды. Секция `commands.language` читается при старте: выключенная команда после reload не появится.",
       "fix": "Включение самой `/language` — рестарт сервера."
+    },
+    {
+      "title": "Каждый игрок читает на своём языке (форк Farmstead)",
+      "body": "`localization.perPlayerLanguage` (по умолчанию true): ответы на команды игрока и то, что ему говорят при входе, приходят на языке его клиента — любом из девяти в jar; украинский, белорусский и казахский клиенты получают русский, незнакомые языки — английский. Остальное (рассылки, задержанные телепорты, сообщения из фоновых задач) — на `localization.language`. Сообщение, которое команда одного игрока шлёт другому (/tpa, /pay), написано на языке отправителя. Свой файл в `languages/custom/<код>.json` накладывается и на язык игрока.",
+      "fix": "Нужен один язык на всех — `\"perPlayerLanguage\": false` в секции `localization`, затем `/language reload`."
     }
   ],
   "knownIssues": [

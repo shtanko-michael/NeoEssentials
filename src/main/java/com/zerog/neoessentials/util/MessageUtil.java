@@ -37,6 +37,42 @@ public class MessageUtil {
     private static final Logger LOGGER = LoggerFactory.getLogger(MessageUtil.class);
     private static final Map<String, String> translations = new HashMap<>();
     private static boolean loaded = false;
+
+    /**
+     * Farmstead fork: tables for readers whose client language is not the server's (see {@link ReaderLanguage}).
+     * Each is the bundled language over the en_us fallback, with the operator's own file for that language
+     * (config/neoessentials/lang/&lt;code&gt;.json) laid on top when there is one. Built on first use and
+     * dropped by {@link #reloadTranslations()}.
+     */
+    private static final Map<String, Map<String, String>> readerTables = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** The table for whoever this message is for: their language's, or the server's. */
+    private static Map<String, String> table() {
+        loadTranslations();
+        String reader = ReaderLanguage.current();
+        if (reader == null || reader.equals(getConfiguredLanguage())) return translations;
+        return readerTables.computeIfAbsent(reader, MessageUtil::buildReaderTable);
+    }
+
+    private static Map<String, String> buildReaderTable(String langCode) {
+        Map<String, String> table = buildJarTranslationsWithFallback(langCode);
+        Map<String, String> result = table == null ? new HashMap<>() : new HashMap<>(table);
+        File custom = new File(getNeoEssentialsLangCustomDir(), langCode + ".json");
+        if (custom.isFile()) {
+            Map<String, String> edits = loadServerTranslations(custom);
+            if (edits != null) result.putAll(edits);
+        }
+        return result.isEmpty() ? translations : result;
+    }
+
+    /** Whether the jar carries a language file with this code — the reader languages we can answer in. */
+    static boolean hasBundledLanguage(String langCode) {
+        try (InputStream in = ResourceUtil.getJarLangResource(langCode + ".json")) {
+            return in != null;
+        } catch (Exception e) {
+            return false;
+        }
+    }
     private static boolean debugMode = false; // Default to false, will sync with config
     /**
      * Sync debugMode with config value (modules.debugMode)
@@ -704,7 +740,7 @@ public class MessageUtil {
      * {@code args}.  Legacy {@code %s} tokens are treated as {@code {0}}.</p>
      */
     public static String localize(String key, Object... args) {
-        loadTranslations();
+        Map<String, String> translations = table();
         String template = translations.get(key);
 
         if (template == null) {
@@ -753,7 +789,7 @@ public class MessageUtil {
      * <p>Named placeholders are preserved verbatim (see {@link #localize(String, Object...)}).</p>
      */
     public static String localizeOrDefault(String key, String fallback, Object... args) {
-        loadTranslations();
+        Map<String, String> translations = table();
         String template = translations.getOrDefault(key, fallback);
 
         if (debugMode && !translations.containsKey(key)) {
@@ -899,6 +935,7 @@ public class MessageUtil {
     public static void reloadTranslations() {
         loaded = false;
         translations.clear();
+        readerTables.clear();
         loadTranslations();
         NeoLog.info(LOGGER, LogCategory.GENERAL, "Forced translation reload completed, {} keys loaded", translations.size());
     }

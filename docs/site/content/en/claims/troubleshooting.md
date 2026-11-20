@@ -58,7 +58,7 @@ Check `/rg info` and the priorities in JSON. At each point the region with the h
 
 ## A language file change did not apply
 
-Restart the server or reload the NeoForge config. Check that you are editing the file for the selected language in `config/RegionGuard/lang/`, and that `language` in `regionguard-server.toml` is `ru_ru` or `en_us`.
+Restart the server or reload the NeoForge config. Check that you are editing the file for the selected language in `config/RegionGuard/lang/`, and that `language` in `regionguard-server.toml` is `auto`, `ru_ru` or `en_us` (in `auto` each player sees the file of their own language).
 
 ## Pixelmon flags change nothing
 

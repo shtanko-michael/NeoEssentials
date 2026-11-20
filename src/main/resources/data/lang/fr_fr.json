@@ -14,6 +14,7 @@
     "_comment_utilities":  "=== Commandes utilitaires ===",
     "_comment_farmstead":  "=== Farmstead fork additions (keys upstream does not ship) ===",
     "commands.neoessentials.balance":  "Solde : {0}{1}",
+    "commands.neoessentials.broadcast.notice":  "§c[Annonce] §7>> §r{0}",
     "commands.neoessentials.balance.player_not_found":  "Joueur introuvable.",
     "commands.neoessentials.baltop.header":  "§6══════ §eMeilleurs soldes §7(Page §f{0}§7/§f{1}§7, mis à jour il y a §f{2}s§7) §6══════",
     "commands.neoessentials.baltop.no_permission":  "Vous n'avez pas la permission d'utiliser /baltop.",

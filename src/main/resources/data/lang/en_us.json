@@ -3,6 +3,7 @@
     "_comment_general":  "=== General ===",
     "_comment_economy":  "=== Economy System ===",
     "commands.neoessentials.balance":  "Balance: {0}{1}",
+    "commands.neoessentials.broadcast.notice":  "§c[Announcement] §7>> §r{0}",
     "commands.neoessentials.balance.player_not_found":  "Player not found.",
     "commands.neoessentials.baltop.header":  "§6══════ §eTop Balances §7(Page §f{0}§7/§f{1}§7, updated §f{2}s§7 ago) §6══════",
     "commands.neoessentials.baltop.no_permission":  "§cYou do not have permission to use /baltop.",

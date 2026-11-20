@@ -6,7 +6,7 @@
 [general]
 allowFallbackSelection = true
 enablePixelmonCompat = true
-language = "ru_ru"
+language = "auto"
 maxRegionsPerPlayer = 3
 defaultDeniedFlagsOnClaim = ["build", "block-break", "block-place", "interact", "chest-access", "tnt", "invincibility"]
 defaultAllowedFlagsOnClaim = ["use", "entry", "pvp", "mob-damage", "mob-spawning", "mob-entry", "passive-entity-damage", "fall-damage", "item-drop", "potion-splash", "fire-spread", "creeper-explosion", "other-explosion", "thunder", "pixelmon-spawn", "pixelmon-entry", "pixelmon-player"]
@@ -16,7 +16,7 @@ defaultAllowedFlagsOnClaim = ["use", "entry", "pvp", "mob-damage", "mob-spawning
 |---|---:|---|
 | `allowFallbackSelection` | `true` | Разрешить внутреннее хранилище выделения, если WorldEdit отсутствует. В текущей версии нет команды, заполняющей это хранилище. |
 | `enablePixelmonCompat` | `true` | Включить мост Pixelmon, если сам Pixelmon установлен. |
-| `language` | `ru_ru` | Язык сообщений: `ru_ru` или `en_us`. Неизвестное значение откатывается на английский. |
+| `language` | `auto` | Язык сообщений. `auto` — каждый игрок читает на языке своего клиента (русский для ru/uk/be/kk, английский для остальных); `ru_ru` или `en_us` — один язык для всех. Неизвестное значение откатывается на английский. В `auto` ответы на команды и предупреждения защиты идут на языке игрока, логи — на русском. |
 | `maxRegionsPerPlayer` | `3` | Лимит регионов владельца; `-1` означает без лимита. Может быть переопределён meta-ключом LuckPerms. |
 | `defaultDeniedFlagsOnClaim` | список | Булевы флаги, записываемые как `false` при создании региона. |
 | `defaultAllowedFlagsOnClaim` | список | Булевы флаги, записываемые как `true` после deny-списка. При повторе побеждает allow. |
